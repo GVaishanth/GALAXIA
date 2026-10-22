@@ -1,0 +1,89 @@
+# GALAXIA: test, build and deploy to GitHub Pages.
+#
+# One-time repository setup: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions". See the deployment section of README.md.
+#
+# Actions are pinned to full commit SHAs (tag in the trailing comment).
+# The base path comes from the repository's real Pages URL (configure-pages),
+# so project pages (/<repo>/), user/org pages and custom domains (/) all work.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main] # production branch
+  workflow_dispatch: # manual run from the Actions tab
+
+# Least privilege by default; the deploy job adds only what Pages needs.
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel a deployment that is in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Test and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies (exact, from package-lock.json)
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit, integration and soak tests
+        run: npm test
+
+      - name: Configure Pages (resolves the site base path)
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Build production assets
+        run: npx vite build
+        env:
+          # "/<repo>/" for project pages, "/" for user/org pages or a custom domain
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+
+      - name: Verify build output (assets resolve under the base, no dev tools, size budget)
+        # scripts/verify-dist.ts: every URL in index.html/404.html and every
+        # assets/ reference in JS/CSS must exist in dist/ and carry the same
+        # base Vite used; no Hangar, source maps or loopback hosts; Free Roam
+        # stays a lazy chunk; gzip budgets hold. Fails the run before upload.
+        run: npm run verify:dist
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+
+      - name: Upload Pages artifact (dist/ only)
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write # publish the Pages site
+      id-token: write # OIDC token that authenticates the deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

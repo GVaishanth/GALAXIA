@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>GALAXIA · Arcade Space Shooter</title>
+    <meta name="description" content="GALAXIA: an original arcade space shooter for the browser. Classic Mode: hold off diving alien formations on one fixed screen, rescue captured fighters and clear Challenging Stages. Free Roam (prototype): fly freely through open space. Plays with keyboard, touch or gamepad." />
+    <meta name="theme-color" content="#06070f" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="application-name" content="GALAXIA" />
+    <meta name="apple-mobile-web-app-title" content="GALAXIA" />
+    <meta property="og:title" content="GALAXIA" />
+    <meta property="og:description" content="An original fixed-screen arcade space shooter for the browser." />
+    <meta property="og:type" content="website" />
+    <!-- public/ files: Vite prefixes these with the configured base path at build time -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  </head>
+  <body>
+    <div id="app" class="app"><p class="boot">Loading GALAXIA…</p></div>
+    <noscript><p class="noscript">GALAXIA needs JavaScript to run.</p></noscript>
+    <script type="module" src="/src/main.ts"></script>
+    <script nomodule>
+      document.getElementById('app').textContent = 'GALAXIA needs a newer browser (2022 or later).';
+    </script>
+    <script>
+      // Boot watchdog: if the game bundle never starts (network failure, blocked
+      // or stale assets), replace "Loading…" with a clear message and a reload button.
+      setTimeout(function () {
+        if (window.__galaxiaBooted) return;
+        var app = document.getElementById('app');
+        if (!app) return;
+        app.innerHTML =
+          '<div class="fatal" role="alert" style="position:fixed;inset:0;display:grid;place-content:center;justify-items:center;gap:8px;padding:24px;text-align:center;background:#030409;color:#f3efe4;font:14px system-ui,sans-serif">' +
+          '<h2 style="margin:0;color:#ff3b4e;letter-spacing:.18em">GALAXIA COULD NOT LOAD</h2>' +
+          '<p style="margin:0;max-width:34em">The game files did not finish loading. Check your connection and reload. If the site was just updated, a reload fetches the new version.</p>' +
+          '<button type="button" onclick="location.reload()" style="min-width:160px;min-height:44px;margin-top:12px;border:1px solid #5cefff;border-radius:6px;background:#0c0f1e;color:#5cefff;font:inherit;font-weight:700;letter-spacing:.16em">RELOAD</button>' +
+          '</div>';
+      }, 15000);
+    </script>
+  </body>
+</html>

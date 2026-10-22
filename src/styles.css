@@ -1,0 +1,6066 @@
+/* GALAXIA: Hangar shell styles. Colours mirror src/config/palette.ts roles. */
+:root {
+  --space-void: #06070f;
+  --space-letterbox: #030409;
+  --panel: #0c0f1e;
+  --panel-edge: #1b2038;
+  --text: #f3efe4;
+  --text-dim: #8a90ad;
+  --accent: #ff3b4e;
+  --highlight: #5cefff;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --fast: 150ms;
+  /* Safe-area insets: the ONE source for both modes (TD-72). CSS positions HUDs
+     and controls with these; AppShell measures the same values for the
+     scripts (a probe element), so script and CSS never disagree. Automated
+     tests may override them on <html> to simulate a notch. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--space-letterbox);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100dvh;
+  min-height: 0;
+}
+
+.boot {
+  grid-row: 1 / -1;
+  place-self: center;
+  margin: 0;
+  color: var(--text-dim);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* Fatal error / boot failure panel (src/ui/fatal.ts, index.html watchdog) */
+.fatal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  padding: 24px;
+  text-align: center;
+  background: rgb(3 4 9 / 0.92);
+}
+
+.fatal h2 {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 20px;
+  letter-spacing: 0.18em;
+}
+
+.fatal p {
+  max-width: 34em;
+  margin: 0;
+}
+
+.fatal .fatal-hint {
+  color: var(--text-dim);
+}
+
+.fatal-btn {
+  min-width: 160px;
+  min-height: 44px;
+  margin-top: 16px;
+  border: 1px solid var(--highlight);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--highlight);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+
+.fatal-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+/* Header ------------------------------------------------------------------ */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--panel-edge);
+  background: var(--space-void);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+}
+
+.brand-mark {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+}
+
+.brand-sub {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.tabs,
+.toggles {
+  display: flex;
+  gap: 4px;
+}
+
+.tab,
+.toggle {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease-out),
+    background-color var(--fast) var(--ease-out),
+    border-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+
+.tab:hover,
+.toggle:hover {
+  color: var(--text);
+  border-color: #2c3356;
+}
+
+.tab:active,
+.toggle:active {
+  transform: scale(0.96);
+}
+
+.tab:focus-visible,
+.toggle:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--space-void);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.toggle[aria-pressed='true'] {
+  color: var(--highlight);
+  border-color: #1f5c6e;
+}
+
+/* Views ------------------------------------------------------------------- */
+.views {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.view {
+  height: 100%;
+}
+
+.view[hidden] {
+  display: none;
+}
+
+.view-formation {
+  display: grid;
+  padding: 8px;
+}
+
+.stage-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Fleet --------------------------------------------------------------------- */
+.view-fleet {
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+
+.fleet-group + .fleet-group {
+  margin-top: 20px;
+}
+
+.fleet-title {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 10px;
+}
+
+.card {
+  margin: 0;
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.card-canvas {
+  display: block;
+  width: 100%;
+  height: 148px;
+  background: var(--space-void);
+}
+
+.card-caption {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px 10px;
+}
+
+.card-name {
+  font-weight: 650;
+}
+
+.card-meta {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+/* Scales -------------------------------------------------------------------- */
+.view-scales {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 16px 24px;
+  overflow: auto;
+}
+
+.scale-panel {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.scale-canvas {
+  display: block;
+  border: 1px solid var(--panel-edge);
+  image-rendering: pixelated;
+}
+
+.scale-label {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.scale-label::after {
+  content: ' · ' attr(data-scale);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer -------------------------------------------------------------------- */
+.status {
+  padding: 6px 16px;
+  border-top: 1px solid var(--panel-edge);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-error {
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .brand-sub {
+    display: none;
+  }
+  .tab,
+  .toggle {
+    padding: 0 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab,
+  .toggle {
+    transition-duration: 1ms;
+  }
+  .tab:active,
+  .toggle:active {
+    transform: none;
+  }
+}
+
+/* HUD (Stage 2) -------------------------------------------------------------- */
+/* Overlay aligned to the playfield rect by ui/hud.ts. --u = 1 arcade unit in CSS px. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.hud {
+  --u: 2px;
+  position: absolute;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: 0.04em;
+}
+
+.hud-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 calc(var(--u) * 6);
+}
+
+.hud-top {
+  top: 0;
+  align-items: flex-start;
+  padding-top: calc(var(--u) * 2);
+}
+
+.hud-bottom {
+  bottom: 0;
+  align-items: center;
+}
+
+.hud-cell {
+  display: grid;
+  gap: calc(var(--u) * 1.5);
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.hud-cell-center {
+  /* wider share so "HIGH SCORE" stays on one line in narrow landscape playfields */
+  flex-grow: 1.6;
+  text-align: center;
+}
+
+.hud-cell-right {
+  text-align: right;
+}
+
+.hud-label,
+.hud-value {
+  white-space: nowrap;
+}
+
+.hud-label {
+  font-size: calc(var(--ut, var(--u)) * 6);
+  color: var(--text-dim);
+}
+
+.hud-label-accent {
+  color: var(--accent);
+}
+
+.hud-value {
+  font-size: calc(var(--ut, var(--u)) * 7.5);
+}
+
+.hud-value-live {
+  color: var(--highlight);
+}
+
+.hud-flash {
+  animation: hud-flash var(--hud-flash) steps(1, end);
+}
+
+@keyframes hud-flash {
+  0% {
+    color: var(--highlight);
+  }
+}
+
+.hud-reserves {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 1.5);
+  height: calc(var(--u) * 8);
+}
+
+.hud-reserve {
+  display: block;
+  width: calc(var(--u) * 7.5);
+  height: calc(var(--u) * 7.5);
+  image-rendering: pixelated;
+}
+
+.hud-reserve-pip {
+  border-radius: 1px;
+  background: var(--text);
+}
+
+.hud-overflow {
+  font-size: calc(var(--ut, var(--u)) * 6);
+  color: var(--text-dim);
+}
+
+.hud-stage {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--u) * 3);
+}
+
+.hud-dual {
+  font-size: calc(var(--ut, var(--u)) * 6);
+  color: var(--highlight);
+}
+
+.hud-note {
+  display: grid;
+  gap: calc(var(--u) * 3);
+  animation: hud-in var(--hud-fade) var(--ease-out);
+}
+
+.hud-note-ticker {
+  font-size: calc(var(--ut, var(--u)) * 6);
+}
+
+.hud-note-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46%;
+  text-align: center;
+  font-size: calc(var(--ut, var(--u)) * 8);
+}
+
+.hud-note-popup {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--ut, var(--u)) * 6);
+}
+
+.hud-tone-text {
+  color: var(--text);
+}
+
+.hud-tone-accent {
+  color: var(--accent);
+}
+
+.hud-tone-highlight {
+  color: var(--highlight);
+}
+
+.hud-blink-off {
+  visibility: hidden;
+}
+
+@keyframes hud-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Rewards bench (Hangar view 4) -------------------------------------------- */
+.view-rewards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 8px;
+  padding: 8px;
+  min-height: 0;
+}
+
+.rewards-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.rewards-panel {
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 4px 8px 16px 4px;
+}
+
+.bench-section h2 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.bench-note {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.bench-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.bench-buttons .toggle {
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.bench-log {
+  margin: 0;
+  padding: 8px 10px;
+  list-style: none;
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  background: var(--panel);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.bench-log .rejected {
+  color: var(--accent);
+}
+
+.bench-log .dim {
+  color: var(--text-dim);
+}
+
+.bench-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bench-table th,
+.bench-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--panel-edge);
+  text-align: left;
+}
+
+.bench-table td:not(:first-child) {
+  text-align: right;
+}
+
+.bench-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .view-rewards {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(320px, 60%) auto;
+    overflow-y: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-flash,
+  .hud-note {
+    animation: none;
+  }
+}
+
+/* Game shell (Stage 3, responsive layouts Stage 5) ---------------------------- */
+html.game-mode,
+html.game-mode body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.game-mode body {
+  position: fixed;
+  inset: 0;
+}
+
+/* Shared mode shell (TD-72 / FR-TD-73): Classic and Free Roam use the same
+   container, stage and canvas sizing (src/shared/rendering/appShell.ts).
+   The shell fills the host's display area (.galaxia-root, 100dvh), the
+   canvas is full-bleed, and essential content (Classic's arena, HUDs,
+   controls) is placed inside the safe area by each mode. */
+.mode-shell {
+  position: absolute;
+  inset: 0;
+  display: block;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--space-letterbox);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mode-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.mode-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* adaptive render resolution (TD-79): when the browser upscale is an exact
+   integer (DPR 2 at ratio 1, DPR 3 at 1.5) each backing pixel becomes a crisp
+   2x2 / 3x3 block instead of a smoothed one */
+.mode-canvas[data-upscale='integer'] {
+  image-rendering: pixelated;
+}
+
+/* Measure the --safe-* insets for AppShell (never visible, no layout effect):
+   start = left x top, end = right x bottom. Their boxes change with any inset,
+   so the shell's ResizeObserver re-measures even without a viewport resize. */
+.shell-safe-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: content-box;
+  padding: 0;
+  width: var(--safe-left);
+  height: var(--safe-top);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.shell-safe-probe-end {
+  width: var(--safe-right);
+  height: var(--safe-bottom);
+}
+
+.game-app {
+  --pad-h: 0px;
+  --side-col: 0px;
+}
+
+.game-stage {
+  overflow: hidden;
+}
+
+.touch-pad {
+  display: none;
+}
+
+/* Touch, portrait: control strip under the playfield (thumb zone), overlaid
+   on the full-bleed canvas inside the safe area; the playfield is fitted
+   above it (layout.ts playArea). */
+.game-app[data-layout='touch-portrait'] .touch-pad {
+  position: absolute;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--safe-bottom);
+  height: var(--pad-h);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  padding: 8px 10px;
+}
+
+.game-app[data-layout='touch-portrait'] .touch-group {
+  display: grid;
+  min-height: 0;
+}
+
+.game-app[data-layout='touch-portrait'] .touch-group-action {
+  grid-template-columns: minmax(56px, 0.5fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+/* Touch, landscape: controls in the pillarbox columns (inside the safe area),
+   playfield full safe height between them. */
+.game-app[data-layout='touch-landscape'] .touch-pad {
+  display: contents;
+}
+
+.game-app[data-layout='touch-landscape'] .touch-group {
+  position: absolute;
+  top: var(--safe-top);
+  bottom: var(--safe-bottom);
+  width: var(--side-col);
+  display: grid;
+  align-content: end;
+  gap: 12px;
+  min-height: 0;
+  padding: 12px 10px 16px;
+}
+
+.game-app[data-layout='touch-landscape'] .touch-group-move {
+  left: var(--safe-left);
+}
+
+.game-app[data-layout='touch-landscape'] .touch-group-action {
+  right: var(--safe-right);
+  grid-template-rows: auto auto;
+}
+
+.game-app[data-layout='touch-landscape'] .touch-move {
+  height: clamp(84px, 34vh, 150px);
+}
+
+.game-app[data-layout='touch-landscape'] .touch-fire {
+  height: clamp(84px, 38vh, 170px);
+}
+
+.game-app[data-layout='touch-landscape'] .touch-pause {
+  height: 56px;
+  order: -1;
+}
+
+.touch-zone {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 56px;
+  min-height: 56px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  font: 700 18px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.08em;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.touch-zone.is-pressed {
+  background: var(--panel-edge);
+  border-color: rgba(92, 239, 255, 0.6);
+}
+
+.touch-fire {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-size: 20px;
+}
+
+.touch-fire.is-pressed {
+  background: rgba(255, 59, 78, 0.22);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.touch-pause {
+  color: var(--text-dim);
+}
+
+/* Move pad: slide left / right; the centre line marks the stop zone. */
+.touch-move {
+  --knob: 0;
+  grid-template-columns: 1fr 1fr;
+  padding: 0 18px;
+  overflow: hidden;
+}
+
+.touch-move::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  bottom: 22%;
+  width: 0;
+  border-left: 1px dashed var(--panel-edge);
+}
+
+.touch-arrow {
+  color: var(--text-dim);
+  font-size: 22px;
+}
+
+.touch-arrow-left {
+  justify-self: start;
+}
+
+.touch-arrow-right {
+  justify-self: end;
+}
+
+.touch-move[data-dir='-1'] .touch-arrow-left,
+.touch-move[data-dir='1'] .touch-arrow-right {
+  color: var(--highlight);
+}
+
+.touch-knob {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--knob) * (50% - 26px));
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 2px solid var(--panel-edge);
+  border-radius: 50%;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.touch-knob.is-active {
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.12);
+  opacity: 1;
+}
+
+/* Desktop side panels (letterbox reference: controls / scoring / records). */
+.side-panel {
+  position: absolute;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding: 14px 16px;
+  overflow-y: auto;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.55);
+  font: 600 13px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.side-panel[hidden] {
+  display: none;
+}
+
+.side-section {
+  display: grid;
+  gap: 8px;
+}
+
+.side-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--highlight);
+}
+
+.side-keys,
+.side-records {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+}
+
+.side-keys dt,
+.side-records dt {
+  color: var(--accent);
+}
+
+.side-records dt {
+  color: var(--text-dim);
+}
+
+.side-keys dd,
+.side-records dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.side-table th {
+  color: var(--text-dim);
+  font-weight: 700;
+  text-align: right;
+}
+
+.side-table td {
+  padding: 2px 0;
+  text-align: right;
+}
+
+.side-table td:first-child {
+  text-align: left;
+}
+
+.side-compact-controls,
+.side-panel-compact .side-section:not(.side-compact-controls) {
+  display: none;
+}
+
+.side-panel-compact .side-compact-controls {
+  display: grid;
+}
+
+/* Stage 4: HUD additions ------------------------------------------------------ */
+.hud-dual-single {
+  color: var(--text-dim);
+}
+
+.hud-badges {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(var(--u) * 0.75);
+  align-self: center;
+}
+
+.hud-badge {
+  display: block;
+  width: calc(var(--u) * 3.5);
+  height: calc(var(--u) * 6);
+  image-rendering: pixelated;
+}
+
+.hud-pause-flag {
+  font-size: calc(var(--ut, var(--u)) * 6);
+  color: var(--highlight);
+}
+
+.hud-pause-flag[hidden] {
+  display: none;
+}
+
+/* Stage 4: menu screens ------------------------------------------------------- */
+.screens {
+  --u: 2px;
+  position: absolute;
+  pointer-events: none;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.screen {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: calc(var(--u) * 5);
+  width: min(86%, calc(var(--u) * 190));
+  pointer-events: auto;
+  animation: screen-in 160ms var(--ease-out);
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+@keyframes screen-in-center {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + var(--u) * 3));
+  }
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(var(--u) * 3));
+  }
+}
+
+/* Title menu sits between the formation lineup and the player ship. */
+.screen-title {
+  top: 47%;
+}
+
+.screen-pause,
+.screen-over {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-height: 96%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  animation-name: screen-in-center;
+  padding: calc(var(--u) * 8) calc(var(--u) * 10);
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.86);
+  box-shadow: 0 0 0 1px rgba(92, 239, 255, 0.08);
+}
+
+.screen-howto,
+.screen-settings {
+  top: 9%;
+  max-height: 84%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: calc(var(--u) * 7) calc(var(--u) * 9);
+  border: 1px solid var(--panel-edge);
+  background: rgb(6, 7, 15);
+}
+
+.screen-heading {
+  margin: 0;
+  font-size: calc(var(--u) * 9);
+  letter-spacing: 0.14em;
+  color: var(--highlight);
+}
+
+.screen-heading-accent {
+  color: var(--accent);
+}
+
+.screen-menu {
+  display: grid;
+  gap: calc(var(--u) * 1.5);
+  justify-items: stretch;
+  min-width: calc(var(--u) * 92);
+}
+
+.screen-btn,
+.screen-toggle {
+  position: relative;
+  min-height: 44px;
+  padding: calc(var(--u) * 2.5) calc(var(--u) * 8);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: calc(var(--u) * 7);
+  letter-spacing: inherit;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.screen-btn::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--u) * 2);
+  top: 50%;
+  border: calc(var(--u) * 2.5) solid transparent;
+  border-left-color: var(--accent);
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+/* Hover styles only where a real hover exists (no sticky hover after a tap). */
+.screen-btn:focus-visible,
+.screen-toggle:focus-visible {
+  color: var(--highlight);
+  border-color: rgba(92, 239, 255, 0.35);
+  outline: none;
+}
+
+.screen-btn:focus-visible::before {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .screen-btn:hover,
+  .screen-toggle:hover {
+    color: var(--highlight);
+    border-color: rgba(92, 239, 255, 0.35);
+  }
+
+  .screen-btn:hover::before {
+    opacity: 1;
+  }
+}
+
+.screen-btn:active,
+.screen-toggle:active {
+  color: var(--highlight);
+  background: rgba(92, 239, 255, 0.1);
+}
+
+.screen-hint {
+  margin: 0;
+  font-size: calc(var(--u) * 5);
+  color: var(--text-dim);
+}
+
+.screen-score {
+  margin: 0;
+  font-size: calc(var(--u) * 8);
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-sub {
+  margin: 0;
+  font-size: calc(var(--u) * 5.5);
+  color: var(--text-dim);
+}
+
+.screen-best {
+  margin: 0;
+  font-size: calc(var(--u) * 6);
+  color: var(--highlight);
+}
+
+.screen-best[hidden] {
+  display: none;
+}
+
+.screen-settings-list {
+  display: grid;
+  gap: calc(var(--u) * 2);
+  width: 100%;
+}
+
+.screen-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: calc(var(--u) * 4);
+  font-size: calc(var(--u) * 6);
+}
+
+.screen-row-label {
+  color: var(--text-dim);
+}
+
+.screen-row-value {
+  min-width: 3ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-toggle {
+  grid-column: 2 / 4;
+  min-width: calc(var(--u) * 40);
+  border-color: var(--panel-edge);
+  font-size: calc(var(--u) * 6);
+}
+
+.screen-toggle[aria-pressed='true'] {
+  color: var(--highlight);
+}
+
+.screen-range {
+  width: calc(var(--u) * 60);
+  accent-color: var(--accent);
+}
+
+.screen-range:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.screen-howto-body {
+  display: grid;
+  gap: calc(var(--u) * 5);
+  width: 100%;
+  font-size: calc(var(--u) * 5.5);
+}
+
+.screen-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: calc(var(--u) * 1.5) calc(var(--u) * 6);
+  margin: 0;
+}
+
+.screen-keys dt {
+  color: var(--accent);
+}
+
+.screen-keys dd {
+  margin: 0;
+}
+
+.screen-rules {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.screen-scores {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-scores th {
+  color: var(--text-dim);
+  font-weight: 700;
+  text-align: left;
+  padding-right: calc(var(--u) * 6);
+}
+
+.screen-scores td {
+  padding: calc(var(--u) * 0.75) calc(var(--u) * 6) calc(var(--u) * 0.75) 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen {
+    animation: none;
+  }
+}
+
+.hud-menu-open .hud-center {
+  visibility: hidden;
+}
+
+/* Stage 5: short screens (landscape phones) and coarse pointers ------------- */
+@media (max-height: 520px) {
+  .screen-howto,
+  .screen-settings {
+    top: 3%;
+    max-height: 94%;
+  }
+
+  .screen-title {
+    top: 40%;
+  }
+}
+
+@media (pointer: coarse) {
+  .screen-range {
+    height: 36px;
+    touch-action: none;
+  }
+}
+
+/* Hints follow the active control scheme. */
+.hint-touch,
+.game-app[data-layout^='touch'] .hint-keys {
+  display: none;
+}
+
+.game-app[data-layout^='touch'] .hint-touch {
+  display: inline;
+}
+
+/* Stage 8: gamepad wording. data-input on the app root follows the device in use
+   (keyboard / touch / gamepad); the matching hint and controls list are shown. */
+.hint-pad,
+.side-keys-pad {
+  display: none;
+}
+
+.game-app[data-input='gamepad'] .hint-keys,
+.game-app[data-input='gamepad'] .hint-touch {
+  display: none;
+}
+
+.game-app[data-input='gamepad'] .hint-pad {
+  display: inline;
+}
+
+.game-app[data-input='gamepad'] .side-keys-kb {
+  display: none;
+}
+
+.game-app[data-input='gamepad'] .side-keys-pad {
+  display: grid;
+}
+
+/* Stage 9: responsive sizing --------------------------------------------------
+   Page screens (HOW TO PLAY, SETTINGS) on touch layouts use the whole safe game
+   area (Screens.setPlayfieldRect pageArea), not just the playfield column of a
+   landscape phone. The gameplay controls are inactive on these screens, so
+   they are hidden and the stage may draw the panel over their space. */
+.game-app[data-layout^='touch'][data-screen='howTo'] .game-stage,
+.game-app[data-layout^='touch'][data-screen='settings'] .game-stage {
+  overflow: visible;
+  z-index: 2;
+}
+
+.game-app[data-layout^='touch'][data-screen='howTo'] .touch-pad,
+.game-app[data-layout^='touch'][data-screen='settings'] .touch-pad {
+  visibility: hidden;
+}
+
+/* Readability floors: the menu unit bottoms out at 2px on phone playfields,
+   which made secondary text 10-11px. */
+.screen-hint {
+  font-size: max(12px, calc(var(--u) * 5));
+}
+
+.screen-sub {
+  font-size: max(12px, calc(var(--u) * 5.5));
+}
+
+.screen-howto-body {
+  font-size: max(12px, calc(var(--u) * 5.5));
+}
+
+/* A fixed minimum width overflowed narrow panels (landscape phones). */
+.screen-menu {
+  min-width: min(100%, calc(var(--u) * 92));
+}
+
+/* Touch sliders: a full 44px target (also on hybrid laptops in touch mode). */
+.game-app[data-input='touch'] .screen-range {
+  height: 44px;
+  touch-action: none;
+}
+
+@media (pointer: coarse) {
+  .screen-range {
+    height: 44px;
+  }
+}
+
+/* Panel content may never force the panel wider than the screen: the implicit
+   auto column could not shrink below its widest child (the score table). */
+.screen {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.screen-scores td:last-child,
+.screen-scores th:last-child {
+  padding-right: 0;
+}
+
+/* Touch landscape: the page screens are wide and short, so they use two
+   columns instead of a long scroll (568x320: SETTINGS 7 rows -> 4). */
+.game-app[data-layout='touch-landscape'] .screen-howto,
+.game-app[data-layout='touch-landscape'] .screen-settings {
+  width: min(94%, 680px);
+  gap: calc(var(--u) * 4);
+}
+
+.game-app[data-layout='touch-landscape'] .screen-settings-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: calc(var(--u) * 8);
+}
+
+.game-app[data-layout='touch-landscape'] .screen-howto-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: calc(var(--u) * 8);
+  align-items: start;
+}
+
+.game-app[data-layout='touch-landscape'] .screen-keys {
+  grid-row: span 2;
+}
+
+/* Very short landscape screens (e.g. 568x320): tighter spacing, same text size. */
+@media (max-height: 360px) {
+  .game-app[data-layout='touch-landscape'] .screen-howto,
+  .game-app[data-layout='touch-landscape'] .screen-settings {
+    top: 2%;
+    max-height: 96%;
+    padding: calc(var(--u) * 4) calc(var(--u) * 8);
+    gap: calc(var(--u) * 3);
+  }
+
+  .game-app[data-layout='touch-landscape'] .screen-rules {
+    line-height: 1.35;
+  }
+
+  /* SETTINGS (5 rows of 44 px targets + the heading/BACK line): a little less air (TD-73) */
+  .game-app[data-layout='touch-landscape'] .screen-settings {
+    padding-top: calc(var(--u) * 2.5);
+    padding-bottom: calc(var(--u) * 2.5);
+    gap: calc(var(--u) * 2);
+  }
+}
+
+/* Page screens cover the playfield on touch layouts: hide the HUD bands so
+   labels do not peek out around the panel edges. */
+.game-app[data-layout^='touch'][data-screen='howTo'] .hud-band,
+.game-app[data-layout^='touch'][data-screen='settings'] .hud-band {
+  visibility: hidden;
+}
+
+/* The game containers clip but must never scroll: with overflow: hidden a
+   focused or scrolled-into-view element (keyboard Tab, test tools) could
+   scroll them and shift the whole game by a few pixels. overflow: clip
+   forbids programmatic scrolling; hidden remains the fallback (Safari < 16). */
+.game-stage {
+  overflow: hidden;
+  overflow: clip;
+}
+
+/* Very short screens: the pause and game-over panels fit without scrolling. */
+@media (max-height: 360px) {
+  .screen-pause,
+  .screen-over {
+    padding: calc(var(--u) * 4) calc(var(--u) * 8);
+    gap: calc(var(--u) * 3);
+  }
+}
+
+/* Mode host + title screen (Free Roam Prompt 2) -------------------------------
+   #app holds the title screen and at most one mode container (.mode-root). */
+.galaxia-root {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.mode-root {
+  position: absolute;
+  inset: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--space-void);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+}
+
+.title-screen[hidden] {
+  display: none;
+}
+
+.title-stars {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.title-inner {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 100%;
+  padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
+  animation: title-in 180ms var(--ease-out);
+}
+
+/* scale up, not slide: a moving box would briefly add scrollable overflow on short screens */
+@keyframes title-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.title-logo {
+  margin: 0;
+  line-height: 0;
+}
+
+.title-logo canvas {
+  width: min(78vw, 440px);
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.title-kicker {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: var(--text-dim);
+}
+
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 300px));
+  gap: 14px;
+  width: 100%;
+  justify-content: center;
+}
+
+.mode-card {
+  --card: var(--accent);
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.88);
+  color: var(--text);
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease-out),
+    transform var(--fast) var(--ease-out);
+}
+
+.mode-card-freeroam {
+  --card: var(--highlight);
+}
+
+.mode-card::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 3px;
+  background: var(--card);
+}
+
+.mode-card-art {
+  justify-self: stretch;
+  line-height: 0;
+  border: 1px solid var(--panel-edge);
+}
+
+.mode-card-art canvas {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 160 / 96;
+  image-rendering: pixelated;
+}
+
+.mode-card-tag {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--card);
+}
+
+.mode-card-name {
+  position: relative;
+  font-size: 22px;
+  letter-spacing: 0.14em;
+}
+
+.mode-card-desc {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.mode-card-meta {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.mode-card-name::before {
+  content: '';
+  position: absolute;
+  left: -11px;
+  top: 50%;
+  border: 6px solid transparent;
+  border-left-color: var(--card);
+  border-right-width: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+/* :focus (not only :focus-visible): the selected card is the menu cursor for keyboard and gamepad */
+.mode-card:focus {
+  outline: none;
+  border-color: var(--card);
+}
+
+.mode-card:focus .mode-card-name::before {
+  opacity: 1;
+}
+
+.mode-card:focus .mode-card-name {
+  color: var(--card);
+}
+
+@media (hover: hover) {
+  .mode-card:hover {
+    border-color: var(--card);
+  }
+}
+
+.mode-card:active {
+  transform: translateY(1px);
+}
+
+.title-hint {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.title-hint-touch,
+.fr-hint-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .title-hint-keys,
+  .fr-hint-keys {
+    display: none;
+  }
+
+  .title-hint-touch,
+  .fr-hint-touch {
+    display: inline;
+  }
+}
+
+.title-notices {
+  display: grid;
+  gap: 4px;
+  max-width: 40em;
+  text-align: center;
+}
+
+.title-notice {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ffe14a;
+}
+
+.title-notice.is-error {
+  color: var(--accent);
+}
+
+/* phones in portrait: stack the cards, keep the art modest so both fit */
+@media (max-width: 560px) {
+  .title-inner {
+    gap: 10px;
+  }
+
+  .mode-cards {
+    grid-template-columns: minmax(0, 360px);
+    gap: 10px;
+  }
+
+  .mode-card {
+    padding: 8px 10px 10px;
+  }
+
+  .mode-card-art {
+    justify-self: center;
+    width: min(100%, 200px);
+  }
+}
+
+/* short landscape screens: art beside the text, smaller logo */
+@media (max-height: 460px) {
+  .title-inner {
+    gap: 8px;
+  }
+
+  .title-logo canvas {
+    width: min(44vw, 260px);
+  }
+
+  .title-kicker,
+  .title-hint {
+    font-size: 10px;
+  }
+
+  .mode-cards {
+    grid-template-columns: repeat(2, minmax(0, 340px));
+    gap: 10px;
+  }
+
+  .mode-card {
+    grid-template-columns: 80px minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr auto;
+    column-gap: 18px;
+    row-gap: 2px;
+    padding: 8px 10px;
+  }
+
+  .mode-card-art {
+    grid-row: 1 / -1;
+    align-self: center;
+    width: 80px;
+  }
+
+  .mode-card-tag {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  .mode-card-name {
+    font-size: 16px;
+  }
+
+  .mode-card-desc {
+    font-size: 11.5px;
+  }
+
+  .mode-card-meta {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+}
+
+@media (max-height: 460px) and (max-width: 560px) {
+  .mode-cards {
+    grid-template-columns: minmax(0, 360px);
+  }
+}
+
+/* Classic: "◀ MENU" on the Classic title (top-right of the playfield) */
+.mode-exit {
+  position: absolute;
+  z-index: 5;
+  transform: translateX(-100%);
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font: 700 12px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.mode-exit[hidden] {
+  display: none;
+}
+
+.mode-exit:focus-visible {
+  outline: none;
+  color: var(--highlight);
+  border-color: rgba(92, 239, 255, 0.35);
+}
+
+@media (hover: hover) {
+  .mode-exit:hover {
+    color: var(--highlight);
+  }
+}
+
+/* Free Roam (prototype flight test) ------------------------------------------ */
+.freeroam-app {
+  /* container sizing: the shared .mode-shell rule (TD-72) */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.fr-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.fr-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fr-hud {
+  position: absolute;
+  top: max(8px, var(--safe-top));
+  left: max(10px, var(--safe-left));
+  right: max(10px, var(--safe-right));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.fr-pause {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.7);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.fr-pause:focus-visible {
+  outline: none;
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.freeroam-app:not([data-panel='none']) .fr-pause {
+  visibility: hidden;
+}
+
+.fr-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(10px, var(--safe-bottom));
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-hint {
+  visibility: hidden;
+}
+
+.freeroam-app[data-input='touch'] .fr-hint-keys {
+  display: none;
+}
+
+.freeroam-app[data-input='touch'] .fr-hint-touch {
+  display: inline;
+}
+
+/* touch: the hint stays left of the BOOST / FIRE buttons (it ran underneath them) */
+.freeroam-app[data-input='touch'] .fr-hint {
+  left: max(12px, var(--safe-left));
+  right: calc(max(14px, var(--safe-right)) + 184px);
+  text-align: left;
+  line-height: 1.5;
+}
+
+.fr-interact {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(10px, var(--safe-bottom)) + 26px);
+  transform: translateX(-50%);
+  min-width: 44px;
+  min-height: 48px;
+  max-width: calc(100% - 24px);
+  padding: 0 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--highlight);
+  background: rgba(6, 7, 15, 0.85);
+  color: var(--highlight);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fr-interact[hidden] {
+  display: none;
+}
+
+.fr-interact:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-interact {
+  display: none;
+}
+
+.fr-sector-line {
+  text-align: center;
+}
+
+.fr-sim-note[hidden] {
+  display: none;
+}
+
+.fr-panels {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-panels {
+  background: rgba(3, 4, 9, 0.5);
+  pointer-events: auto;
+}
+
+.fr-panel {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: min(100%, 460px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 18px 20px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.9);
+  box-shadow: 0 0 0 1px rgba(92, 239, 255, 0.08);
+  text-align: center;
+  animation: title-in 160ms var(--ease-out);
+}
+
+/* FR-TD-82: a panel the game just opened mid-flight ignores pointers until it has settled (touch FIRE taps must not land on it) */
+.fr-panel[data-arming] {
+  pointer-events: none;
+}
+.fr-panel[hidden] {
+  display: none;
+}
+
+.fr-kicker {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.26em;
+  color: var(--highlight);
+}
+
+.fr-title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.16em;
+}
+
+.fr-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.fr-text-dim,
+.fr-stats {
+  color: var(--text-dim);
+}
+
+.fr-stats {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-result {
+  margin: 0;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-best {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.fr-best.is-best {
+  color: #ffe14a;
+}
+
+.fr-menu {
+  display: grid;
+  gap: 3px;
+  min-width: 200px;
+  margin-top: 4px;
+}
+
+.fr-btn {
+  position: relative;
+  min-height: 44px;
+  padding: 4px 28px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.fr-btn::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  border: 6px solid transparent;
+  border-left-color: var(--highlight);
+  border-right-width: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+}
+
+.fr-btn:focus {
+  outline: none;
+  color: var(--highlight);
+  border-color: rgba(92, 239, 255, 0.35);
+}
+
+.fr-btn:focus::before {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .fr-btn:hover {
+    color: var(--highlight);
+  }
+}
+
+.fr-btn:active {
+  background: rgba(92, 239, 255, 0.1);
+}
+
+@media (max-height: 420px) {
+  .fr-panel {
+    gap: 5px;
+    padding: 10px 16px;
+  }
+
+  .fr-title {
+    font-size: 18px;
+  }
+
+  .fr-menu {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+
+  /* Prompt 14 audit: the pause menu has 9 entries; one row of 58 px columns overlapped the labels.
+     Three rows of three in a wider panel keep every label on one line and the 44 px targets. */
+  .fr-panel.fr-panel-pause {
+    width: min(100%, 620px);
+  }
+
+  .fr-panel-pause .fr-menu {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fr-panel-pause .fr-btn {
+    padding: 4px 12px 4px 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-inner,
+  .fr-panel {
+    animation: none;
+  }
+
+  .mode-card {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Free Roam: Galaxy Map (src/modes/freeroam/galaxy/galaxyMapScreen.ts) */
+/* Wide screens: map + side panel. Portrait / narrow: map + bottom      */
+/* sheet. The map box is measured in JS and the layout lattice chosen   */
+/* for it (galaxy/layout.ts); nothing here scales text or the canvas.   */
+/* ------------------------------------------------------------------ */
+.fr-flight {
+  position: absolute;
+  inset: 0;
+}
+
+.fr-flight[hidden],
+.fr-map[hidden],
+.fr-map-confirm[hidden],
+.fr-det-actions[hidden] {
+  display: none;
+}
+
+.fr-map {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 30vw, 380px);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'head head'
+    'field details';
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+  background: var(--space-void);
+  overflow: hidden;
+}
+
+.fr-map-head {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--panel-edge);
+}
+
+.fr-map-back {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.7);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.fr-map-back:focus {
+  outline: none;
+}
+
+.fr-map-back:focus-visible {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.fr-map-titles {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.fr-map-title {
+  margin: 0;
+  white-space: nowrap;
+  font-size: 16px;
+  letter-spacing: 0.2em;
+  color: var(--highlight);
+}
+
+.fr-map-sub {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fr-map-meta {
+  display: grid;
+  gap: 2px;
+  margin-left: auto;
+  text-align: right;
+}
+
+.fr-map-note,
+.fr-map-hint {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.freeroam-app[data-input='touch'] .fr-map-hint .fr-hint-keys {
+  display: none;
+}
+
+.freeroam-app[data-input='touch'] .fr-map-hint .fr-hint-touch {
+  display: inline;
+}
+
+.fr-map-field {
+  grid-area: field;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fr-map-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fr-map-nodes {
+  position: absolute;
+  inset: 0;
+}
+
+.fr-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0 0 1px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fr-node-name,
+.fr-node-sub {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow:
+    0 0 3px #000,
+    0 1px 2px #000;
+}
+
+.fr-node-name {
+  font-size: 12px;
+  line-height: 15px;
+  letter-spacing: 0.06em;
+}
+
+.fr-node-sub {
+  font-size: 10px;
+  line-height: 13px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-map[data-compact='true'] .fr-node-sub {
+  display: none;
+}
+
+.fr-node[data-state='locked'] .fr-node-name {
+  color: var(--text-dim);
+}
+
+.fr-node[data-state='current'] .fr-node-sub,
+.fr-node[data-state='available'] .fr-node-sub {
+  color: var(--highlight);
+}
+
+.fr-node[aria-pressed='true'] .fr-node-name {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: var(--highlight);
+  text-underline-offset: 3px;
+}
+
+.fr-node:focus {
+  outline: none;
+}
+
+.fr-node:focus-visible {
+  border-color: rgba(92, 239, 255, 0.55);
+  background: rgba(92, 239, 255, 0.06);
+}
+
+@media (hover: hover) {
+  .fr-node:hover .fr-node-name {
+    color: var(--highlight);
+  }
+}
+
+.fr-map[data-travel='on'] .fr-node {
+  pointer-events: none;
+}
+
+.fr-map-details {
+  grid-area: details;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.94);
+}
+
+.fr-det-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 6px;
+}
+
+.fr-det-art {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  image-rendering: pixelated;
+}
+
+.fr-det-titles {
+  min-width: 0;
+}
+
+.fr-det-kicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--highlight);
+}
+
+.fr-map-details[data-state='locked'] .fr-det-kicker,
+.fr-map-details[data-state='discovered'] .fr-det-kicker {
+  color: var(--text-dim);
+}
+
+.fr-det-name {
+  margin: 2px 0;
+  font-size: 18px;
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+}
+
+.fr-det-class {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.fr-det-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  padding: 0 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.fr-det-desc,
+.fr-det-note {
+  margin: 4px 0 8px;
+}
+
+.fr-det-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0 0 6px;
+  font-size: 11px;
+}
+
+.fr-det-facts dt {
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.fr-det-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-bar {
+  height: 4px;
+  margin: 0 0 8px;
+  background: var(--panel-edge);
+}
+
+.fr-bar i {
+  display: block;
+  height: 100%;
+  background: var(--highlight);
+}
+
+.fr-det-h {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: var(--text-dim);
+}
+
+.fr-req-list,
+.fr-req-parts,
+.fr-route-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-req {
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--panel-edge);
+}
+
+.fr-req-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+}
+
+.fr-req-mark {
+  color: var(--accent);
+}
+
+.fr-req[data-met='true'] .fr-req-mark,
+.fr-req-parts li[data-met='true'] {
+  color: #7dff9b;
+}
+
+.fr-req-progress {
+  margin-left: auto;
+  color: #ffe14a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fr-req-detail {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+}
+
+.fr-req-parts li {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.fr-route {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(27, 32, 56, 0.7);
+  font-size: 11px;
+}
+
+.fr-route-meta {
+  color: var(--text-dim);
+}
+
+.fr-route-state {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.fr-route[data-state='active'] .fr-route-state,
+.fr-route[data-state='open'] .fr-route-state {
+  color: var(--highlight);
+}
+
+.fr-route[data-state='sealed'] .fr-route-state {
+  color: var(--accent);
+}
+
+.fr-det-actions {
+  display: grid;
+  gap: 3px;
+  padding: 6px 10px 8px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.fr-det-actions .fr-btn {
+  width: 100%;
+}
+
+.fr-map-confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(3, 4, 9, 0.8);
+}
+
+.fr-map-confirm .fr-confirm {
+  background: rgba(6, 7, 15, 0.97);
+}
+
+.fr-charted {
+  color: var(--highlight);
+}
+
+.fr-news {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  line-height: 1.5;
+  color: #ffe14a;
+}
+
+.fr-news[hidden] {
+  display: none;
+}
+
+.fr-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* portrait and narrow screens: details become a bottom sheet */
+@media (max-aspect-ratio: 1/1), (max-width: 599px) and (min-height: 461px) {
+  .fr-map {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'head'
+      'field'
+      'details';
+  }
+
+  .fr-map-details {
+    max-height: 42dvh;
+    border-top: 1px solid var(--panel-edge);
+    border-left: 0;
+  }
+
+  .fr-det-head {
+    padding: 8px 12px 4px;
+  }
+
+  .fr-det-art {
+    width: 48px;
+    height: 48px;
+  }
+
+  .fr-det-name {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 719px) {
+  .fr-map-note {
+    display: none;
+  }
+}
+
+@media (max-width: 459px), (max-width: 719px) and (max-height: 460px) {
+  .fr-map-meta {
+    display: none;
+  }
+}
+
+/* short landscape phones: compact header and panel */
+@media (max-height: 460px) and (min-aspect-ratio: 1/1) {
+  .fr-map {
+    grid-template-columns: minmax(0, 1fr) clamp(240px, 36vw, 320px);
+  }
+
+  .fr-map-head {
+    min-height: 48px;
+    padding: 2px 10px;
+  }
+
+  .fr-map-title {
+    font-size: 14px;
+  }
+
+  .fr-det-head {
+    padding: 6px 10px 4px;
+  }
+
+  .fr-det-art {
+    width: 48px;
+    height: 48px;
+  }
+
+  .fr-det-name {
+    font-size: 15px;
+  }
+
+  .fr-det-body {
+    padding: 0 10px 6px;
+  }
+
+  .fr-det-actions {
+    padding: 4px 8px 6px;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Free Roam: System Map (src/modes/freeroam/galaxy/systemMapScreen.ts) */
+/* Same shell as the Galaxy Map (.fr-map). Each system button covers   */
+/* its whole lattice cell (galaxy/systemLayout.ts), so touch targets   */
+/* stay large; the marker is drawn on the canvas above the label.      */
+/* ------------------------------------------------------------------ */
+.fr-map-kicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--text-dim);
+}
+
+.fr-sysnode {
+  justify-content: flex-start;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.fr-sysnode[hidden] {
+  display: none;
+}
+
+.fr-sysnode > span {
+  flex: none;
+}
+
+.fr-sysnode .fr-node-name {
+  font-size: 11px;
+  line-height: 13px;
+  letter-spacing: 0.04em;
+}
+
+/* wide, tall cells: names may take two lines (set per layout in JS) */
+.fr-sysnode[data-lines='2'] .fr-node-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  text-align: center;
+}
+
+/* very narrow cells (small landscape phones): a smaller single line */
+.fr-sysmap[data-compact='true'] .fr-sysnode .fr-node-name {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.fr-sysnode .fr-node-sub {
+  font-size: 9px;
+  line-height: 12px;
+  letter-spacing: 0.1em;
+}
+
+.fr-sysnode[data-knowledge='signal'] .fr-node-name {
+  color: #a6fbff;
+  font-style: italic;
+}
+
+.fr-sysnode[data-state='blocked'] .fr-node-name,
+.fr-sysnode[data-state='remote'] .fr-node-name {
+  color: #c9c5bb;
+}
+
+.fr-sysnode[data-state='reachable'] .fr-node-sub,
+.fr-sysnode[data-state='current'] .fr-node-sub {
+  color: var(--highlight);
+}
+
+.fr-sysnode[data-state='locked'] .fr-node-sub {
+  color: var(--accent);
+}
+
+.fr-map-details[data-knowledge='signal'] .fr-det-name {
+  color: #a6fbff;
+  font-style: italic;
+}
+
+.fr-map-details[data-state='blocked'] .fr-det-kicker,
+.fr-map-details[data-state='remote'] .fr-det-kicker {
+  color: var(--text-dim);
+}
+
+.fr-map-details[data-state='locked'] .fr-det-kicker {
+  color: var(--accent);
+}
+
+.fr-prov {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--panel-edge);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.fr-prov-verified-object {
+  border-color: rgba(125, 255, 155, 0.55);
+  color: #7dff9b;
+}
+
+.fr-prov-speculative {
+  border-color: rgba(208, 124, 255, 0.55);
+  color: #d07cff;
+}
+
+.fr-det-fact {
+  margin: 6px 0;
+  padding-left: 8px;
+  border-left: 2px solid rgba(125, 255, 155, 0.5);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.fr-det-sub {
+  margin: 8px 0 3px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.fr-marker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-marker {
+  padding: 2px 6px;
+  border: 1px solid var(--panel-edge);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.fr-marker::before {
+  margin-right: 5px;
+}
+
+.fr-marker[data-kind='objective'] {
+  border-color: rgba(255, 225, 74, 0.6);
+}
+
+.fr-marker[data-kind='objective']::before {
+  content: '◆';
+  color: #ffe14a;
+}
+
+.fr-marker[data-kind='key']::before {
+  content: '⚿';
+  color: #ffb43a;
+}
+
+.fr-marker[data-kind='gateway']::before {
+  content: '◇';
+  color: var(--highlight);
+}
+
+.fr-marker[data-kind='hostile']::before {
+  content: '▲';
+  color: var(--accent);
+}
+
+.fr-marker[data-kind='station']::before {
+  content: '▣';
+  color: var(--highlight);
+}
+
+.fr-marker[data-kind='anomaly']::before {
+  content: '✕';
+  color: #d07cff;
+}
+
+.fr-route-sum {
+  margin: 4px 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #ffe14a;
+}
+
+.fr-hop-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fr-hop-meta {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.fr-blocked {
+  color: #ffb0b8;
+}
+
+.fr-alts {
+  display: grid;
+  gap: 4px;
+}
+
+.fr-alt {
+  min-height: 44px;
+  padding: 4px 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.7);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fr-alt:focus {
+  outline: none;
+}
+
+.fr-alt:focus-visible {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+@media (hover: hover) {
+  .fr-alt:hover {
+    border-color: rgba(92, 239, 255, 0.55);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Free Roam Prompt 7: flight controls (FIRE, HUD buttons, sector map, */
+/* cargo, controls). docs/freeroam/FLIGHT_CONTROLS.md                  */
+/* ------------------------------------------------------------------ */
+.fr-hud-buttons {
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.fr-hudbtn {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.7);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.fr-hudbtn:focus-visible {
+  outline: none;
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.freeroam-app:not([data-panel='none']) .fr-hudbtn {
+  visibility: hidden;
+}
+
+/* the open overlay's own HUD button stays usable to close it (lifted above the panel backdrop) */
+.freeroam-app[data-panel='sectormap'] .fr-hud,
+.freeroam-app[data-panel='cargo'] .fr-hud {
+  z-index: 2;
+}
+
+.freeroam-app[data-panel='sectormap'] .fr-hud-map,
+.freeroam-app[data-panel='cargo'] .fr-hud-cargo {
+  visibility: visible;
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.freeroam-app[data-aim='mouse'] .fr-canvas {
+  cursor: crosshair;
+}
+
+/* FIRE: touch only (coarse pointer or touch in use). Held, multi-pointer safe. */
+.fr-fire {
+  position: absolute;
+  right: max(14px, var(--safe-right));
+  bottom: calc(max(14px, var(--safe-bottom)) + 22px);
+  display: none;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border: 2px solid rgba(92, 239, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(6, 7, 15, 0.55);
+  color: var(--highlight);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-fire.is-active {
+  background: rgba(92, 239, 255, 0.22);
+  border-color: var(--highlight);
+}
+
+@media (pointer: coarse) {
+  .fr-fire {
+    display: grid;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-fire {
+  display: grid;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-fire {
+  display: none;
+}
+
+/* touch: the contextual INTERACT button sits above FIRE, clear of the stick thumb */
+@media (pointer: coarse) {
+  .fr-interact {
+    left: auto;
+    right: max(12px, var(--safe-right));
+    bottom: calc(max(14px, var(--safe-bottom)) + 118px);
+    transform: none;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-interact {
+  left: auto;
+  right: max(12px, var(--safe-right));
+  bottom: calc(max(14px, var(--safe-bottom)) + 118px);
+  transform: none;
+}
+
+@media (max-height: 420px) {
+  .fr-fire {
+    width: 72px;
+    height: 72px;
+    bottom: max(10px, var(--safe-bottom));
+  }
+
+  .fr-interact,
+  .freeroam-app[data-input='touch'] .fr-interact {
+    bottom: calc(max(10px, var(--safe-bottom)) + 26px);
+  }
+
+  @media (pointer: coarse) {
+    .fr-interact {
+      right: calc(max(14px, var(--safe-right)) + 84px);
+      bottom: max(14px, var(--safe-bottom));
+    }
+  }
+
+  .freeroam-app[data-input='touch'] .fr-interact {
+    right: calc(max(14px, var(--safe-right)) + 84px);
+    bottom: max(14px, var(--safe-bottom));
+  }
+}
+
+@media (max-width: 520px) {
+  .fr-hudbtn {
+    padding: 0 6px;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* sector map overlay */
+.fr-panel-sectormap {
+  width: min(100%, 560px);
+}
+
+.fr-sectormap-canvas {
+  display: block;
+  width: min(100%, 62dvh, 480px);
+  aspect-ratio: 1;
+  border: 1px solid var(--panel-edge);
+  image-rendering: auto;
+}
+
+.fr-map-legend {
+  font-size: 11px;
+}
+
+@media (max-height: 420px) {
+  .fr-panel-sectormap {
+    width: min(100%, 720px);
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    column-gap: 14px;
+  }
+
+  .fr-panel-sectormap .fr-sectormap-canvas {
+    grid-row: 1 / span 5;
+    width: min(46dvh * 1.6, 60dvh);
+  }
+}
+
+/* cargo hold */
+.fr-cargo {
+  display: grid;
+  gap: 2px;
+  width: min(100%, 320px);
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-cargo-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(92, 239, 255, 0.12);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.fr-cargo-amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--highlight);
+}
+
+.fr-cargo-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* controls (rebinding) */
+.fr-panel-controls {
+  width: min(100%, 480px);
+}
+
+.fr-panel-controls .fr-menu {
+  grid-auto-flow: row;
+  width: 100%;
+}
+
+.fr-controls-grid {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+}
+
+.fr-controls-row,
+.fr-controls-zoom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 92px;
+  align-items: center;
+  gap: 6px;
+}
+
+.fr-controls-action {
+  text-align: left;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-btn.fr-keybtn,
+.fr-controls-zoom .fr-btn {
+  min-height: 40px;
+  padding: 2px 6px;
+  border-color: var(--panel-edge);
+  font-size: 13px;
+}
+
+.fr-keybtn::before,
+.fr-controls-zoom .fr-btn::before {
+  display: none;
+}
+
+.fr-keybtn.is-capturing {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.1);
+}
+
+.fr-controls-status {
+  min-height: 2.8em;
+  font-size: 12px;
+}
+
+@media (max-width: 360px) {
+  .fr-hud {
+    gap: 6px;
+  }
+
+  .fr-hud-buttons {
+    gap: 4px;
+  }
+
+  .fr-hudbtn {
+    min-width: 40px;
+    padding: 0 4px;
+    font-size: 10px;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* ===================== Free Roam Prompt 8: ships, hangar ===================== */
+
+/* BOOST: touch only, held; beside FIRE (left of it), multi-pointer safe */
+.fr-boost {
+  position: absolute;
+  right: calc(max(14px, var(--safe-right)) + 96px);
+  bottom: calc(max(14px, var(--safe-bottom)) + 30px);
+  display: none;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 2px solid rgba(255, 210, 63, 0.55);
+  border-radius: 50%;
+  background: rgba(6, 7, 15, 0.55);
+  color: #ffd23f;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-boost.is-active {
+  background: rgba(255, 210, 63, 0.2);
+  border-color: #ffd23f;
+}
+
+@media (pointer: coarse) {
+  .fr-boost {
+    display: grid;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-boost {
+  display: grid;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-boost {
+  display: none;
+}
+
+/* short landscape: FIRE bottom right, INTERACT left of it, BOOST above FIRE */
+@media (max-height: 420px) {
+  .fr-boost {
+    right: calc(max(14px, var(--safe-right)) + 4px);
+    bottom: calc(max(10px, var(--safe-bottom)) + 82px);
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* cargo hold: capacity line and JETTISON per stack */
+.fr-cargo-cap {
+  margin: 0;
+}
+
+.fr-cargo-cap.is-full {
+  color: var(--accent);
+}
+
+.fr-panel-cargo .fr-cargo-row {
+  align-items: center;
+}
+
+.fr-jettison {
+  min-height: 34px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.fr-jettison.is-armed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* hangar */
+.fr-panel-hangar {
+  width: min(100%, 780px);
+  max-height: min(100%, 100dvh);
+}
+
+.fr-hangar {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+}
+
+.fr-hangar-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.fr-hangar-ship {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.8);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fr-hangar-ship:focus-visible,
+.fr-hangar-ship.is-inspected {
+  outline: none;
+  border-color: var(--highlight);
+}
+
+.fr-hangar-ship-name {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.fr-hangar-ship-role {
+  grid-column: 1;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.fr-hangar-ship-state {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.fr-hangar-ship[data-status='active'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='active'] {
+  color: var(--highlight);
+}
+
+.fr-hangar-ship[data-status='owned'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='owned'],
+.fr-hangar-ship[data-status='available'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='available'] {
+  color: #8fe388;
+}
+
+.fr-hangar-ship[data-status='locked'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='locked'] {
+  color: var(--accent);
+}
+
+.fr-hangar-detail {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fr-hangar-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fr-hangar-preview {
+  width: 168px;
+  height: 132px;
+  border: 1px solid var(--panel-edge);
+  background: var(--space-void);
+}
+
+.fr-hangar-strip {
+  width: 320px;
+  max-width: 100%;
+  height: 78px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.fr-hangar-name {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+}
+
+.fr-hangar-role,
+.fr-hangar-state {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+.fr-hangar-desc {
+  margin: 0;
+  text-align: left;
+}
+
+.fr-hangar-stats {
+  display: grid;
+  gap: 3px;
+}
+
+.fr-hangar-stat {
+  display: grid;
+  grid-template-columns: 112px 1fr 72px 14px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.fr-hangar-label {
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+.fr-hangar-bar {
+  height: 6px;
+  border: 1px solid var(--panel-edge);
+}
+
+.fr-hangar-fill {
+  display: block;
+  height: 100%;
+  background: var(--highlight);
+}
+
+.fr-hangar-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-hangar-delta.is-better {
+  color: #8fe388;
+}
+
+.fr-hangar-delta.is-worse {
+  color: var(--accent);
+}
+
+.fr-hangar-slots,
+.fr-hangar-terms {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+
+.fr-hangar-terms[hidden] {
+  display: none;
+}
+
+.fr-hangar-slot {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+}
+
+.fr-hangar-slot-type {
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+.fr-hangar-term {
+  color: var(--accent);
+}
+
+.fr-hangar-term.is-met {
+  color: #8fe388;
+}
+
+.fr-hangar-msg {
+  min-height: 1.2em;
+  margin: 0;
+}
+
+.fr-hangar-actions {
+  width: 100%;
+}
+
+.fr-hangar-action:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .fr-hangar {
+    grid-template-columns: 1fr;
+  }
+
+  .fr-hangar-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fr-hangar-ship {
+    grid-template-columns: 1fr;
+    padding: 5px 6px;
+  }
+
+  .fr-hangar-ship-state {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .fr-hangar-stat {
+    grid-template-columns: 96px 1fr 64px 12px;
+  }
+}
+
+@media (max-height: 420px) {
+  .fr-hangar-preview {
+    width: 120px;
+    height: 94px;
+  }
+}
+
+/* ---- Free Roam combat HUD (Prompt 9): banner, objective, boss bar ---- */
+.fr-alert {
+  position: absolute;
+  left: 50%;
+  top: calc(max(8px, var(--safe-top)) + 92px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 5px 14px;
+  border: 2px solid currentColor;
+  background: rgba(6, 7, 15, 0.86);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.fr-alert[data-tone='danger'] {
+  color: #ff6a3d;
+  animation: fr-alert-pulse 0.5s steps(2, jump-none) infinite alternate;
+}
+
+.fr-alert[data-tone='danger']::before {
+  content: '▲ ';
+}
+
+.fr-alert[data-tone='warn'] {
+  color: #ffd25a;
+}
+
+.fr-alert[data-tone='info'] {
+  color: var(--highlight);
+}
+
+@keyframes fr-alert-pulse {
+  from {
+    border-color: currentColor;
+  }
+  to {
+    border-color: transparent;
+  }
+}
+
+.fr-combat {
+  position: absolute;
+  top: calc(max(8px, var(--safe-top)) + 46px);
+  right: max(10px, var(--safe-right));
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  width: min(250px, 48vw);
+  pointer-events: none;
+}
+
+.fr-objective {
+  margin: 0;
+  padding: 3px 8px;
+  background: rgba(6, 7, 15, 0.72);
+  border-left: 2px solid #ffd25a;
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+.fr-alert[hidden],
+.fr-objective[hidden],
+.fr-boss[hidden] {
+  display: none;
+}
+
+.fr-boss {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 4px 6px;
+  background: rgba(6, 7, 15, 0.72);
+}
+
+.fr-boss-name {
+  color: #ff6a3d;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: right;
+}
+
+.fr-boss-bar {
+  display: block;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.fr-boss-hull {
+  height: 7px;
+}
+
+.fr-boss-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+.fr-boss-shield .fr-boss-fill {
+  background: var(--highlight);
+}
+
+.fr-boss-hull .fr-boss-fill {
+  background: #ff6a3d;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-combat,
+.freeroam-app:not([data-panel='none']) .fr-alert {
+  visibility: hidden;
+}
+
+@media (max-width: 520px) {
+  .fr-alert {
+    top: calc(max(8px, var(--safe-top)) + 196px);
+    font-size: 12px;
+  }
+
+  .fr-combat {
+    top: calc(max(8px, var(--safe-top)) + 132px);
+  }
+}
+
+/* short landscape phones: toast, then the alert, then the objective column (all above FIRE / BOOST) */
+@media (max-height: 420px) {
+  .fr-alert {
+    top: calc(max(6px, var(--safe-top)) + 108px);
+  }
+
+  .fr-combat {
+    top: calc(max(6px, var(--safe-top)) + 148px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-alert[data-tone='danger'] {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Free Roam Prompt 10: inventory, collection log, full-hold choice, fabricator
+ * ---------------------------------------------------------------------- */
+.fr-icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  image-rendering: pixelated;
+}
+
+.fr-icon-small {
+  width: 16px;
+  height: 16px;
+}
+
+.fr-icon-big {
+  width: 36px;
+  height: 36px;
+}
+
+/* collection log: bottom-left, small, never over the centre of the action */
+.fr-feed {
+  position: absolute;
+  left: max(10px, var(--safe-left));
+  bottom: calc(max(10px, var(--safe-bottom)) + 34px);
+  display: grid;
+  gap: 3px;
+  max-width: min(340px, calc(50% - 150px));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  pointer-events: none;
+}
+
+.fr-feed[hidden] {
+  display: none;
+}
+
+.fr-feed-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 2px 4px;
+  border-left: 2px solid var(--highlight);
+  background: rgba(6, 7, 15, 0.62);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
+  animation: title-in 160ms var(--ease-out);
+}
+
+.fr-feed-line.is-warn {
+  border-left-style: dashed;
+  border-left-color: var(--accent);
+}
+
+.fr-feed-line.is-info {
+  border-left-color: var(--text-dim);
+}
+
+.fr-feed-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-feed {
+  visibility: hidden;
+}
+
+/* full-hold choice: low in the centre, above the interact prompt; flight goes on */
+.fr-offer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(10px, var(--safe-bottom)) + 82px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  max-width: min(560px, calc(100% - 24px));
+  padding: 6px 10px;
+  border: 1px dashed var(--accent);
+  background: rgba(6, 7, 15, 0.82);
+  pointer-events: none;
+}
+
+.fr-offer[hidden] {
+  display: none;
+}
+
+.fr-offer-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--text);
+}
+
+.fr-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.fr-offer-btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--highlight);
+  background: rgba(6, 7, 15, 0.9);
+  color: var(--highlight);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.fr-offer-btn:disabled {
+  border-style: dashed;
+  color: var(--text-dim);
+  border-color: var(--text-dim);
+  cursor: default;
+}
+
+.fr-offer-btn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-offer {
+  display: none;
+}
+
+/* cargo hold panel */
+.fr-panel-cargo {
+  width: min(100%, 720px);
+}
+
+.fr-inv-bar {
+  display: block;
+  width: min(100%, 320px);
+  height: 6px;
+  border: 1px solid var(--panel-edge);
+}
+
+.fr-inv-fill {
+  display: block;
+  height: 100%;
+  background: var(--highlight);
+}
+
+.fr-inv-bar.is-full .fr-inv-fill {
+  background: repeating-linear-gradient(45deg, var(--accent) 0 4px, transparent 4px 7px);
+}
+
+.fr-inv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.fr-inv-tools .fr-btn {
+  min-height: 38px;
+  padding: 2px 22px;
+  font-size: 12px;
+}
+
+.fr-inv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+
+.fr-inv[hidden] {
+  display: none;
+}
+
+.fr-panel-cargo .fr-cargo {
+  width: 100%;
+}
+
+.fr-inv-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fr-inv-row:focus-visible,
+.fr-cargo-row.is-selected .fr-inv-row {
+  border-color: var(--highlight);
+  outline: none;
+}
+
+.fr-inv-row .fr-cargo-name {
+  flex: 1;
+}
+
+.fr-inv-rarity {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.fr-inv-row[data-rarity='rare'] .fr-inv-rarity::before {
+  content: '◆ ';
+}
+
+.fr-inv-stacks {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.fr-inv-detail {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(92, 239, 255, 0.18);
+}
+
+.fr-inv-detail[hidden] {
+  display: none;
+}
+
+.fr-inv-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.fr-inv-meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--highlight);
+  letter-spacing: 0.06em;
+}
+
+.fr-inv-desc,
+.fr-inv-from,
+.fr-inv-use {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.fr-inv-modules {
+  width: 100%;
+  text-align: left;
+}
+
+.fr-inv-mods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-inv-mod {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.fr-inv-mod-slot {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* station fabricator */
+.fr-panel-fabricator {
+  width: min(100%, 780px);
+  max-height: min(100%, 100dvh);
+}
+
+.fr-fab {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+}
+
+/* list panels stay one column even where short screens lay button menus out in columns */
+.fr-panel-fabricator .fr-menu,
+.fr-panel-cargo .fr-menu {
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fr-fab-head {
+  margin-top: 6px;
+}
+
+.fr-fab-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-fab-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(92, 239, 255, 0.12);
+}
+
+.fr-fab-row.is-locked {
+  opacity: 0.7;
+}
+
+.fr-fab-info {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.fr-fab-name {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.fr-fab-desc,
+.fr-fab-why,
+.fr-fab-empty {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.fr-fab-cost {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.fr-fab-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.fr-fab-part.is-met {
+  color: var(--text);
+}
+
+.fr-fab-build,
+.fr-fab-fit,
+.fr-fab-claim {
+  flex: none;
+  min-height: 40px;
+  max-width: 100%;
+  padding: 2px 22px;
+  font-size: 11px;
+  white-space: normal;
+  justify-self: start;
+}
+
+.fr-fab-info .fr-fab-fit {
+  margin-top: 2px;
+}
+
+.fr-fab-build.is-armed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fr-fab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 620px) {
+  .fr-inv {
+    grid-template-columns: 1fr;
+  }
+
+  .fr-fab-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* touch-only devices: keyboard shortcuts mean nothing */
+@media (hover: none) and (pointer: coarse) {
+  .fr-offer-key {
+    display: none;
+  }
+}
+
+/* small screens (phones, either way up). The ship sits mid-screen, so:
+ *  - the log moves up under the gauges (top-left), two lines at most;
+ *  - the choice is compact (one text line, short labels) and sits low, above the
+ *    bottom row of touch buttons, never over the middle of the view. */
+@media (max-height: 500px), (max-width: 620px) {
+  .fr-feed {
+    /* under the top-HUD elements in its column, measured in freeRoamMode.ts (FR-TD-80) */
+    top: var(--fr-feed-top, calc(max(8px, var(--safe-top)) + 160px));
+    bottom: auto;
+    max-width: min(300px, calc(50% - 60px));
+  }
+
+  .fr-feed[data-tight] .fr-feed-line:not(:last-child),
+  .fr-feed-line:nth-last-child(n + 3) {
+    display: none;
+  }
+
+  .fr-offer {
+    gap: 2px;
+    padding: 2px 6px;
+    max-width: min(320px, calc(100% - 24px));
+  }
+
+  .fr-offer-text {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 11px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .fr-offer-text .fr-offer-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .fr-offer-detail,
+  .fr-offer-more {
+    display: none;
+  }
+
+  .fr-offer-actions {
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .fr-offer-btn {
+    padding: 0 10px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+/* landscape phones: just above the touch buttons (INTERACT / FIRE row) */
+@media (max-height: 500px) {
+  /* one 48 px row (two-line lead beside the buttons): the band between the ship and the
+   * touch buttons is short, but landscape has width to spare */
+  .fr-offer {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 6px;
+    bottom: calc(max(14px, var(--safe-bottom)) + 54px);
+  }
+
+  .fr-offer-text {
+    width: 118px;
+    white-space: normal;
+    line-height: 1.25;
+  }
+}
+
+/* portrait phones: above the INTERACT button, which sits above FIRE */
+@media (max-width: 620px) and (min-height: 501px) {
+  .fr-offer {
+    max-width: calc(100% - 24px);
+    bottom: calc(max(14px, var(--safe-bottom)) + 186px);
+  }
+
+  .fr-feed {
+    max-width: calc(100% - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-feed-line {
+    animation: none;
+  }
+}
+
+/* ---- Free Roam Prompt 11: missions, exchange, upgrades, record, fuel ---- */
+.fr-panel-station {
+  width: min(100%, 780px);
+  max-height: min(100%, 100dvh);
+}
+
+/* list panels: one column even where short screens lay button menus out in columns */
+.fr-panel-station .fr-menu {
+  grid-auto-flow: row;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* the hangar's button row grows with the station services */
+.fr-hangar-actions {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.fr-station-head {
+  margin: 2px 0;
+}
+
+.fr-station-msg {
+  min-height: 1.2em;
+  margin: 2px 0 4px;
+}
+
+.fr-station-preview {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--accent);
+  background: rgba(6, 7, 15, 0.82);
+}
+
+.fr-station-preview[hidden] {
+  display: none;
+}
+
+.fr-quote {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.fr-quote dt {
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-quote dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-quote-before {
+  color: var(--text-dim);
+}
+
+.fr-quote-arrow {
+  color: var(--text-dim);
+}
+
+.fr-quote-after {
+  color: var(--highlight);
+}
+
+.fr-mission-type,
+.fr-record-tag {
+  justify-self: start;
+  padding: 0 5px;
+  border: 1px solid var(--panel-edge);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+}
+
+.fr-mission-obj {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+
+.fr-mission-obj li.is-done {
+  color: var(--text-dim);
+}
+
+.fr-mission-deadline {
+  font-size: 11px;
+  color: var(--accent);
+}
+
+.fr-mission-reward {
+  font-size: 11px;
+  color: var(--highlight);
+}
+
+.fr-mission-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.fr-board-note,
+.fr-mission-done {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.fr-fab-fit.is-armed,
+.fr-fab-claim.is-armed {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fr-record-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 12px;
+  margin: 0 0 4px;
+  font-size: 11px;
+}
+
+.fr-record-stats dt {
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-record-stats dd {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-record.is-fact .fr-record-tag {
+  border-color: rgba(92, 239, 255, 0.6);
+  color: var(--highlight);
+}
+
+.fr-record.is-fiction .fr-record-tag {
+  border-color: rgba(255, 225, 74, 0.6);
+  color: #ffe14a;
+}
+
+.fr-record-src {
+  font-size: 10px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+/* reactor cells (maps) */
+.fr-fuel-warn {
+  color: var(--accent);
+}
+
+.fr-btn-sos {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.fr-route-sum[data-short='true'] {
+  color: var(--accent);
+}
+
+.fr-sysnode[data-mission='true']::after {
+  content: '◆';
+  position: absolute;
+  top: -4px;
+  right: -2px;
+  font-size: 11px;
+  line-height: 1;
+  color: #ffe14a;
+  pointer-events: none;
+}
+
+.fr-marker[data-kind='mission'] {
+  border-color: rgba(255, 225, 74, 0.6);
+}
+
+.fr-marker[data-kind='mission']::before {
+  content: '◆';
+  color: #ffe14a;
+}
+
+@media (max-height: 420px) {
+  /* the station services wrap into rows instead of one squeezed column flow */
+  .fr-hangar-actions {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+
+  .fr-station-preview {
+    padding: 4px 8px;
+  }
+
+  .fr-record-stats {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+/* ==========================================================================
+ * Free Roam Prompt 12: presentation. Contextual flight HUD (ship card,
+ * location + objective, cargo / nearby chips, one notice card), station hub
+ * and tabs, equipment, recovery and sound panels, focus, disabled states,
+ * reduced motion. docs/freeroam/UX.md
+ *
+ * Spacing steps: 4 / 8 / 12 px. Glow: none on text; a thin border marks
+ * focus and selection. Colour is never the only cue (every bar has a number,
+ * every state a word).
+ * ======================================================================== */
+.freeroam-app {
+  --fr-top: max(8px, var(--safe-top));
+  --fr-left: max(10px, var(--safe-left));
+  --fr-right: max(10px, var(--safe-right));
+  --fr-chip-bg: rgba(6, 7, 15, 0.72);
+  --fr-warn: #ffd25a;
+  --fr-danger: #ff6a3d;
+  --fr-good: #8fe388;
+  --fr-card-w: 244px;
+  --fr-buttons-w: 200px;
+}
+
+/* the HUD buttons only (top right) */
+.fr-hud {
+  justify-content: flex-end;
+}
+
+/* ---- ship card: top left ---- */
+.fr-shipcard {
+  position: absolute;
+  top: var(--fr-top);
+  left: var(--fr-left);
+  display: grid;
+  gap: 3px;
+  width: var(--fr-card-w);
+  padding: 6px 8px 7px;
+  border: 1px solid var(--panel-edge);
+  background: var(--fr-chip-bg);
+  pointer-events: none;
+}
+
+.fr-shipcard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-bottom: 1px;
+}
+
+.fr-ship-name {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+}
+
+.fr-weapon {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fr-weapon[data-state='firing'] {
+  color: var(--highlight);
+}
+
+.fr-meter {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) 62px;
+  align-items: center;
+  gap: 6px;
+}
+
+.fr-meter-label,
+.fr-meter-value {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.fr-meter-value {
+  text-align: right;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-meter-track {
+  height: 6px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.fr-meter-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--fr-good);
+  transition: width var(--fast) linear;
+}
+
+.fr-meter-shield .fr-meter-fill {
+  background: #9ec9ff;
+}
+
+.fr-meter-energy .fr-meter-fill {
+  background: var(--highlight);
+}
+
+.fr-meter.is-low .fr-meter-value,
+.fr-meter.is-low .fr-meter-label {
+  color: var(--fr-danger);
+}
+
+.fr-meter-hull.is-low .fr-meter-fill {
+  background: var(--accent);
+}
+
+.fr-meter-shield.is-low .fr-meter-fill {
+  background: repeating-linear-gradient(90deg, #9ec9ff 0 4px, transparent 4px 6px);
+}
+
+.fr-shipcard.is-boosting .fr-meter-energy .fr-meter-label {
+  color: var(--highlight);
+}
+
+/* ---- location and tracked objective: top centre ---- */
+.fr-top {
+  position: absolute;
+  top: var(--fr-top);
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100% - 2 * (var(--fr-card-w) + 24px));
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+.fr-loc {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.fr-loc-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-overflow: ellipsis;
+}
+
+.fr-loc-galaxy {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.fr-survey {
+  padding: 1px 6px;
+  border: 1px solid rgba(92, 239, 255, 0.4);
+  color: var(--highlight);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-survey.is-done {
+  border-color: var(--panel-edge);
+  color: var(--text-dim);
+}
+
+/* combat: the location shrinks to the system name */
+.fr-flight[data-loc='compact'] .fr-loc-galaxy,
+.fr-flight[data-loc='compact'] .fr-survey {
+  display: none;
+}
+
+.fr-flight[data-loc='compact'] .fr-loc-name {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.fr-hud-mission {
+  max-width: min(100%, 440px);
+  margin: 0;
+  padding: 2px 8px;
+  overflow: hidden;
+  border-left: 2px solid var(--fr-warn);
+  background: var(--fr-chip-bg);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fr-hud-mission[data-mode='compact'] {
+  border-left-color: rgba(255, 210, 90, 0.45);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.fr-hud-mission.is-here {
+  color: var(--fr-warn);
+}
+
+.fr-hud-mission[hidden],
+.fr-cargochip[hidden],
+.fr-nearby[hidden],
+.fr-notice[hidden],
+.fr-notice [hidden] {
+  display: none;
+}
+
+/* ---- cargo chip: under the ship card ---- */
+.fr-cargochip {
+  position: absolute;
+  top: calc(var(--fr-card-bottom, calc(var(--fr-top) + 102px)) + 4px); /* under the ship card (measured, FR-TD-80) */
+  left: var(--fr-left);
+  margin: 0;
+  padding: 3px 8px;
+  border-left: 2px solid var(--highlight);
+  background: var(--fr-chip-bg);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.fr-cargochip[data-state='warn'] {
+  border-left-style: dashed;
+  border-left-color: var(--fr-warn);
+  color: var(--fr-warn);
+}
+
+/* ---- nearby point of interest: bottom centre (the interaction prompt's place) ---- */
+.fr-nearby {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(max(10px, var(--safe-bottom)) + 30px);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 0 auto;
+  padding: 3px 10px;
+  overflow: hidden;
+  border: 1px solid var(--panel-edge);
+  background: var(--fr-chip-bg);
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* wherever the BOOST / FIRE pads show (touch in use, or a coarse pointer):
+   above the pads in portrait, bottom left in landscape */
+.freeroam-app[data-input='touch'] .fr-nearby {
+  bottom: calc(max(10px, var(--safe-bottom)) + 176px);
+}
+
+@media (pointer: coarse) {
+  .freeroam-app .fr-nearby {
+    bottom: calc(max(10px, var(--safe-bottom)) + 176px);
+  }
+}
+
+@media (max-height: 420px) {
+  .freeroam-app[data-input='touch'] .fr-nearby {
+    left: var(--fr-left);
+    right: auto;
+    bottom: max(10px, var(--safe-bottom));
+    max-width: calc(50% - 40px);
+    margin: 0;
+  }
+
+  .freeroam-app[data-input='touch'] .fr-flight:has(.fr-nearby:not([hidden])) .fr-hint {
+    opacity: 0;
+  }
+}
+
+@media (max-height: 420px) and (pointer: coarse) {
+  .freeroam-app .fr-nearby {
+    left: var(--fr-left);
+    right: auto;
+    bottom: max(10px, var(--safe-bottom));
+    max-width: calc(50% - 40px);
+    margin: 0;
+  }
+
+  .freeroam-app .fr-flight:has(.fr-nearby:not([hidden])) .fr-hint {
+    opacity: 0;
+  }
+}
+
+/* ---- the notice card (one at a time; the combat banner uses the same slot) ---- */
+.fr-notice {
+  position: absolute;
+  top: calc(var(--fr-top) + 92px);
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: max-content;
+  max-width: min(460px, calc(100% - 2 * (var(--fr-card-w) + 24px)));
+  margin: 0 auto;
+  padding: 6px 14px;
+  border: 1px solid var(--panel-edge);
+  border-top: 2px solid var(--text-dim);
+  background: rgba(6, 7, 15, 0.88);
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fr-notice-kicker {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+}
+
+.fr-notice-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.fr-notice-detail {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.fr-notice[data-kind='arrival'] {
+  border-top-color: var(--highlight);
+}
+
+.fr-notice[data-kind='arrival'] .fr-notice-title {
+  font-size: 16px;
+  letter-spacing: 0.2em;
+}
+
+.fr-notice[data-kind='arrival'] .fr-notice-kicker,
+.fr-notice[data-kind='discovery'] .fr-notice-kicker {
+  color: var(--highlight);
+}
+
+.fr-notice[data-kind='discovery'] {
+  border-top-color: var(--highlight);
+}
+
+.fr-notice[data-kind='mission'],
+.fr-notice[data-kind='upgrade'] {
+  border-top-color: var(--fr-warn);
+}
+
+.fr-notice[data-kind='mission'] .fr-notice-kicker,
+.fr-notice[data-kind='upgrade'] .fr-notice-kicker {
+  color: var(--fr-warn);
+}
+
+.fr-notice[data-kind='warn'],
+.fr-notice[data-kind='danger'] {
+  border-top-color: var(--fr-danger);
+}
+
+.fr-notice[data-kind='warn'] .fr-notice-kicker,
+.fr-notice[data-kind='danger'] .fr-notice-kicker {
+  color: var(--fr-danger);
+}
+
+/* the combat banner: same slot as the notice card, same width rule */
+.fr-alert {
+  max-width: min(520px, calc(100% - 2 * (var(--fr-card-w) + 24px)));
+}
+
+/* overlays open: the flight HUD steps back (the open panel's own HUD button stays) */
+.freeroam-app:not([data-panel='none']) .fr-shipcard,
+.freeroam-app:not([data-panel='none']) .fr-top,
+.freeroam-app:not([data-panel='none']) .fr-cargochip,
+.freeroam-app:not([data-panel='none']) .fr-nearby,
+.freeroam-app:not([data-panel='none']) .fr-notice {
+  visibility: hidden;
+}
+
+/* danger: a thin red frame while the hull is low (static; no flashing) */
+.fr-flight[data-danger='critical']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 59, 78, 0.55),
+    inset 0 0 40px rgba(255, 59, 78, 0.16);
+  pointer-events: none;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-flight::after {
+  display: none;
+}
+
+/* the control hint fades after the first seconds in a sector (it returns in the next one) */
+.fr-hint {
+  transition: opacity 600ms ease;
+}
+
+.fr-flight[data-hint='off'] .fr-hint {
+  opacity: 0;
+}
+
+/* ---- phones, portrait / narrow: ship card | buttons, then location, then the notice ---- */
+@media (max-width: 720px) and (min-height: 421px) {
+  .freeroam-app {
+    --fr-card-w: min(184px, calc(100vw - 196px));
+  }
+
+  .fr-meter {
+    grid-template-columns: 44px minmax(0, 1fr) 54px;
+    gap: 4px;
+  }
+
+  .fr-meter-label,
+  .fr-meter-value {
+    letter-spacing: 0.04em;
+  }
+
+  .fr-weapon {
+    display: none;
+  }
+
+  .fr-top {
+    top: calc(var(--fr-card-bottom, calc(var(--fr-top) + 102px)) + 4px); /* under the ship card (measured, FR-TD-80) */
+    max-width: calc(100% - 20px);
+  }
+
+  .fr-cargochip {
+    top: calc(var(--fr-top) + 52px);
+    left: auto;
+    right: var(--fr-right);
+    /* stay right of the ship card (it overlapped HULL/ENERGY before FR-TD-80); wrap if needed */
+    max-width: calc(100% - var(--fr-left) - var(--fr-card-w) - var(--fr-right) - 8px);
+    text-align: right;
+    text-wrap: balance;
+  }
+
+  .fr-notice,
+  .fr-alert {
+    top: calc(var(--fr-top) + 150px);
+    max-width: calc(100% - 20px);
+  }
+
+  .fr-combat {
+    top: calc(var(--fr-top) + 194px);
+  }
+}
+
+/* ---- short landscape phones: ship card | location | buttons; notice under the location ---- */
+@media (max-height: 420px) {
+  .freeroam-app {
+    --fr-card-w: 184px;
+  }
+
+  .fr-shipcard {
+    gap: 2px;
+    padding: 4px 6px 5px;
+  }
+
+  .fr-meter {
+    grid-template-columns: 44px minmax(0, 1fr) 54px;
+    gap: 4px;
+  }
+
+  .fr-meter-label,
+  .fr-meter-value {
+    letter-spacing: 0.04em;
+  }
+
+  .fr-weapon {
+    display: none;
+  }
+
+  .fr-loc-name {
+    font-size: 13px;
+  }
+
+  .fr-top {
+    max-width: calc(100% - 2 * (var(--fr-card-w) + 16px));
+  }
+
+  .fr-cargochip {
+    top: calc(var(--fr-card-bottom, calc(var(--fr-top) + 94px)) + 4px); /* under the ship card (measured, FR-TD-80) */
+  }
+
+  .fr-notice,
+  .fr-alert {
+    top: calc(var(--fr-top) + 50px);
+    max-width: calc(100% - 2 * (var(--fr-card-w) + 16px));
+    padding: 4px 10px;
+  }
+
+  .fr-combat {
+    top: calc(var(--fr-top) + 52px);
+  }
+
+  .fr-nearby {
+    bottom: max(8px, var(--safe-bottom));
+  }
+}
+
+/* ---- focus and states (keyboard, pad and touch alike) ---- */
+.freeroam-app :focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.freeroam-app .fr-btn:focus-visible,
+.freeroam-app .fr-tab:focus-visible,
+.freeroam-app .fr-hudbtn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+.freeroam-app .fr-btn:disabled,
+.freeroam-app .fr-btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- station tabs (one strip, moved into the open station panel) ---- */
+.fr-tabs {
+  /* the strip's full width must not widen the panel: it scrolls instead */
+  contain: inline-size;
+  flex: none; /* the panel's flex column must not squeeze the strip below its tap height */
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: calc(100% + 16px);
+  margin: -8px -8px 2px;
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.97);
+}
+
+.fr-tablist {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.fr-tablist.is-scrollable {
+  mask-image: linear-gradient(90deg, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+}
+
+.fr-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.fr-tab {
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fr-tab[aria-selected='true'] {
+  border-bottom-color: var(--highlight);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.fr-tab-launch {
+  flex: none;
+  margin: 2px 0;
+  min-height: 44px;
+  border: 1px solid rgba(92, 239, 255, 0.45);
+  color: var(--highlight);
+}
+
+@media (hover: hover) {
+  .fr-tab:hover {
+    color: var(--text);
+  }
+}
+
+@media (max-height: 420px) {
+  .fr-tabs {
+    top: -10px;
+    margin-top: -4px;
+  }
+
+  .fr-tab,
+  .fr-tab-launch {
+    min-height: 40px;
+  }
+}
+
+/* ---- station overview ---- */
+.fr-panel-station-hub {
+  width: min(100%, 780px);
+  max-height: min(100%, 100dvh);
+}
+
+.fr-hub-facts {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 2px 14px;
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.fr-hub-facts dt {
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.fr-hub-facts dd {
+  margin: 0;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-hub-facts dd.is-accent {
+  color: var(--fr-warn);
+}
+
+.fr-hub {
+  width: 100%;
+}
+
+.fr-hub-services {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.fr-btn.fr-hub-card {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-height: 60px;
+  padding: 8px 12px 8px 24px;
+  border: 1px solid var(--panel-edge);
+  text-align: left;
+}
+
+.fr-hub-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fr-hub-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.fr-hub-badge {
+  padding: 0 6px;
+  border: 1px solid rgba(255, 210, 90, 0.6);
+  color: var(--fr-warn);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.fr-hub-card-detail {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+
+.fr-btn.fr-hub-card:focus .fr-hub-card-detail {
+  color: var(--text);
+}
+
+/* ---- equipment ---- */
+.fr-panel-equipment {
+  width: min(100%, 780px);
+  max-height: min(100%, 100dvh);
+}
+
+.fr-equip-slotname {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.fr-equip-slot.is-empty .fr-fab-name {
+  color: var(--text-dim);
+}
+
+/* ---- recovery ---- */
+.fr-panel-recovery {
+  border-top: 2px solid var(--accent);
+}
+
+.fr-panel-recovery .fr-kicker {
+  color: var(--accent);
+}
+
+.fr-recovery-body {
+  display: grid;
+  gap: 6px;
+  max-width: 400px;
+}
+
+.fr-recovery-wreck {
+  padding: 4px 8px;
+  border-left: 2px dashed var(--fr-warn);
+  text-align: left;
+}
+
+/* the burst stays visible behind the recovery card */
+.freeroam-app[data-panel='recovery'] .fr-panels {
+  background: rgba(3, 4, 9, 0.28);
+}
+
+/* ---- sound ---- */
+.fr-sound {
+  width: min(100%, 320px);
+}
+
+.fr-sound-row {
+  display: grid;
+  grid-template-columns: 1fr 48px 56px 48px;
+  align-items: center;
+  gap: 4px;
+}
+
+.fr-sound-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-align: left;
+}
+
+.fr-sound-value {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-btn.fr-sound-step {
+  min-width: 44px;
+  padding: 0;
+  border-color: var(--panel-edge);
+  font-size: 18px;
+}
+
+.fr-btn.fr-sound-step::before {
+  display: none;
+}
+
+.fr-sound-row.is-muted .fr-sound-value {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+.fr-pause-info {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- reduced motion: the game's own setting as well as the system's ---- */
+.freeroam-app[data-motion='reduced'] .fr-panel,
+.freeroam-app[data-motion='reduced'] .fr-feed-line,
+.freeroam-app[data-motion='reduced'] .fr-alert[data-tone='danger'] {
+  animation: none;
+}
+
+.freeroam-app[data-motion='reduced'] .fr-meter-fill,
+.freeroam-app[data-motion='reduced'] .fr-hint {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-meter-fill,
+  .fr-hint {
+    transition: none;
+  }
+}
+
+@media (max-height: 420px) {
+  .fr-menu.fr-sound {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+  }
+}
+
+/* Fullscreen toggles (TD-72): only where the browser supports fullscreen. */
+.screen-row[hidden],
+.fr-sound-fullscreen[hidden] {
+  display: none;
+}
+
+/* Arcade Display (TD-73) ------------------------------------------------------
+   The bezel is a decorative ring just OUTSIDE the arena rect (the inner edge
+   of its border is the arena edge, so it never covers gameplay); its thickness
+   comes from --bezel (set per layout by app.ts, clamped 3..14 px). Bevel in
+   the panel colours (lit top edge, darker sides and bottom), a hairline cyan
+   rim and a faint halo; no animation. Click-through. */
+.arcade-bezel {
+  --bezel: 8px;
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: var(--bezel) solid #161b33;
+  border-color: #28305a #171c36 #0e1226 #171c36;
+  /* outer corners only: the inner radius (outer - border) is 0, so the arena corners stay square */
+  border-radius: calc(var(--bezel) * 0.85);
+  box-shadow:
+    0 0 0 1px rgba(92, 239, 255, 0.16),
+    0 0 calc(var(--bezel) * 2.5) rgba(92, 239, 255, 0.07),
+    0 calc(var(--bezel) * 1) calc(var(--bezel) * 3) rgba(0, 0, 0, 0.6);
+}
+
+.arcade-bezel[hidden] {
+  display: none;
+}
+
+/* a single lit line along the top edge */
+.arcade-bezel::before {
+  content: '';
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: calc(var(--bezel) * -1);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(92, 239, 255, 0.4), transparent);
+}
+
+/* GALAXIA mark centred in the bottom edge, only on a generous frame (large screens) */
+.arcade-bezel-mark::after {
+  content: 'GALAXIA';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bezel) * -1);
+  height: var(--bezel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 800 calc(var(--bezel) * 0.62) / 1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.7em;
+  text-indent: 0.7em;
+  color: rgba(255, 59, 78, 0.55);
+}
+
+/* ARCADE DISPLAY MODE switch (Classic SETTINGS, TD-73) */
+.screen-row-switch {
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 2px;
+}
+
+/* label over its description on the left, the switch centred across both lines on the right */
+.screen-row-switch > .screen-row-label {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+}
+
+.screen-row-switch > .screen-switch {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+
+.screen-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--u) * 3);
+  min-height: 44px;
+  min-width: calc(var(--u) * 40);
+  padding: calc(var(--u) * 1.5) calc(var(--u) * 5);
+  border: 1px solid var(--panel-edge);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: calc(var(--u) * 6);
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.screen-switch-track {
+  position: relative;
+  flex: none;
+  width: max(30px, calc(var(--u) * 17));
+  height: max(18px, calc(var(--u) * 9));
+  border: 1px solid var(--panel-edge);
+  border-radius: 999px;
+  background: #11152a;
+  transition: background var(--fast), border-color var(--fast);
+}
+
+.screen-switch-thumb {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: max(12px, calc(var(--u) * 6.5));
+  height: max(12px, calc(var(--u) * 6.5));
+  border-radius: 50%;
+  background: var(--text-dim);
+  transform: translateY(-50%);
+  transition: left var(--fast) var(--ease-out), background var(--fast);
+}
+
+.screen-switch-state {
+  min-width: 3ch;
+  text-align: left;
+}
+
+.screen-switch[aria-checked='true'] .screen-switch-track {
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.22);
+}
+
+.screen-switch[aria-checked='true'] .screen-switch-thumb {
+  left: calc(100% - 2px - max(12px, calc(var(--u) * 6.5)));
+  background: var(--highlight);
+  box-shadow: 0 0 6px rgba(92, 239, 255, 0.55);
+}
+
+.screen-switch[aria-checked='true'] .screen-switch-state {
+  color: var(--highlight);
+}
+
+.screen-switch:focus-visible {
+  color: var(--highlight);
+  border-color: rgba(92, 239, 255, 0.55);
+  outline: none;
+}
+
+@media (hover: hover) {
+  .screen-switch:hover {
+    color: var(--highlight);
+    border-color: rgba(92, 239, 255, 0.35);
+  }
+}
+
+.screen-switch:active {
+  background: rgba(92, 239, 255, 0.1);
+}
+
+.screen-row-desc {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6em;
+  margin: 0;
+  font-size: calc(var(--u) * 5);
+  color: var(--text-dim);
+}
+
+.screen-row-desc-mode {
+  color: var(--text);
+}
+
+.screen-switch[aria-checked='true'] + .screen-row-desc .screen-row-desc-mode {
+  color: var(--highlight);
+}
+
+/* Touch landscape and short touch portrait (<= 640 px tall, e.g. 320x568):
+   BACK shares the heading line (heading centred, BACK at the right) so the
+   extra ARCADE DISPLAY MODE row still fits without scrolling. DOM / focus
+   order unchanged (the list, then BACK). */
+.game-app[data-layout='touch-landscape'] .screen-settings {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.game-app[data-layout='touch-landscape'] .screen-settings > .screen-heading {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+}
+
+.game-app[data-layout='touch-landscape'] .screen-settings > .screen-menu {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+  min-width: 0;
+}
+
+.game-app[data-layout='touch-landscape'] .screen-settings > .screen-settings-list {
+  grid-column: 1 / -1;
+}
+
+@media (max-height: 640px) {
+  .game-app[data-layout='touch-portrait'] .screen-settings {
+    top: 2%;
+    max-height: 96%;
+    padding-top: calc(var(--u) * 5);
+    padding-bottom: calc(var(--u) * 5);
+    /* narrow: heading on the left, BACK on the right (no room to centre the heading) */
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .game-app[data-layout='touch-portrait'] .screen-settings > .screen-heading {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: start;
+    align-self: center;
+  }
+
+  .game-app[data-layout='touch-portrait'] .screen-settings > .screen-menu {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+    min-width: 0;
+  }
+
+  .game-app[data-layout='touch-portrait'] .screen-settings > .screen-settings-list {
+    grid-column: 1 / -1;
+  }
+}
+
+/* short landscape phones: one line across both settings columns (label | description | switch) */
+.game-app[data-layout='touch-landscape'] .screen-row-switch {
+  grid-column: 1 / -1;
+  grid-template-columns: auto 1fr auto;
+}
+
+.game-app[data-layout='touch-landscape'] .screen-row-switch .screen-row-desc {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  justify-content: center;
+}
+
+.game-app[data-layout='touch-landscape'] .screen-row-switch .screen-switch {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-switch-track,
+  .screen-switch-thumb {
+    transition: none;
+  }
+}
+
+/* ◀ MENU (back to the GALAXIA main menu) in both modes: a red pill in the
+   HIGH SCORE red (--accent at the top rim) with white letters like the score
+   digits. The fill darkens towards the bottom so white text keeps at least
+   ~5:1 contrast where the letters sit (#d92236 → #c41a2f). A transparent 6 px
+   border keeps the 44 px touch target around a slimmer visible pill
+   (background clipped to the padding box). Doubled class: wins over each
+   button's own rules. */
+.menu-btn.menu-btn {
+  white-space: nowrap; /* "◀ MENU" on one line even on 320 px phones */
+  border: 6px solid transparent;
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--accent) 0%, #d92236 40%, #c41a2f 100%) padding-box;
+  color: #fff;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(60, 0, 8, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 190, 196, 0.55),
+    inset 0 -2px 0 rgba(90, 0, 14, 0.4);
+}
+
+.menu-btn.menu-btn:focus-visible {
+  color: #fff;
+  outline: 2px solid var(--highlight);
+  outline-offset: -4px;
+}
+
+@media (hover: hover) {
+  .menu-btn.menu-btn:hover {
+    color: #fff;
+    background: linear-gradient(180deg, #ff5566 0%, #e22a3e 40%, #cc1f34 100%) padding-box;
+  }
+}
+
+.menu-btn.menu-btn:active {
+  background: linear-gradient(180deg, #d92236 0%, #c41a2f 60%, #a8132a 100%) padding-box;
+  box-shadow: inset 0 2px 3px rgba(70, 0, 10, 0.5);
+}
+
+@media (forced-colors: active) {
+  .menu-btn.menu-btn {
+    border-color: ButtonText;
+    forced-color-adjust: auto;
+  }
+}
+
+/* ==========================================================================
+ * Free Roam save slots (Prompt 13): a modal layer over any Free Roam screen,
+ * three slot cards, explicit confirmation for destructive actions.
+ * ======================================================================== */
+.fr-saves {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: max(10px, var(--safe-top)) max(10px, var(--safe-right)) max(10px, var(--safe-bottom)) max(10px, var(--safe-left));
+  background: rgba(3, 4, 9, 0.86);
+}
+
+.fr-saves[hidden] {
+  display: none;
+}
+
+.fr-saves .fr-saves-box {
+  width: min(100%, 560px);
+  justify-items: stretch;
+  gap: 6px;
+  padding: 14px 16px;
+  background: rgba(6, 7, 15, 0.97);
+  text-align: left;
+}
+
+.fr-saves .fr-kicker,
+.fr-saves .fr-title {
+  text-align: center;
+}
+
+.fr-saves .fr-title {
+  font-size: 18px;
+}
+
+.fr-saves-storage {
+  display: grid;
+  gap: 2px;
+}
+
+.fr-saves-storage .fr-text {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.fr-saves-warn {
+  color: var(--fr-warn);
+}
+
+.fr-saves-body {
+  display: grid;
+  gap: 6px;
+}
+
+.fr-saves-msg {
+  min-height: 1.4em;
+  font-size: 12px;
+  color: var(--highlight);
+}
+
+.fr-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.75);
+}
+
+.fr-slot-active {
+  border-color: rgba(92, 239, 255, 0.45);
+}
+
+.fr-slot-damaged,
+.fr-slot-newer {
+  border-left: 2px solid var(--fr-warn);
+}
+
+.fr-slot-title {
+  margin: 0 0 2px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  color: var(--highlight);
+}
+
+.fr-slot-line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.fr-slot-where {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.fr-slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  margin-top: auto;
+  padding-top: 3px;
+}
+
+.fr-slot-actions .fr-btn {
+  padding: 4px 22px;
+  font-size: 13px;
+}
+
+.fr-slot-actions .fr-slot-line {
+  flex-basis: 100%;
+  font-size: 11px;
+}
+
+.fr-saves-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fr-saves .fr-menu {
+  min-width: 0;
+}
+
+.fr-saves .fr-btn-danger {
+  color: var(--fr-danger);
+}
+
+/* the galaxy map header button (same frame as ◀ MENU) */
+.fr-map-head.has-saves .fr-map-titles {
+  margin-right: auto;
+}
+
+.fr-map-head.has-saves .fr-map-meta {
+  margin-left: 0;
+}
+
+/* narrow phones: the title, ◀ MENU and SAVES share one row (the title gives way last) */
+.fr-map-head.has-saves .fr-map-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 379px) {
+  .fr-map-head.has-saves {
+    gap: 6px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .fr-map-head.has-saves .fr-map-back {
+    padding: 0 8px;
+  }
+
+  .fr-map-head.has-saves .fr-map-title {
+    font-size: 14px;
+    letter-spacing: 0.08em;
+  }
+}
+
+.fr-saves-btn.is-warn {
+  border-color: var(--fr-warn);
+  color: var(--fr-warn);
+}
+
+@media (max-height: 460px) and (min-aspect-ratio: 1/1) {
+  .fr-saves .fr-saves-box {
+    width: min(100%, 720px);
+    padding: 8px 12px;
+  }
+
+  .fr-saves-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fr-saves-body > :not(.fr-slot) {
+    grid-column: 1 / -1;
+  }
+
+  .fr-saves .fr-title {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-saves .fr-saves-box {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+ * Classic: weapon heat (TD-74), the II / ⓘ corner and the ⓘ info box (TD-75)
+ * ======================================================================== */
+
+/* HUD heat meter: between the reserves and the stage, only during a run.
+   OVERHEAT is spelled out (never colour alone). */
+.hud-heat {
+  display: flex;
+  flex: 0 1 auto; /* in a narrow arena the meter gives way; reserves and STAGE keep their size */
+  align-items: center;
+  gap: max(5px, calc(var(--u) * 3)); /* clear space between the text and the bar */
+  min-width: 0;
+  margin: 0 calc(var(--u) * 2);
+}
+
+.hud-bottom > .hud-reserves,
+.hud-bottom > .hud-stage {
+  flex-shrink: 0;
+}
+
+.hud-heat[hidden] {
+  display: none;
+}
+
+.hud-heat-label {
+  /* never shrinks (a squeezed label let its text run under the bar), and always
+     as wide as OVERHEAT so the bar never jumps when the text changes */
+  display: grid;
+  justify-items: end;
+  flex: 0 0 auto;
+  font-size: calc(var(--ut, var(--u)) * 5);
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.hud-heat-label::after {
+  content: 'OVERHEAT';
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+.hud-heat-track {
+  position: relative;
+  /* a real width (not just flex-basis) so the meter is sized for the whole bar;
+     it still shrinks first in a narrow arena, never below min-width */
+  flex: 0 1 auto;
+  width: calc(var(--u) * 28);
+  min-width: calc(var(--u) * 8);
+  height: calc(var(--u) * 3);
+  min-height: 4px;
+  border: 1px solid rgba(243, 239, 228, 0.28);
+  background: rgba(243, 239, 228, 0.08);
+  overflow: hidden;
+}
+
+.hud-heat-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--highlight);
+}
+
+.hud-heat.is-hot .hud-heat-fill {
+  background: #ffb347;
+}
+
+.hud-heat.is-hot .hud-heat-label {
+  color: #ffb347;
+}
+
+.hud-heat.is-overheated .hud-heat-fill {
+  background: var(--accent);
+}
+
+.hud-heat.is-overheated .hud-heat-label {
+  color: var(--accent);
+  animation: heat-blink 0.5s steps(1, end) infinite;
+}
+
+.game-app[data-motion='reduced'] .hud-heat.is-overheated .hud-heat-label {
+  animation: none;
+}
+
+@keyframes heat-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Touch FIRE: heat rises inside the button; HOT while locked */
+.touch-fire {
+  --heat: 0%;
+  overflow: hidden;
+}
+
+.touch-fire::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--heat);
+  background: linear-gradient(0deg, rgba(255, 140, 50, 0.38), rgba(255, 179, 71, 0.16));
+  pointer-events: none;
+}
+
+.touch-fire.is-overheated {
+  color: #ffb347;
+  border-color: #ffb347;
+}
+
+/* Touch pad: II and ⓘ share one column. Side by side whenever the column fits
+   two 44 px buttons (tablets, landscape); stacked only in narrow phone columns,
+   which are tall enough (a fixed stack overflowed the 68 px tablet strip). */
+.touch-system {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* inside the column the 56 px zone minimum would overflow it; 44 px is still a full touch target */
+.touch-system .touch-zone {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.game-app[data-layout='touch-landscape'] .touch-system .touch-zone {
+  height: 56px;
+}
+
+.touch-info {
+  color: var(--highlight);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 22px;
+}
+
+/* II / ⓘ corner: top-right of the playfield, phone-sized desktop layouts during play */
+.play-corner {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  transform: translateX(-100%);
+}
+
+.play-corner[hidden] {
+  display: none;
+}
+
+.play-corner-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  background: rgba(12, 15, 30, 0.78);
+  color: var(--text);
+  font: 800 15px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.play-corner-info {
+  color: var(--highlight);
+  font: italic 700 20px/1 Georgia, 'Times New Roman', serif;
+}
+
+.play-corner-btn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .play-corner-btn:hover {
+    border-color: rgba(92, 239, 255, 0.45);
+  }
+}
+
+/* the ticker (top right of the HUD) keeps clear of the corner buttons */
+.game-app[data-corner='on'] .hud-ticker {
+  padding-right: 104px;
+}
+
+/* ⓘ info box: modal over the whole Classic app (touch pad included) */
+.info-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--safe-top, 0px) + 12px) calc(var(--safe-right, 0px) + 12px) calc(var(--safe-bottom, 0px) + 12px) calc(var(--safe-left, 0px) + 12px);
+  background: rgba(4, 6, 14, 0.74);
+}
+
+.info-layer[hidden] {
+  display: none;
+}
+
+.info-card {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 560px);
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  font: 600 13px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.06em;
+}
+
+.info-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-title {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: var(--accent);
+}
+
+.info-close {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--panel-edge);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: 700 12px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.info-close:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.info-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+}
+
+.info-section {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.info-heading {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--highlight);
+}
+
+.info-keys,
+.info-records {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 0;
+}
+
+.info-keys dt {
+  color: var(--accent);
+}
+
+.info-records dt {
+  color: var(--text-dim);
+}
+
+.info-keys dd,
+.info-records dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.info-keys-pad,
+.info-keys-touch {
+  display: none;
+}
+
+.game-app[data-layout^='touch'] .info-keys-kb {
+  display: none;
+}
+
+.game-app[data-layout^='touch'] .info-keys-touch {
+  display: grid;
+}
+
+.game-app[data-input='gamepad'] .info-keys-kb,
+.game-app[data-input='gamepad'] .info-keys-touch {
+  display: none;
+}
+
+.game-app[data-input='gamepad'] .info-keys-pad {
+  display: grid;
+}
+
+.info-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.info-table th {
+  color: var(--text-dim);
+  font-weight: 700;
+  text-align: right;
+}
+
+.info-table td {
+  padding: 2px 0;
+}
+
+.info-table td + td {
+  text-align: right;
+}
+
+/* Free Roam: weapon heat (FR-TD-79). The HEAT row in the ship card warms from
+   cyan to amber, and reads OVERHEAT (red, text not colour alone) while locked. */
+.fr-meter-heat .fr-meter-fill {
+  background: var(--highlight);
+}
+
+.fr-meter-heat.is-low .fr-meter-fill {
+  background: #ffb347;
+}
+
+.fr-meter-heat.is-overheated .fr-meter-fill {
+  background: var(--accent);
+}
+
+.fr-meter-heat.is-overheated .fr-meter-value {
+  letter-spacing: 0; /* OVERHEAT fits the 54 px phone value column */
+  font-weight: 700;
+}
+
+.fr-weapon[data-state='overheated'] {
+  color: var(--fr-danger);
+}
+
+/* touch FIRE: heat rises inside the round button; HOT while locked */
+.fr-fire {
+  --heat: 0%;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.fr-fire::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  height: var(--heat);
+  background: linear-gradient(0deg, rgba(255, 140, 50, 0.42), rgba(255, 179, 71, 0.16));
+  pointer-events: none;
+}
+
+.fr-fire.is-overheated {
+  color: #ffb347;
+  border-color: #ffb347;
+}

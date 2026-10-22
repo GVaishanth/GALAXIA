@@ -1,0 +1,32 @@
+{
+  "name": "galaxia",
+  "private": true,
+  "version": "1.0.0",
+  "description": "GALAXIA: an original fixed-screen arcade space shooter for the browser (static, GitHub Pages ready).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "npm run typecheck && vite build",
+    "build:qa": "npm run typecheck && vite build --mode qa",
+    "build:e2e": "npm run typecheck && vite build --mode e2e",
+    "preview": "vite preview --host 0.0.0.0",
+    "preview:e2e": "vite preview --mode e2e --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:soak": "node scripts/soak.ts",
+    "check": "npm run typecheck && npm run test && vite build && npm run verify:dist",
+    "verify:dist": "node scripts/verify-dist.ts",
+    "icons": "node scripts/make-icons.ts",
+    "sprites:sheet": "node scripts/render-sprite-sheet.ts",
+    "catalogue:doc": "node scripts/catalogue-doc.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

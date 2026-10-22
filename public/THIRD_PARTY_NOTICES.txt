@@ -1,0 +1,91 @@
+GALAXIA - THIRD-PARTY NOTICES AND CREDITS
+==========================================
+
+This file is deployed with the game. It lists the third-party material
+contained in, or credited by, the published site. The full asset register
+is docs/freeroam/CONTENT_AND_ASSET_LICENSES.md in the source repository.
+
+This notice records licences. It is not a statement that GALAXIA has been
+legally cleared; see docs/freeroam/IP_AND_ASSET_AUDIT.md.
+
+
+1. Third-party code included in the published bundle
+----------------------------------------------------
+
+The only third-party code in the built JavaScript is the small module-preload
+helper that the Vite build tool injects into the entry chunk. It is used
+under the MIT licence:
+
+  Vite (https://vite.dev, https://github.com/vitejs/vite)
+
+  MIT License
+
+  Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+Other build and test tools (TypeScript, Vitest, Rolldown, Lightning CSS and
+their dependencies) are used only to build or test the game. Their code is
+not shipped.
+
+
+2. Fonts, images and sound
+--------------------------
+
+- Fonts: none are shipped. The interface uses the visitor's system fonts
+  (system-ui and platform defaults). In-game lettering is a pixel font
+  defined in GALAXIA's own source code.
+- Images: no third-party images, photographs or telescope imagery are
+  shipped. Sprites, icons and backdrops are drawn by GALAXIA's own code.
+- Sound: no recordings or music files are shipped. Every sound is
+  synthesised in the browser from short recipes in GALAXIA's own code.
+
+
+3. Astronomy references (Free Roam)
+-----------------------------------
+
+Free Roam names real galaxies and a few real astronomical objects. Their
+short fact lines are written in GALAXIA's own words from public sources.
+No source text or imagery is reproduced. Credit is given to:
+
+  NASA (science.nasa.gov, NASA APOD, Hubble Messier Catalog, Chandra X-ray
+  Center, GSFC Imagine the Universe, JPL-Caltech/Spitzer), ESA, ESA/Webb,
+  ESA/Hubble, ESO, NOIRLab/NSF/AURA, the Event Horizon Telescope
+  Collaboration, MIT News, Lawrence Berkeley National Laboratory,
+  Nature (Nugent et al. 2011), Encyclopaedia Britannica and Wikipedia
+  (secondary reference, morphology codes only).
+
+ESA, ESA/Webb, ESA/Hubble, ESO and NOIRLab publish their texts and images
+under the Creative Commons Attribution 4.0 International licence (CC BY 4.0).
+NASA material is generally not subject to copyright in the United States.
+Neither NASA nor any agency listed endorses GALAXIA. Every fact and its
+source URL are listed in docs/freeroam/ASTRONOMY_SOURCES.md.
+
+All star systems, planets, stations, factions and events inside other
+galaxies are fictional or procedurally generated and are labelled as such
+in the game.
+
+
+4. Trademarks
+-------------
+
+GALAXIA's Classic mode is an independent homage inspired by the 1981 arcade
+game Galaga. It is not affiliated with, endorsed by or connected to Bandai
+Namco Entertainment Inc. Galaga and Galaxian are trademarks of their owner.
+All other trademarks belong to their respective owners.

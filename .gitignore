@@ -1,0 +1,34 @@
+# Dependencies and build output
+node_modules/
+dist/
+# release build + automation hooks for the browser harnesses (npm run build:e2e); never published
+dist-e2e/
+coverage/
+
+# Local editor / OS noise
+.DS_Store
+*.log
+
+# Python bytecode produced when skill helper scripts are run
+__pycache__/
+*.pyc
+
+# Claude Code: personal (non-shared) settings
+.claude/settings.local.json
+
+# Impeccable engine binary (platform-specific, ~21 MB).
+# The skill launcher (.claude/skills/impeccable/scripts/impeccable) re-downloads
+# the correct binary for each machine and verifies it against the release .sha256.
+.claude/skills/impeccable/scripts/bin/
+
+# Vite / TypeScript caches and local env files
+.vite/
+*.tsbuildinfo
+.env.local
+.env.*.local
+
+# Playwright artefacts if the optional playtest scripts are run in-repo
+test-results/
+playwright-report/
+docs/development/playtest/s5/
+docs/development/playtest/s8-audit/
