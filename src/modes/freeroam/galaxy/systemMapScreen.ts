@@ -32,6 +32,8 @@ import { HAZARD_LABEL, PATTERN_LABEL, deriveSystemView, type Knowledge, type Lan
 
 type Services = ModeContext['services'];
 
+declare const __GALAXIA_GRAVITY_LAB__: boolean; // vite.config.ts `define` (FR-TD-83: dev / QA builds only)
+
 export interface SystemMapDeps {
   readonly scope: DisposableScope;
   readonly parent: HTMLElement;
@@ -48,6 +50,8 @@ export interface SystemMapDeps {
   readonly travelFactor?: (() => { readonly factor: number; readonly ship: string }) | undefined;
   /** Prompt 11: reactor cells (absent = the Prompt 5 estimate display, nothing is spent). */
   readonly fuel?: SystemFuelDeps | undefined;
+  /** FR-TD-83: the experimental Gravity Flight test (dev / QA builds only): offered on this system while the pilot is in it. */
+  readonly gravityTest?: { readonly systemId: string; readonly enter: () => void } | undefined;
 }
 
 /** A course refused because the hold lacks reactor cells (shell travel result). */
@@ -495,6 +499,8 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     const actions: HTMLButtonElement[] = [];
     if (st === 'current') {
       actions.push(button('fr-btn', 'ENTER SECTOR', () => deps.startSurvey()));
+      const lab = deps.gravityTest;
+      if (__GALAXIA_GRAVITY_LAB__ && lab && lab.systemId === id) actions.push(button('fr-btn fr-btn-lab', 'GRAVITY TEST · EXPERIMENTAL', () => lab.enter()));
       const sos = deps.fuel?.emergency() ?? null;
       if (sos) {
         body.push(el('p', 'fr-det-note fr-fuel-warn', `Too few reactor cells for any lane out of ${intel.name}, and it has no station. The Guild covers an emergency jump to ${name(sos)}, the nearest station: free, and you can dock there for free cells.`));

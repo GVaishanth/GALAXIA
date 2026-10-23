@@ -14,7 +14,7 @@ import { DEFAULT_BINDINGS, PANEL_KEYS, RESERVED_KEYS, ZOOM_KEYS, type Bindings, 
 import type { FlightInput } from './sim.ts';
 
 /** Gamepad standard-mapping indices used by Free Roam flight. */
-export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], aimDeadZone: 0.3 });
+export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], missile: [11] as readonly number[], aimDeadZone: 0.3 });
 
 const held = (keys: ReadonlySet<string>, b: Bindings, a: FlightAction): boolean => keys.has(b[a][0]) || (b[a][1] !== null && keys.has(b[a][1]));
 
@@ -33,6 +33,11 @@ export function keyboardFire(keys: ReadonlySet<string>, b: Bindings = DEFAULT_BI
 /** Boost key held (Shift by default). */
 export function keyboardBoost(keys: ReadonlySet<string>, b: Bindings = DEFAULT_BINDINGS): boolean {
   return held(keys, b, 'boost');
+}
+
+/** Missile key held (Q / K by default); the skill reacts to the press only. */
+export function keyboardMissile(keys: ReadonlySet<string>, b: Bindings = DEFAULT_BINDINGS): boolean {
+  return held(keys, b, 'missile');
 }
 
 /** Left stick with a radial dead zone (rescaled so output starts at 0), or the D-pad. */
@@ -69,6 +74,11 @@ export function padFire(snap: PadSnapshot | null): boolean {
 /** LB or LT held (boost, Prompt 8). */
 export function padBoost(snap: PadSnapshot | null): boolean {
   return !!snap && PAD.boost.some((i) => snap.pressed[i] === true);
+}
+
+/** Right-stick click (R3) held: the missile (every face and shoulder button already has a flight role). */
+export function padMissile(snap: PadSnapshot | null): boolean {
+  return !!snap && PAD.missile.some((i) => snap.pressed[i] === true);
 }
 
 /** Sum of all sources, clamped to the unit disc (two devices never exceed full thrust). */

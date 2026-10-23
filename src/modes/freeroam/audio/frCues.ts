@@ -66,6 +66,18 @@ export function sectorCue(e: SectorEvent, ctx: HitContext): FrSoundId | null {
       return 'fr.complete';
     case 'gate':
       return e.gate.state === 'open' ? null : 'fr.deny';
+    /* pilot missile (Combat P03) */
+    case 'missileLock':
+      return 'fr.lock';
+    case 'missileLaunched':
+      return 'fr.missile';
+    case 'missileHit':
+      return e.killed ? null : 'fr.impact'; // a kill plays the destroyed boom instead
+    case 'missileRefused':
+    case 'missileLockLost':
+      return 'fr.deny';
+    case 'missileReady':
+      return 'fr.armed';
     default:
       return null;
   }

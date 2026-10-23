@@ -229,7 +229,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps the local sector world model and runtime pure; only the sector renderer touches the DOM (Prompt 6)', () => {
     const dir = join(src, 'modes/freeroam/sector');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'render.ts', 'resume.ts', 'run.ts', 'validate.ts']);
+    expect(files.sort()).toEqual(['collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'render.ts', 'resume.ts', 'run.ts', 'validate.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // no storage access: persistent changes leave the sector code only as events
@@ -237,14 +237,43 @@ describe('mode separation (Free Roam Prompt 2)', () => {
       expect(code, f).not.toMatch(/https?:\/\//); // no external art or data at runtime
       if (f === 'render.ts' || f === 'combatRender.ts' || f === 'lootRender.ts') continue;
       expect(code, f).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|fetch)\b/);
-      expect(code, f).not.toMatch(/from '\.\/(?:combatR|lootR|r)ender\.ts'/);
+      // gravityRender.ts draws but needs no DOM access, so it stays under the purity rule above
+      if (f !== 'gravityRender.ts') expect(code, f).not.toMatch(/from '\.\/(?:combatR|lootR|gravityR|r)ender\.ts'/);
     }
+  });
+
+  it('keeps the Gravity Flight prototype contained: pure physics and runtime, DOM only in its overlay and shell, loaded lazily behind its build flag (FR-TD-83)', () => {
+    const dir = join(src, 'modes/freeroam/gravity');
+    const names = readdirSync(dir).filter((f) => f.endsWith('.ts')).sort();
+    expect(names).toEqual(['config.ts', 'lab.ts', 'labShell.ts', 'physics.ts', 'render.ts']);
+    for (const f of names) {
+      const code = readFileSync(join(dir, f), 'utf8');
+      // no storage, no network, no telemetry
+      expect(code, f).not.toMatch(/from '[./]*(?:\.\.\/)*(?:profile|persistence|shared\/persistence|saveSlots)[^']*'/);
+      expect(code, f).not.toMatch(/\b(localStorage|sessionStorage|indexedDB|fetch|sendBeacon|XMLHttpRequest|WebSocket)\b|https?:\/\//);
+      if (f === 'labShell.ts') continue;
+      // the overlay draws on the canvas it is given; physics, config and the runtime are pure and deterministic
+      expect(code, f).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now)\b/);
+      if (f !== 'render.ts') expect(code, f).not.toMatch(/from '\.\/(?:render|labShell)\.ts'/);
+    }
+    // outside gravity/: type imports only (sector/run.ts: the hook's input type; the shell: the lab types)
+    const staticValue = /^import\s+(?!type\b)[^;]*?from\s+'(\.[^']+)'/gm;
+    for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/gravity/'))) {
+      const code = readFileSync(f, 'utf8');
+      const values = [...code.matchAll(staticValue)].map((m) => rel(resolve(dirname(f), m[1]!)));
+      expect(values.filter((v) => v.startsWith('modes/freeroam/gravity/')), rel(f)).toEqual([]);
+      const dynamic = importSpecs(f).filter((v) => v.startsWith('modes/freeroam/gravity/') && code.includes(`import('./gravity/`));
+      if (rel(f) !== 'modes/freeroam/freeRoamMode.ts') expect(dynamic, rel(f)).toEqual([]);
+    }
+    const shell = readFileSync(join(src, 'modes/freeroam/freeRoamMode.ts'), 'utf8');
+    expect(shell).toMatch(/if \(!__GALAXIA_GRAVITY_LAB__\) return;\n\s*const m = await import\('\.\/gravity\/labShell\.ts'\);/);
+    expect(shell.match(/import\('\.\/gravity\//g)?.length).toBe(1);
   });
 
   it('keeps Free Roam combat pure and independent of Classic (Prompt 9)', () => {
     const dir = join(src, 'modes/freeroam/combat');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'encounters.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'projectiles.ts', 'state.ts', 'weapons.ts', 'world.ts']);
+    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'encounters.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'state.ts', 'weapons.ts', 'world.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // deterministic simulation: no DOM, wall clock, unseeded randomness or storage

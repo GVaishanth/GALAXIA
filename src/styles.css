@@ -6064,3 +6064,134 @@ html.game-mode body {
   color: #ffb347;
   border-color: #ffb347;
 }
+
+/* Free Roam: pilot missile (Combat P03). The MISSILE row in the ship card:
+   fill = lock progress or cooldown recovered; the text says READY / LOCKING /
+   AWAY / seconds left, or HIT / KILL / MISS for a moment: 5 characters at
+   most, so the 54 px phone value column holds them. A refusal (NO TARGET /
+   LOW ENERGY / LOCK LOST) takes the whole row for its moment (text, not
+   colour alone); a press during the cooldown shows the seconds as a refusal. */
+.fr-meter-missile .fr-meter-fill {
+  background: #fbf8ee;
+}
+
+.fr-meter-missile .fr-meter-value {
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.fr-meter-missile[data-state='acquiring'] .fr-meter-fill {
+  background: var(--highlight);
+}
+
+.fr-meter-missile[data-state='cooldown'] .fr-meter-fill,
+.fr-meter-missile[data-state='launching'] .fr-meter-fill,
+.fr-meter-missile[data-state='safe'] .fr-meter-fill {
+  background: rgba(251, 248, 238, 0.45);
+}
+
+/* the "cannot launch now" state is not a danger: keep the row calm, the text says why */
+.fr-meter-missile.is-low .fr-meter-label {
+  color: var(--text-dim);
+}
+
+.fr-meter-missile.is-low .fr-meter-value {
+  color: var(--text);
+}
+
+.fr-meter-missile[data-state='refused'] .fr-meter-value,
+.fr-meter-missile.is-nudge .fr-meter-value {
+  color: #ffd23f;
+}
+
+.fr-meter-missile[data-state='refused'] .fr-meter-label,
+.fr-meter-missile[data-state='refused'] .fr-meter-track {
+  display: none;
+}
+
+.fr-meter-missile[data-state='refused'] .fr-meter-value {
+  grid-column: 1 / -1;
+}
+
+/* MSL: touch only, one press per touch (holding never repeats); clear of FIRE,
+   BOOST, the INTERACT prompt band and the stick side of the screen. A dark
+   fill drains as the cooldown runs; the label says LOCK or the seconds left. */
+.fr-missile {
+  --cool: 0%;
+  position: absolute;
+  /* 40 px from the edge: clear of the canvas edge markers (threats inset 18 px, objective 28 px, up to 9 px each) */
+  right: calc(max(14px, var(--safe-right)) + 26px);
+  bottom: calc(max(14px, var(--safe-bottom)) + 206px);
+  display: none;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 2px solid rgba(251, 248, 238, 0.55);
+  border-radius: 50%;
+  background: rgba(6, 7, 15, 0.55);
+  color: #fbf8ee;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-missile::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  z-index: -1;
+  height: var(--cool);
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.fr-missile.is-active,
+.fr-missile[data-state='acquiring'] {
+  background: rgba(92, 239, 255, 0.2);
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.fr-missile[data-state='cooldown'],
+.fr-missile[data-state='launching'] {
+  color: var(--text-dim);
+  border-color: rgba(251, 248, 238, 0.3);
+}
+
+.fr-missile[data-state='refused'] {
+  border-color: #ffd23f;
+  color: #ffd23f;
+}
+
+@media (pointer: coarse) {
+  .fr-missile {
+    display: grid;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-missile {
+  display: grid;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-missile {
+  display: none;
+}
+
+.fr-missile[hidden] {
+  display: none;
+}
+
+/* short landscape: the nearby chip moves bottom left, so MSL sits just above BOOST (top edge ~152 px up) */
+@media (max-height: 420px) {
+  .fr-missile {
+    bottom: calc(max(14px, var(--safe-bottom)) + 150px);
+  }
+}

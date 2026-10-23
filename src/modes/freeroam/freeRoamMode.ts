@@ -47,7 +47,7 @@ import { buildNavGraph, type NavGraph } from './galaxy/graph.ts';
 import { applySurvey, applyTravel, deriveView, describeRequirement, progressDiff, progressFromSaved, type ExplorationProgress, type SurveyResult } from './galaxy/progress.ts';
 import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMapStatus } from './galaxy/systemMapScreen.ts';
 import { applySystemTravel, deriveSystemView, HAZARD_LABEL, type SystemTravelResult } from './galaxy/systems.ts';
-import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
+import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardMissile, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padMissile, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
 import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withFleet, withMilestone, withModules, withNavigation, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
@@ -64,12 +64,16 @@ import { createInventoryPanel, type InventoryPanel } from './inventory/ui/invent
 import { COMBAT } from './combat/difficulty.ts';
 import { FACTIONS } from './combat/factions.ts';
 import { combatHud, type CombatHudModel } from './combat/hudModel.ts';
+import { MISSILE } from './combat/playerMissile.ts';
+import { spawnAgent } from './combat/ai.ts';
+import type { FamilyId } from './combat/families.ts';
 import { createCombatHud, type CombatHudView } from './combatHud.ts';
 import { sectorContext } from './sector/context.ts';
 import { generateSector } from './sector/generate.ts';
 import { stackFlightHud } from './ui/hudStack.ts';
 import { EMPTY_SECTOR_SAVE, POI_RULES, RARE_RESOURCES, type LootEntry, type SectorLayout } from './sector/model.ts';
 import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Wreck } from './sector/render.ts';
+import type { LabShell, LabStatus } from './gravity/labShell.ts';
 import { applyShip, canSwitchShip, createSectorRun, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
 import { upgradedShip, cleanLevels, type UpgradeLevels } from './ships/upgrades.ts';
 import { createEventBus, type GameEvent } from './progression/events.ts';
@@ -140,6 +144,8 @@ export interface SectorStatus {
   readonly vibrations: number;
   readonly shaking: boolean;
   readonly kills: number;
+  /** Combat P03: the missile skill (state, lock, cooldown ticks, notice, launches / hits this visit) and missiles in flight. */
+  readonly missile: { readonly state: string; readonly target: number | null; readonly lock: number; readonly cooldown: number; readonly notice: string | null; readonly launches: number; readonly hits: number; readonly inFlight: number };
   readonly hostileList: readonly {
     readonly id: number;
     readonly family: string;
@@ -193,9 +199,12 @@ export interface InputStatus {
   readonly aim: { readonly x: number; readonly y: number } | null;
   readonly fire: boolean;
   readonly boost: boolean;
+  /** Missile key / R3 / MSL held (Combat P03). */
+  readonly missile: boolean;
   readonly stickActive: boolean;
   readonly fireTouches: number;
   readonly boostTouches: number;
+  readonly missileTouches: number;
   readonly mouseFire: boolean;
   readonly keys: readonly string[];
 }
@@ -222,6 +231,8 @@ export interface FreeRoamStatus {
   readonly input: () => InputStatus;
   readonly camera: () => CameraStatus;
   readonly controls: () => FlightControls;
+  /** FR-TD-83: the Gravity Flight test sector while it is active (dev / QA builds), else null. */
+  readonly lab: () => LabStatus | null;
   /** Prompt 13: save slots panel and save state. */
   readonly saves: () => Readonly<Record<string, unknown>>;
   /** Client (CSS) px -> world, through the current camera (pointer mapping checks). */
@@ -256,9 +267,23 @@ export interface FreeRoamStatus {
   draws: number;
   /** Adaptive render resolution (TD-79) of the flight canvas. */
   readonly renderScale: () => (RenderScaleStats & { ratio: number; backing: string }) | null;
+  /**
+   * Combat P03 QA only: put one hostile ship at (dx, dy) art px from the pilot (browser checks of the missile).
+   * Part of the test hook object, so it exists only in builds with __GALAXIA_TEST_HOOKS__ (never in a release).
+   */
+  readonly qaSpawn: (family: FamilyId, dx: number, dy: number) => number | null;
+  /** FR-TD-86: the planet / star pull on the ship this tick and the sector's wells (read only). */
+  readonly gravity: () => {
+    readonly x: number;
+    readonly y: number;
+    readonly g: number;
+    readonly source: string | null;
+    readonly wells: readonly { readonly id: string; readonly kind: string; readonly x: number; readonly y: number; readonly solid: number; readonly ref: number; readonly felt: number; readonly range: number }[];
+  } | null;
 }
 
 declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
+declare const __GALAXIA_GRAVITY_LAB__: boolean; // vite.config.ts `define` (FR-TD-83: the Gravity Flight prototype, dev / QA builds only)
 
 declare global {
   interface Window {
@@ -306,6 +331,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** Panel buttons that lead back to a map; their label follows `mapReturn`. */
   let returnButtons: HTMLButtonElement[] = [];
   let flightRoot: HTMLElement;
+  /** FR-TD-83: the HUD button row (the gravity test adds its LAB button there). */
+  let hudButtons: HTMLElement;
+  /** FR-TD-83: the active Gravity Flight test sector (dev / QA builds only), or null. */
+  let lab: LabShell | null = null;
   let lastPersistTick = 0;
   /** False when a newer build wrote the profile: play session-only, never overwrite it. */
   let writable = true;
@@ -344,7 +373,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let viewRatio = 1;
   const bursts: Burst[] = [];
   const wrecks: Wreck[] = [];
-  const NO_INPUT: InputStatus = { moveX: 0, moveY: 0, aim: null, fire: false, boost: false, stickActive: false, fireTouches: 0, boostTouches: 0, mouseFire: false, keys: [] };
+  const NO_INPUT: InputStatus = { moveX: 0, moveY: 0, aim: null, fire: false, boost: false, missile: false, stickActive: false, fireTouches: 0, boostTouches: 0, missileTouches: 0, mouseFire: false, keys: [] };
   /** Owned ships and loadouts (validated against the roster), and the derived ship flown. */
   let fleet: FleetState;
   let craft: DerivedShip;
@@ -428,6 +457,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (fireBtn.textContent !== label) fireBtn.textContent = label;
   };
   let boostBtn: HTMLButtonElement;
+  /* missile skill (Combat P03): the MSL touch button, and a press waiting for the next simulated tick */
+  let missileBtn: HTMLButtonElement;
+  let missilePending = false;
+  let padMissileWas = false;
+  const paintMissileBtn = (r: SectorRun, touches: number): void => {
+    const m = r.missile;
+    const state = m.state === 'acquiring' ? 'acquiring' : m.state === 'cooldown' ? (r.missiles.length > 0 ? 'launching' : m.notice === 'cooling' ? 'refused' : 'cooldown') : m.notice === 'noTarget' || m.notice === 'lowEnergy' || m.notice === 'lockLost' ? 'refused' : 'ready';
+    const label = state === 'acquiring' ? 'LOCK' : m.state === 'cooldown' && state !== 'launching' ? `${Math.ceil(m.cooldown / 60)}s` : 'MSL';
+    if (missileBtn.dataset['state'] !== state) missileBtn.dataset['state'] = state;
+    if (missileBtn.textContent !== label) missileBtn.textContent = label;
+    const pct = m.state === 'cooldown' ? Math.round((100 * m.cooldown) / MISSILE.cooldownTicks) : 0;
+    missileBtn.style.setProperty('--cool', `${pct}%`);
+    missileBtn.classList.toggle('is-active', touches > 0);
+  };
   let hangar: HangarPanel;
   let inventory: InventoryPanel;
   let fabricator: FabricatorPanel;
@@ -503,6 +546,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   };
   /** Credit whole seconds flown in the active sector, note a safe resume point, then save. */
   const persist = (): boolean => {
+    // FR-TD-83: the gravity test sector writes nothing (no flight time, no resume point, no save)
+    if (__GALAXIA_GRAVITY_LAB__ && lab) return true;
     if (run) {
       const seconds = Math.floor((run.tick - lastPersistTick) / 60);
       if (seconds > 0) {
@@ -807,6 +852,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   const leaveSector = (): void => {
     if (!run) return;
     persist();
+    if (__GALAXIA_GRAVITY_LAB__ && lab) {
+      lab.dispose();
+      lab = null;
+      keys.setCodes(allCodes(controls.bindings));
+    }
     disposeSectorRun(run);
     art?.dispose();
     run = null;
@@ -824,6 +874,63 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     arrivalMs = null;
     if (feed) feed.clear();
     if (offerView) offerView.render(null, false, { take: '', swap: '', leave: '' }, () => ['', '']);
+  };
+  /**
+   * FR-TD-83: enter the Gravity Flight test sector (an experimental region of
+   * Sol; dev / QA builds only). The lab module loads on demand; the active
+   * sector is left first (and saved as usual). Nothing in the test writes the
+   * profile; leaving returns to the system map.
+   */
+  const enterGravityLab = async (): Promise<void> => {
+    if (!__GALAXIA_GRAVITY_LAB__) return;
+    const m = await import('./gravity/labShell.ts');
+    if (lifecycle === 'disposed') return;
+    leaveSector();
+    const shell = m.createLabShell({
+      graph,
+      craft,
+      seed: randomSeed(),
+      root: flightRoot,
+      hudButtons,
+      pause: () => (run ? pauseSector(run).length > 0 : false),
+      resume: () => {
+        if (run) resumeSector(run);
+        clock.resetTiming();
+      },
+      exit: () => actions.openMap(),
+      notice: (title, detail) => showNotice('info', title, detail, 4200),
+      sound: (id) => services.sound.play(id),
+      onReset: () => {
+        if (!run) return;
+        snapCamera(cam, run.ship.x, run.ship.y);
+        bursts.length = 0;
+        wrecks.length = 0;
+        clock.resetTiming();
+      },
+    });
+    lab = shell;
+    layout = shell.layout;
+    art = new SectorArt(layout);
+    run = shell.run;
+    resumedAt = false;
+    mapReturn = 'system';
+    counters.generated += 1;
+    resetRunCounters();
+    snapCamera(cam, run.ship.x, run.ship.y);
+    bursts.length = 0;
+    wrecks.length = 0;
+    lastKey = '';
+    arrivalMs = null;
+    keys.setCodes([...allCodes(controls.bindings), ...shell.codes]);
+    refreshBriefing();
+    hereName = 'GRAVITY TEST';
+    refreshHint();
+    showScreen('flight');
+    showPanel(null);
+    clock.resetTiming();
+    arrivalMs = lastFrameTs;
+    const s = shell.status();
+    showNotice('info', `GRAVITY TEST · SCENARIO ${s.scenario}`, 'Experimental. Nothing here is saved. LAB (or T) opens scenarios, Flight Assist and tuning.', 5200);
   };
   const surveyText = (r: SectorRun): string => {
     const total = r.layout.pois.filter((p) => p.kind === 'survey').length;
@@ -852,6 +959,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       vibrations,
       shaking: shakeStart !== null,
       kills: r ? r.kills : 0,
+      missile: r ? { state: r.missile.state, target: r.missile.target, lock: r.missile.lock, cooldown: r.missile.cooldown, notice: r.missile.notice, launches: r.missile.launches, hits: r.missile.hits, inFlight: r.missiles.length } : { state: 'ready', target: null, lock: 0, cooldown: 0, notice: null, launches: 0, hits: 0, inFlight: 0 },
       hostileList: r ? r.hostiles.map((h) => ({ id: h.id, family: h.family, faction: h.faction, state: h.state, role: h.role, x: Math.round(h.x), y: Math.round(h.y), hull: Math.ceil(h.hull), shield: Math.ceil(h.shield), source: h.source })) : [],
       ship: r ? r.craft.ship : null,
       hull: r ? Math.round(r.hull) : 0,
@@ -980,6 +1088,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const order = ['up', 'left', 'down', 'right'] as const; // reads "WASD"
     const move = order.map((a) => keyLabel(b[a][0])).join('');
     const alt = order.map((a) => keyLabel(b[a][1])).join('');
+    if (__GALAXIA_GRAVITY_LAB__ && lab) {
+      // FR-TD-83: the gravity test flies rotate-and-thrust with the same keys
+      hintKeys.textContent = `${keyLabel(b.left[0])}/${keyLabel(b.right[0])} ROTATE · ${keyLabel(b.up[0])} THRUST · ${keyLabel(b.down[0])} BRAKE · ${actionKeys(b, 'fire')} FIRE · G ASSIST · T LAB · ESC PAUSE`;
+      container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
+      return;
+    }
     hintKeys.textContent = `${move}${alt.includes('—') ? '' : ` / ${alt}`} FLY · ${actionKeys(b, 'fire')} FIRE · ${keyLabel(b.boost[0])} BOOST${controls.mouseAim ? ' · MOUSE AIM' : ''} · ${actionKeys(b, 'interact')} INTERACT · ${keyLabel(b.map[0])} MAP · ${keyLabel(b.cargo[0])} CARGO · ESC PAUSE`;
     container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
   };
@@ -1216,6 +1330,15 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       } else if (e.type === 'shotDown') {
         bursts.push({ x: e.x, y: e.y, startMs: lastFrameTs, size: 1 });
         if (bursts.length > 16) bursts.shift();
+      } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady') {
+        cue(e); // the HUD missile row and the MSL button carry the text (NO TARGET, LOCK LOST, LOW ENERGY...)
+      } else if (e.type === 'missileHit' || e.type === 'missileExpired') {
+        if (e.type === 'missileHit') cue(e);
+        // a small puff where it ended (a kill also gets the destroyed burst); bounded like every burst
+        if (e.type === 'missileExpired' || !e.killed) {
+          bursts.push({ x: e.x, y: e.y, startMs: lastFrameTs, size: 1 });
+          if (bursts.length > 16) bursts.shift();
+        }
       } else if (e.type === 'disabled') {
         showNotice('info', 'TARGET DISABLED', undefined, 1600);
       } else if (e.type === 'hit') {
@@ -1297,10 +1420,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
    * event goes to the progression systems as typed gameplay events. `applied`
    * comes from the inventory: a repeat that changed nothing publishes nothing.
    */
+  /** FR-TD-83: events the gravity test passes to the shell (combat feedback only; nothing that saves or publishes). */
+  const LAB_EVENTS: ReadonlySet<SectorEvent['type']> = new Set(['hit', 'fired', 'overheated', 'weaponCooled', 'struck', 'destroyed', 'telegraph', 'blast', 'shotDown', 'disabled', 'missileLock', 'missileLockLost', 'missileRefused', 'missileLaunched', 'missileHit', 'missileExpired', 'missileReady']);
   const handleEvents = (r: SectorRun, events: readonly SectorEvent[]): void => {
     const sys = r.layout.systemId;
     hitCtx = { shieldBefore: batchShield ?? r.shield, shieldAfter: r.shield };
     batchShield = null;
+    if (__GALAXIA_GRAVITY_LAB__ && lab) {
+      for (const e of events) {
+        if (e.type === 'wrecked') {
+          wrecks.push({ x: e.x, y: e.y, heading: e.heading, sprite: r.craft.sprite, startMs: lastFrameTs });
+          if (wrecks.length > 4) wrecks.shift();
+        } else if (e.type === 'recalled') {
+          cue(e);
+          showNotice('warn', 'SHIP DESTROYED · SCENARIO RESET', 'Nothing is lost in the gravity test.', 3200);
+          snapCamera(cam, r.ship.x, r.ship.y);
+        } else if (LAB_EVENTS.has(e.type)) handleEvent(r, sys, e);
+      }
+      return;
+    }
     const kindOf = (id: string) => r.layout.pois.find((p) => p.id === id)?.kind;
     for (const e of events) {
       const before = profile;
@@ -1329,7 +1467,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       persist();
       // the pause card names where you are and carries the survey clock (no longer always on the HUD)
       pauseKicker.textContent = `${hereName} · ${galaxyShort}`;
-      pauseInfo.textContent = `${surveyText(run)} · TIME ${formatTicks(run.tick)}`;
+      pauseInfo.textContent = __GALAXIA_GRAVITY_LAB__ && lab ? `EXPERIMENTAL · NOTHING IS SAVED · TIME ${formatTicks(run.tick)}` : `${surveyText(run)} · TIME ${formatTicks(run.tick)}`;
       showPanel('pause');
     },
     resume: (): void => {
@@ -1341,6 +1479,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     /** Back to the arrival zone: temporary state resets, completed interactions stay. */
     restart: (): void => {
       if (!run) return;
+      if (__GALAXIA_GRAVITY_LAB__ && lab) {
+        // FR-TD-83: RESTART FLIGHT restarts the current gravity scenario
+        lab.reset();
+        resumeSector(run);
+        clock.resetTiming();
+        showPanel(null);
+        return;
+      }
       persist();
       restartSector(run);
       resetRunCounters();
@@ -1405,6 +1551,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       showPanel('sectormap');
     },
     cargo: (): void => {
+      if (__GALAXIA_GRAVITY_LAB__ && lab) {
+        showNotice('info', 'CARGO IS CLOSED IN THE GRAVITY TEST', undefined, 2400); // jettison would change the save
+        return;
+      }
       if (!run || pauseSector(run).length === 0) return;
       services.sound.play('pause');
       persist();
@@ -1484,6 +1634,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     },
     openMap: (): void => {
       services.sound.play('uiSelect');
+      if (__GALAXIA_GRAVITY_LAB__ && lab) {
+        // FR-TD-83: leaving the gravity test touches no resume point; back to the system map
+        leaveSector();
+        showScreen('systems');
+        return;
+      }
       leaveSector();
       // leaving the sector on purpose: the next visit starts at the arrival
       if (profile.resume) {
@@ -1794,7 +1950,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       attention,
     );
     flightHud.render({
-      card: shipCard({ ship: SHIP_BY_ID.get(r.craft.ship)!.name, weapon: weaponName(), firing, docked: r.docked !== null, shield: r.shield, shieldMax: r.craft.stats.shield, hull: r.hull, hullMax: r.craft.stats.hull, energy: r.energy, energyMax: r.craft.stats.energy, boosting: r.boosting, heat: r.heat, overheated: r.overheated }),
+      card: shipCard({ ship: SHIP_BY_ID.get(r.craft.ship)!.name, weapon: weaponName(), firing, docked: r.docked !== null, shield: r.shield, shieldMax: r.craft.stats.shield, hull: r.hull, hullMax: r.craft.stats.hull, energy: r.energy, energyMax: r.craft.stats.energy, boosting: r.boosting, heat: r.heat, overheated: r.overheated, missile: { state: r.missile.state, lock: r.missile.lock, lockTicks: MISSILE.lockTicks, cooldown: r.missile.cooldown, cooldownTicks: MISSILE.cooldownTicks, inFlight: r.missiles.length > 0, notice: r.missile.notice } }),
       location: { name: hereName, galaxy: galaxyShort, survey: surveyText(r), surveyed: r.surveyed },
       view,
       objective: tracked?.text ?? null,
@@ -1846,12 +2002,15 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     // each press goes to whichever context is active when it is handled (a command may open a panel)
     for (const code of keys.takePresses()) {
       if (panel) for (const c of panelKeyCommands([code], binds)) panelCommand(c);
+      else if (__GALAXIA_GRAVITY_LAB__ && lab?.drawerOpen) lab.drawerKey(code); // the lab drawer takes every press while open
+      else if (__GALAXIA_GRAVITY_LAB__ && lab?.key(code, binds)) continue;
       else {
         const offerKey = run?.offer && run.phase === 'flight' && flightKeyCommands([code], binds).length === 0 && !Object.values(binds).some((k) => k.includes(code));
         if (offerKey && code === OFFER_KEYS.take) offerActions.take();
         else if (offerKey && code === OFFER_KEYS.swap) offerActions.swap();
         else if (offerKey && code === OFFER_KEYS.leave) offerActions.leave();
         else for (const c of flightKeyCommands([code], binds)) flightCommand(c);
+        if (run?.phase === 'flight' && (binds.missile[0] === code || binds.missile[1] === code)) missilePending = true; // a tap shorter than a frame still counts
       }
     }
     if (panel) for (const c of panelPadCommands(update)) panelCommand(c);
@@ -1886,16 +2045,37 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     const fire = live && (keyboardFire(keys.heldCodes, binds) || padFire(snapshot) || pointers.firing);
     const boost = live && (keyboardBoost(keys.heldCodes, binds) || padBoost(snapshot) || pointers.boosting);
-    const flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost } : { ...move, fire, boost };
-    lastInput = { moveX: move.moveX, moveY: move.moveY, aim, fire, boost, stickActive: pv.stickActive, fireTouches: pv.fireTouches, boostTouches: pv.boostTouches, mouseFire: pv.mouseFire, keys: [...keys.heldCodes] };
+    // missile (Combat P03): held state for the simulation's press edge, plus a latched press so a quick tap is
+    // never lost on a frame that runs no tick; nothing is latched behind a panel or outside flight
+    const padM = padMissile(snapshot);
+    if (pointers.takeMissilePress() && live) missilePending = true;
+    if (padM && !padMissileWas && live) missilePending = true;
+    padMissileWas = padM;
+    if (!live) missilePending = false;
+    const missile = live && (keyboardMissile(keys.heldCodes, binds) || padM || pointers.missileHeld);
+    let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost, missile } : { ...move, fire, boost, missile };
+    if (__GALAXIA_GRAVITY_LAB__ && lab) {
+      // FR-TD-83: rotate-and-thrust in the gravity test only (the same keys, pad and joystick, mapped there)
+      const kv = keyboardVector(keys.heldCodes, binds);
+      const pv2 = padVector(snapshot);
+      const tv = live ? pv.stick : { x: 0, y: 0 };
+      const sx = pv2.x + tv.x;
+      const sy = pv2.y + tv.y;
+      const sl = Math.hypot(sx, sy);
+      flight = { ...lab.input({ keys: kv, stick: sl > 1 ? { x: sx / sl, y: sy / sl } : { x: sx, y: sy }, aim, fire, boost }, live), missile };
+    }
+    lastInput = { moveX: move.moveX, moveY: move.moveY, aim, fire, boost, missile, stickActive: pv.stickActive, fireTouches: pv.fireTouches, boostTouches: pv.boostTouches, missileTouches: pv.missileTouches, mouseFire: pv.mouseFire, keys: [...keys.heldCodes] };
     fireBtn.classList.toggle('is-active', pv.fireTouches > 0);
     paintFireHeat(r.heat, r.overheated);
     boostBtn.classList.toggle('is-active', pv.boostTouches > 0);
+    paintMissileBtn(r, pv.missileTouches);
     let events: SectorEvent[] = [];
     batchShield = r.shield;
     const alpha = clock.advance(ts, () => {
       if (r.phase !== 'flight' || run !== r) return;
-      events = events.concat(stepSector(r, flight));
+      const f = missilePending && !flight.missile ? { ...flight, missile: true } : flight;
+      missilePending = false;
+      events = events.concat(stepSector(r, f));
       status.ticks += 1;
     });
     if (events.length > 0) handleEvents(r, events);
@@ -1952,8 +2132,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         wrecks,
         arrivalMs,
       });
+      if (__GALAXIA_GRAVITY_LAB__ && lab) lab.draw(surface.ctx, view, { alpha: moving ? alpha : 1, ratio, reducedMotion: reduced });
       status.draws += 1;
     }
+    if (__GALAXIA_GRAVITY_LAB__ && lab) lab.frame(panel !== null);
     hudModel = combatHud(r);
     combatView.render(panel ? null : hudModel);
     renderHud(r, ts, live && !document.hidden, Math.hypot(move.moveX, move.moveY), fire);
@@ -2055,6 +2237,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         return btn;
       };
       const buttons = el('div', 'fr-hud-buttons');
+      hudButtons = buttons;
       buttons.append(hudBtn('fr-hud-map', 'MAP', 'Sector map', 'map'), hudBtn('fr-hud-cargo', 'CARGO', 'Cargo hold', 'cargo'), hudBtn('fr-pause', 'II', 'Pause', 'pause'));
       hud.append(buttons);
       const hint = el('p', 'fr-hint');
@@ -2066,6 +2249,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       boostBtn = el('button', 'fr-boost', 'BOOST');
       boostBtn.type = 'button';
       boostBtn.setAttribute('aria-label', 'Boost (hold while flying)');
+      missileBtn = el('button', 'fr-missile', 'MSL');
+      missileBtn.type = 'button';
+      missileBtn.setAttribute('aria-label', 'Missile: press to lock the ship ahead and launch');
       interactBtn = el('button', 'fr-interact');
       interactBtn.type = 'button';
       interactBtn.hidden = true;
@@ -2394,7 +2580,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery);
       flightRoot.append(hud);
       flightHud = createFlightHud(flightRoot, motion);
-      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, feed.root, offerView.root);
+      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, feed.root, offerView.root);
       combatView = createCombatHud(flightRoot);
       // measured HUD stacking under the ship card (FR-TD-80; ui/hudStack.ts)
       stackFlightHud(scope, flightRoot, flightHud.card, feed.root);
@@ -2451,6 +2637,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         startSurvey: () => actions.briefing('system'),
         back: actions.galaxyMap,
         travelFactor: () => ({ factor: craft.stats.travel, ship: shipName() }),
+        // FR-TD-83: dev / QA builds only (the literal removes it from release builds); = gravity/config.ts LAB_SYSTEM_ID
+        gravityTest: __GALAXIA_GRAVITY_LAB__ ? { systemId: 'milky-way/sol', enter: () => void enterGravityLab() } : undefined,
       });
 
       // Prompt 13: the save slots panel (modal over any screen) and its galaxy map button
@@ -2534,6 +2722,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       });
       scope.on<PointerEvent>(boostBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
       scope.on<Event>(boostBtn, 'contextmenu', (e) => e.preventDefault());
+      scope.on<PointerEvent>(missileBtn, 'pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (panel || run?.phase !== 'flight') return;
+        try {
+          missileBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* synthetic pointers cannot be captured; window pointerup still releases them */
+        }
+        pointers.missileDown(e.pointerId);
+        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+      });
+      scope.on<PointerEvent>(missileBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+      scope.on<Event>(missileBtn, 'contextmenu', (e) => e.preventDefault());
       scope.on<PointerEvent>(container, 'pointerdown', (e) => {
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
@@ -2623,8 +2825,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
             ...run.layout.landmarks.filter((l) => near(l.x, l.y, l.r)).map((l) => ({ kind: l.kind, x: l.x, y: l.y, r: l.r })),
           ];
         },
+        lab: () => (__GALAXIA_GRAVITY_LAB__ && lab ? lab.status() : null),
+        gravity: () =>
+          run
+            ? {
+                ...run.gravity,
+                wells: run.wells.map((w) => ({ id: w.id, kind: run!.layout.landmarks.find((l) => l.id === w.id)?.kind ?? '?', x: w.x, y: w.y, solid: w.solid, ref: w.ref, felt: w.felt, range: w.field.range })),
+              }
+            : null,
         orientationChanges: 0,
         renderScale: () => (surface.adaptive ? { ...surface.adaptive.stats, ratio: surface.backing.ratio, backing: `${surface.backing.width}x${surface.backing.height}` } : null),
+        // Combat P03 QA: the body is compiled out of release builds (the flag is false there)
+        qaSpawn: __GALAXIA_TEST_HOOKS__
+          ? (family: FamilyId, dx: number, dy: number): number | null => {
+              const r = run;
+              if (!r || r.phase !== 'flight') return null;
+              const a = spawnAgent(r, family, 'red-tally', 'qa-probe', 'guard', r.ship.x + dx, r.ship.y + dy);
+              return a ? a.id : null;
+            }
+          : () => null,
         frames: 0,
         ticks: 0,
         draws: 0,
@@ -2633,6 +2852,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       refreshBriefing();
       showScreen('map');
       lifecycle = 'initialized';
+      // FR-TD-83: ?lab=gravity opens the Gravity Flight test directly (dev / QA builds only)
+      if (__GALAXIA_GRAVITY_LAB__ && new URLSearchParams(window.location.search).get('lab') === 'gravity') void enterGravityLab();
     },
     activate() {
       if (lifecycle !== 'initialized') return;

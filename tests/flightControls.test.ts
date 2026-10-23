@@ -357,12 +357,13 @@ describe('Free Roam key bindings (bindings.ts, FR-TD-43)', () => {
   it('the key tracker follows rebinding and drops held keys when its codes change', () => {
     const k = new KeyTracker(trackedCodes(DEFAULT_BINDINGS));
     const ev = (code: string) => ({ code, repeat: false, ctrlKey: false, metaKey: false, altKey: false, target: null, preventDefault: () => undefined }) as never;
-    expect(k.down(ev('KeyQ'))).toBe(false);
+    // KeyF is bound to nothing by default (KeyQ became the missile key in Combat P03)
+    expect(k.down(ev('KeyF'))).toBe(false);
     k.down(ev('KeyW'));
-    const r = rebind(DEFAULT_BINDINGS, 'fire', 1, 'KeyQ');
+    const r = rebind(DEFAULT_BINDINGS, 'fire', 1, 'KeyF');
     if (r.ok) k.setCodes(trackedCodes(r.bindings));
     expect(k.heldCodes.size).toBe(0);
-    expect(k.down(ev('KeyQ'))).toBe(true);
+    expect(k.down(ev('KeyF'))).toBe(true);
   });
 });
 
@@ -432,11 +433,14 @@ describe('Free Roam pointers (pointers.ts, FR-TD-44)', () => {
     p.stickDown(1, 0, 0);
     p.move(1, 50, 0);
     p.fireDown(2);
+    p.missileDown(3);
     p.setCursor(30, 40);
     p.setMouseFire(true);
     p.reset();
-    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
+    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, missileTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
     expect(p.firing).toBe(false);
+    expect(p.missileHeld).toBe(false);
+    expect(p.takeMissilePress()).toBe(false); // a latched press does not survive a reset
     p.reset(true);
     expect(p.snapshot().cursor).toBeNull();
     // a pointerup that arrives after the reset is harmless

@@ -29,3 +29,15 @@ export const DEV_TOOLS: boolean = __GALAXIA_DEV_TOOLS__;
 declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define`
 
 export const TEST_HOOKS: boolean = __GALAXIA_TEST_HOOKS__;
+
+/**
+ * Gravity Flight prototype P01 (FR-TD-83): the experimental gravity test sector
+ * in Sol (System Map button, ?lab=gravity), its tuning panel and diagnostics.
+ * Same builds as DEV_TOOLS: dev, tests and `npm run build:qa`; absent from the
+ * release and e2e builds. The Free Roam shell loads the lab with a dynamic
+ * import inside a branch on the literal, so release builds contain neither the
+ * branch nor the chunk; scripts/lib/distCheck.ts fails a release folder with either.
+ */
+declare const __GALAXIA_GRAVITY_LAB__: boolean; // vite.config.ts `define`
+
+export const GRAVITY_LAB: boolean = __GALAXIA_GRAVITY_LAB__;

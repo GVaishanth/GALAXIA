@@ -46,6 +46,8 @@ import { combatLevel, createEncounters, resetEncounters, salvageTaken, stepEncou
 import type { FamilyId } from '../combat/families.ts';
 import { inInterference, stepEruptions } from '../combat/hazards.ts';
 import { layFieldMines, stepEnemyShots, stepMines, triggerMine } from '../combat/projectiles.ts';
+import { freshGravity, pullOn, wellsOf, type GravityState, type Well } from './gravityWells.ts';
+import { freshMissileSkill, resetMissiles, stepMissiles, stepMissileSkill, type MissileSkill, type PlayerMissile } from '../combat/playerMissile.ts';
 import type { Agent, CombatLevel, EncounterRuntime, EnemyShot, Mine, Pending } from '../combat/state.ts';
 import type { WeaponId } from '../combat/weapons.ts';
 import { damageAgent, damagePlayer, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
@@ -54,6 +56,7 @@ import { dist } from './grid.ts';
 import { safeResumePoint, type ResumeAt } from './resume.ts';
 import { initialDropBudget, interactContainer, killDrop, leftFromSave, lootStream, mineShot, persistentIds, spawnSavedCaches, stepOffer, stepPickups, touchPoi, touchWreck, type LootOffer, type Pickup, type PickupKind } from './collect.ts';
 import type { AgentRole } from '../combat/state.ts';
+import type { VectorControls } from '../gravity/physics.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
 
 export const RUN = Object.freeze({
@@ -131,6 +134,30 @@ export interface SectorInput extends FlightInput {
   readonly fire?: boolean | undefined;
   /** Boost held (Shift, LB / LT, the BOOST button). */
   readonly boost?: boolean | undefined;
+  /** Missile key held (Q / K by default, R3, the MSL button); the skill acts on the press edge only (combat/playerMissile.ts). */
+  readonly missile?: boolean | undefined;
+  /** Rotate-and-thrust controls; read only by a flight hook (the Gravity Flight test sector, FR-TD-83). */
+  readonly vector?: VectorControls | undefined;
+}
+
+/**
+ * Replaces the ship's flight step for one run (FR-TD-83). Only the Gravity
+ * Flight test sector installs one (gravity/lab.ts); every other run has
+ * `flight: null` and flies exactly as before.
+ */
+export interface FlightHook {
+  /** Moves the ship this tick instead of sim.ts stepShip (same modifiers and boosted tuning). */
+  stepShip(run: SectorRun, input: SectorInput, mods: ShipModifiers, tune: ShipTuning, events: SectorEvent[]): { distance: number; pushed: boolean };
+  /** Called just before enemy ships move. */
+  beforeAgents?(run: SectorRun): void;
+  /** Called at the end of the tick, after recalls and focus, before the tick counter advances. */
+  afterTick?(run: SectorRun, events: SectorEvent[]): void;
+  /**
+   * Line of sight (FR-TD-84): true when something this hook owns (the lab's planet) blocks the
+   * view from (ax, ay) to (bx, by). Enemy target choice treats a blocked target as out of sight.
+   * Absent everywhere except the gravity lab, so ordinary sectors keep distance-only sight.
+   */
+  sightBlocked?(ax: number, ay: number, bx: number, by: number): boolean;
 }
 
 export type SectorEvent =
@@ -194,6 +221,14 @@ export type SectorEvent =
   | { readonly type: 'bossPhase'; readonly hostile: number; readonly x: number; readonly y: number }
   | { readonly type: 'blast'; readonly kind: 'mine' | 'eruption'; readonly x: number; readonly y: number; readonly r: number }
   | { readonly type: 'shotDown'; readonly x: number; readonly y: number }
+  /* pilot missile skill (Combat P03, combat/playerMissile.ts) */
+  | { readonly type: 'missileLock'; readonly hostile: number; readonly x: number; readonly y: number }
+  | { readonly type: 'missileLockLost' }
+  | { readonly type: 'missileRefused'; readonly reason: 'noTarget' | 'lowEnergy' | 'cooling' }
+  | { readonly type: 'missileLaunched'; readonly hostile: number; readonly x: number; readonly y: number }
+  | { readonly type: 'missileHit'; readonly hostile: number; readonly x: number; readonly y: number; readonly damage: number; readonly killed: boolean }
+  | { readonly type: 'missileExpired'; readonly x: number; readonly y: number }
+  | { readonly type: 'missileReady' }
   | { readonly type: 'combat'; readonly level: CombatLevel }
   | { readonly type: 'recovered'; readonly units: number; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] };
 
@@ -287,6 +322,10 @@ export interface SectorRun {
   /** Weapon heat 0..1 (FR-TD-79), and whether it is locked until it cools. */
   heat: number;
   overheated: boolean;
+  /** Pilot missile skill (Combat P03): its state machine and the missiles in flight (temporary). */
+  missile: MissileSkill;
+  readonly missiles: PlayerMissile[];
+  nextMissile: number;
   shotsFired: number;
   kills: number;
   /** The nearest usable button interaction in range, or null. */
@@ -300,6 +339,12 @@ export interface SectorRun {
   readonly rng: Rng;
   /** Spawn point used on entry (and after a recall when it was the arrival). */
   readonly spawn: string;
+  /** Flight step override (FR-TD-83); null everywhere except the Gravity Flight test sector. */
+  flight: FlightHook | null;
+  /** FR-TD-86: the pull of this sector's planets and stars (built once from the layout). */
+  readonly wells: readonly Well[];
+  /** FR-TD-86: the pull on the ship this tick (zero while a flight hook owns the physics). */
+  readonly gravity: GravityState;
 }
 
 export interface RunOptions {
@@ -386,6 +431,9 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     fireCooldown: 0,
     heat: 0,
     overheated: false,
+    missile: freshMissileSkill(),
+    missiles: [],
+    nextMissile: 1,
     shotsFired: 0,
     kills: 0,
     focus: null,
@@ -396,6 +444,9 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     disposed: false,
     rng: createRng((o.seed ?? layout.seed) >>> 0),
     spawn: sp.id,
+    flight: null,
+    wells: wellsOf(layout.landmarks),
+    gravity: freshGravity(),
   };
   layFieldMines(run);
   spawnSavedCaches(run);
@@ -588,7 +639,16 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     run.boost = Math.max(0, run.boost - RUN.boostFall);
   }
   const tune = run.boost > 0 ? { ...run.tune, accel: run.tune.accel * (1 + (RUN.boostAccelMul - 1) * run.boost), maxSpeed: run.tune.maxSpeed * (1 + (RUN.boostSpeedMul - 1) * run.boost) } : run.tune;
-  const moved = stepShip(sh, input, L.width, L.height, mods, tune);
+  let moved: { distance: number; pushed: boolean };
+  if (run.flight) {
+    // the gravity lab owns the physics (its own planet and pull): no landmark pull on top
+    if (run.gravity.g !== 0) Object.assign(run.gravity, freshGravity());
+    moved = run.flight.stepShip(run, input, mods, tune, events);
+  } else {
+    // FR-TD-86: planets and stars pull the ship through the same modifier as gravity-shear clouds
+    const g = pullOn(run.wells, sh.x, sh.y, run.tune.accel, run.gravity);
+    moved = stepShip(sh, input, L.width, L.height, g.g > 0 ? { ...mods, pullX: pullX + g.x, pullY: pullY + g.y } : mods, tune);
+  }
   run.distance += moved.distance;
   if (moved.pushed) events.push({ type: 'edge' });
   if (drain > 0) damagePlayer(run, drain / 60, 'hazard', events);
@@ -622,6 +682,9 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   coolWeapon(run, input.fire === true, events);
   if (input.fire === true && !run.overheated) fire(run, events);
   stepShots(run, events);
+  /* missile skill: press edge, lock, launch, cooldown; then move every missile (one impact each) */
+  stepMissileSkill(run, input, events);
+  stepMissiles(run, events);
 
   /* fly-through interactions: survey marks and salvage (a find that does not fit opens the full-hold offer) */
   for (const p of L.pois) {
@@ -645,6 +708,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   stepPending(run);
   stepEncounters(run, events);
   stepPatrols(run);
+  run.flight?.beforeAgents?.(run);
   stepAgents(run, events);
   stepEnemyShots(run, events);
   stepMines(run, events);
@@ -675,6 +739,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
 
   /* button interactions: the nearest usable one in range */
   run.focus = focusOf(run);
+  run.flight?.afterTick?.(run, events);
 
   run.tick += 1;
   if (!run.surveyed && marksLeft(run) === 0) {
@@ -734,6 +799,8 @@ function recall(run: SectorRun): void {
   run.fireCooldown = 0;
   run.heat = 0;
   run.overheated = false;
+  resetMissiles(run);
+  Object.assign(run.gravity, freshGravity());
   for (const st of run.patrols.values()) {
     st.awake = false;
     st.cooldown = RUN.recallCooldownTicks;
@@ -804,6 +871,7 @@ export function disposeSectorRun(run: SectorRun): void {
   run.hostiles.length = 0;
   run.shots.length = 0;
   run.enemyShots.length = 0;
+  resetMissiles(run);
   run.mines.length = 0;
   run.pending.length = 0;
   run.encounters.length = 0;

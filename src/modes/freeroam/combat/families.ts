@@ -69,7 +69,19 @@ export interface FamilyDef {
   readonly threat: number;
 }
 
-const F = (d: FamilyDef): FamilyDef => Object.freeze(d);
+/**
+ * Light-ship recovery (Combat P03, FR-TD-85). Measured: what kept weak ships
+ * alive was shield regeneration in the lulls a pilot leaves while dodging
+ * (a 2-2.5 s delay let a recon regenerate 7.5x its shield in one fight).
+ * Families at or below `lightThreat` (raider, picket, lancer, recon, hauler)
+ * wait `lightRegenDelayMul` times as long after a hit before recharging; their
+ * regen rate, hull, shield, evasion and retreat are unchanged, and heavy,
+ * elite and capital ships are untouched. The table below keeps the base
+ * values; FAMILIES holds the effective ones.
+ */
+export const RECOVERY = Object.freeze({ lightThreat: 2, lightRegenDelayMul: 2 });
+
+const F = (d: FamilyDef): FamilyDef => Object.freeze(d.threat <= RECOVERY.lightThreat ? { ...d, regenDelay: Math.round(d.regenDelay * RECOVERY.lightRegenDelayMul) } : d);
 
 export const FAMILIES: Readonly<Record<FamilyId, FamilyDef>> = Object.freeze({
   raider: F({ id: 'raider', label: 'Raider', role: 'Light raider', sprite: 'foe.raider', hull: 18, shield: 0, shieldRegen: 0, regenDelay: 120, speed: 250, accel: 700, turn: 6, radius: 8, detect: 420, engage: 320, prefer: 150, weapons: ['spark'], retreatAt: 0, disableAt: 0, disableTicks: 0, evadeChance: 0.25, evadeTicks: 30, evadeCooldown: 120, dodges: false, contact: 6, wornAt: 0.5, size: 1, threat: 1 }),

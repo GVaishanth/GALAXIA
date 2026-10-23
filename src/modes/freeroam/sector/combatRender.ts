@@ -16,6 +16,9 @@
  *      eruptions                              a ring that fills to the blast
  *      warp-ins / ambush                      contracting rings with the emblem
  *  - with reduced motion, blinking becomes a steady fill that grows.
+ *  - the pilot's missile (Combat P03) uses only player colours (ivory body,
+ *    cyan trail; a thin cyan ring that tightens on the target while locking)
+ *    and is drawn under ships and enemy fire, so it never hides a threat.
  * Threats off screen get edge markers; the DOM HUD repeats the urgent ones
  * as text (MISSILE LOCK, AMBUSH, encounter objectives).
  */
@@ -28,6 +31,7 @@ import { siteOf } from '../combat/encounters.ts';
 import { FACTIONS, type Emblem } from '../combat/factions.ts';
 import { FAMILIES } from '../combat/families.ts';
 import { eruptionAt, inInterference } from '../combat/hazards.ts';
+import { MISSILE } from '../combat/playerMissile.ts';
 import type { Agent } from '../combat/state.ts';
 import { WEAPONS } from '../combat/weapons.ts';
 import type { FactionId } from '../catalogue/types.ts';
@@ -597,6 +601,72 @@ export function drawCombatShips(ctx: CanvasRenderingContext2D, sprites: SpriteCa
       ctx.arc(toX(x + ux * 4), toY(y + uy * 4), Math.max(1.5, 2 * zoom), 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+  ctx.lineCap = 'butt';
+}
+
+/* ------------------------------------------------------- pilot missile */
+
+/** The lock ring on the target being acquired, then every missile in flight (Combat P03). Drawn before the ships. */
+export function drawPlayerMissiles(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
+  const { toX, toY, zoom, ratio, visible, alpha: k } = V;
+  const lw = (n: number): number => Math.max(1, Math.round(n * ratio));
+  const sk = run.missile;
+  if (sk.state === 'acquiring' && sk.target !== null) {
+    const a = run.hostiles.find((h) => h.id === sk.target && h.state !== 'destroyed');
+    if (a) {
+      const x = a.px + (a.x - a.px) * k;
+      const y = a.py + (a.y - a.py) * k;
+      if (visible(x, y, 60)) {
+        const p = Math.min(1, sk.lock / MISSILE.lockTicks);
+        const r = (FAMILIES[a.family].radius + 18 - 8 * p) * zoom;
+        const X = toX(x);
+        const Y = toY(y);
+        ctx.strokeStyle = COLORS['player.trim'];
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = lw(1.5);
+        // a ring broken at the four quarters, closing as the lock completes
+        const gap = 0.35 - 0.25 * p;
+        ctx.beginPath();
+        for (let q = 0; q < 4; q++) {
+          const a0 = (q * Math.PI) / 2 + gap;
+          const a1 = ((q + 1) * Math.PI) / 2 - gap;
+          ctx.moveTo(X + Math.cos(a0) * r, Y + Math.sin(a0) * r);
+          ctx.arc(X, Y, r, a0, a1);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  if (run.missiles.length === 0) return;
+  ctx.lineCap = 'round';
+  for (const m of run.missiles) {
+    const x = m.px + (m.x - m.px) * k;
+    const y = m.py + (m.y - m.py) * k;
+    if (!visible(x, y, 30)) continue;
+    const sp = Math.hypot(m.vx, m.vy) || 1;
+    const ux = m.vx / sp;
+    const uy = m.vy / sp;
+    // trail (cyan, faint), body (ivory), seeker tip (cyan-white)
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = COLORS['shot.player.edge'];
+    ctx.lineWidth = Math.max(lw(1.5), 2.5 * zoom);
+    ctx.beginPath();
+    ctx.moveTo(toX(x - ux * 6), toY(y - uy * 6));
+    ctx.lineTo(toX(x - ux * 24), toY(y - uy * 24));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = COLORS['player.hull.light'];
+    ctx.lineWidth = Math.max(lw(2), 4 * zoom);
+    ctx.beginPath();
+    ctx.moveTo(toX(x - ux * 6), toY(y - uy * 6));
+    ctx.lineTo(toX(x + ux * 4), toY(y + uy * 4));
+    ctx.stroke();
+    ctx.fillStyle = COLORS['shot.player.core'];
+    ctx.beginPath();
+    ctx.arc(toX(x + ux * 5), toY(y + uy * 5), Math.max(1.5, 1.8 * zoom), 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.lineCap = 'butt';
 }

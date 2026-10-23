@@ -58,9 +58,13 @@ export default defineConfig(({ command, mode, isPreview }) => {
   // the hooks, for the browser harnesses). The release build (`npm run build`)
   // has none: the literal lets the minifier drop every assignment.
   const testHooks = devTools || mode === 'e2e';
+  // FR-TD-83: the Gravity Flight prototype (an experimental test sector with its
+  // tuning panel and diagnostics) exists only where the developer tools do; the
+  // release and e2e builds drop it and its chunk. Set false here to remove it everywhere.
+  const gravityLab = devTools;
   return {
     base,
-    define: { __GALAXIA_DEV_TOOLS__: JSON.stringify(devTools), __GALAXIA_TEST_HOOKS__: JSON.stringify(testHooks) },
+    define: { __GALAXIA_DEV_TOOLS__: JSON.stringify(devTools), __GALAXIA_TEST_HOOKS__: JSON.stringify(testHooks), __GALAXIA_GRAVITY_LAB__: JSON.stringify(gravityLab) },
     plugins: [notFoundPage(base)],
     build: {
       target: 'es2022',

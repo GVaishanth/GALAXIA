@@ -23,6 +23,11 @@
  * Every timed state has an exit, damage applies in every live state, and the
  * one-time transitions are flagged, so no ship can be stuck or invulnerable.
  *
+ * Sight is distance-only (detect range), except where the sector's flight hook
+ * reports an occluder (only the gravity lab: its planet, FR-TD-84). A target
+ * that goes out of sight is treated like any lost target (investigate its
+ * last-known position); reacquiring it starts the reaction delay again.
+ *
  * No ship fires during the arrival grace, before its reaction delay after
  * acquiring a target, in its first COMBAT.spawnFireDelay ticks, or at a pilot
  * inside the arrival sanctuary.
@@ -136,10 +141,12 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
   let bestScore = Infinity;
   const keep = a.target;
   const playerOk = run.grace === 0 && !run.docked && !inSanctuary(run.layout, P) && hostileTo(run, a.faction, 'player');
+  // line of sight is distance-only, unless the sector's flight hook owns an occluder (the gravity lab's planet)
+  const blocked = run.flight?.sightBlocked;
   if (playerOk) {
     const d = dist(a, P);
     const range = detectRange(run, a, P) * (keep === 'player' ? 1.3 : 1);
-    if (d <= range) {
+    if (d <= range && !blocked?.(a.x, a.y, P.x, P.y)) {
       best = 'player';
       bestScore = d * 0.85;
     }
@@ -150,7 +157,7 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
       if (o === a || o.state === 'destroyed' || !hostileTo(run, a.faction, o.faction)) continue;
       const d = dist(a, o);
       const range = Math.min(detectRange(run, a, o), COMBAT.infightRange) * (keep === o.id ? 1.3 : 1);
-      if (d <= range && d < bestScore) {
+      if (d <= range && d < bestScore && !blocked?.(a.x, a.y, o.x, o.y)) {
         best = o.id;
         bestScore = d;
       }
@@ -574,7 +581,7 @@ function faceVelocity(a: Agent): void {
   if (Math.hypot(a.vx, a.vy) > 12) turnToward(a, Math.atan2(a.vy, a.vx));
 }
 
-/** An incoming pilot bolt within 90 px, closing on this ship. */
+/** An incoming pilot bolt within 90 px (or a pilot missile within 140 px), closing on this ship. */
 function incoming(run: SectorRun, a: Agent): boolean {
   for (const s of run.shots) {
     const dx = a.x - s.x;
@@ -582,6 +589,16 @@ function incoming(run: SectorRun, a: Agent): boolean {
     if (dx * dx + dy * dy > 90 * 90) continue;
     if (dx * s.vx + dy * s.vy > 0) {
       a.side = s.vx * dy - s.vy * dx > 0 ? 1 : -1;
+      return true;
+    }
+  }
+  // a pilot missile is seen earlier (it is bigger and slower than a bolt): within 140 px, closing
+  for (const m of run.missiles) {
+    const dx = a.x - m.x;
+    const dy = a.y - m.y;
+    if (dx * dx + dy * dy > 140 * 140) continue;
+    if (dx * m.vx + dy * m.vy > 0) {
+      a.side = m.vx * dy - m.vy * dx > 0 ? 1 : -1;
       return true;
     }
   }

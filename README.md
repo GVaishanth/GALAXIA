@@ -4,7 +4,7 @@
 
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest · GitHub Actions and GitHub Pages
 
-- **Status:** Classic Mode is complete and playable. Free Roam Mode is a playable prototype. Release builds pass all automated checks; the site has not yet been deployed (see [Project status](#project-status-and-roadmap)).
+- **Status:** Classic Mode is complete and playable. Free Roam Mode is a playable prototype; its latest update (P03) adds a guided missile, slower shield recovery for light enemies, and planet and star gravity. Release builds pass all automated checks. The P03 changes have not yet been playtested by people, and the site has not been deployed (see [Project status](#project-status-and-roadmap)).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Platform:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
 
@@ -49,16 +49,16 @@ Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest · GitHub Action
     <td align="center"><sub>Free Roam: Galaxy Map</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/media/freeroam-sector.png" alt="Free Roam local sector: the player's ship firing beside a travel gate, with the ship status card, a USE GATE prompt and the control hint bar"></td>
+    <td><img src="docs/media/freeroam-sector.png" alt="Free Roam local sector: the player's ship beside an ice planet, a chevron next to the ship pointing toward the planet's pull, the dotted gravity field ring, and the ship status card with its MISSILE READY row"></td>
     <td align="center"><img src="docs/media/classic-phone.png" width="170" alt="Classic Mode on an emulated phone in portrait: the playfield above a touch control strip with a slide pad, pause and info buttons, and a FIRE button"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Free Roam: flight in a local sector</sub></td>
+    <td align="center"><sub>Free Roam: planet gravity and the missile row</sub></td>
     <td align="center"><sub>Classic on a phone (touch controls)</sub></td>
   </tr>
 </table>
 
-<sub>Captured from the current release build in headless Chromium: desktop at 1280×720; phone emulated at 390×844.</sub>
+<sub>Captured from the release build in headless Chromium: desktop at 1280×720; phone emulated at 390×844. The Free Roam sector shot (recaptured 2026-10-22 for P03) comes from the same build with read-only test hooks, used only to place the ship beside a planet.</sub>
 
 ---
 
@@ -94,6 +94,17 @@ GALAXIA uses web technology so that it runs anywhere a modern browser does, from
 - **Local sectors:** every one of the 170 systems has a generated sector (deterministic from its seed) with stars, bodies, asteroid fields and clouds. You can record survey marks to chart the system, salvage, inspect wrecks, open caches, investigate anomalies, mine ore veins, dock at stations and use gates to neighbouring systems.
 - **Flight:** movement in any direction with assisted inertia, boost, a follow camera with zoom, and optional mouse aim (off by default).
 - **Combat:** four original factions (the Tessellate, the Red Tally, the Cordon and the Gleaners) field eight enemy families. You meet them in patrols, outposts, ambushes, duels with elites and fights with capital ships. Dangerous attacks are telegraphed, and hazards include minefields, sensor interference and eruption fields. Encounter rewards pay out once. If your ship is destroyed, you are recalled, and half your cargo stays in a wreck you can fly back to.
+- **Missile skill:** every ship carries one guided missile alongside its guns.
+  - **Lock:** pressing the missile control locks onto the hostile ahead of your nose (within 600 px and about 31° of the nose) over 0.3 s.
+  - **Flight:** the missile then launches and homes on its target, dealing one 18-point hit (shields first).
+  - **Cost:** it uses 30 of the ship's boost energy and then recharges for 12 seconds. There is no ammunition or extra currency.
+  - **HUD:** the ship card's **MISSILE** row shows READY, LOCK, the flight and the countdown, or why it refused (NO TARGET, LOW ENERGY, LOCK LOST).
+- **Enemy recovery:** the five lightest enemy families (Raider, Picket, Lancer, Recon and Hauler) wait twice as long before their shields start to recharge, so weak ships can be finished off. Heavier ships recover as before.
+- **Gravity:** every planet and star pulls your ship.
+  - **Strength:** strongest near the surface, fading to nothing at five radii, and always weaker than the engine, so you can fly out at full thrust.
+  - **Field ring:** a dotted ring appears around a body as you approach, marking where the pull becomes noticeable.
+  - **Pull arrow:** a chevron beside the ship points where you are being pulled, doubled when the pull is strong.
+  - **Scope:** only your ship is pulled, not enemies, shots or pickups.
 - **Ships:** six original ships (Petrel, Swift, Shrike, Condor, Magpie, Albatross), acquired with licences earned through play and switched in a station's hangar.
 - **Cargo and crafting:** a limited cargo hold with sorting and details. When the hold is full, you choose what to keep; nothing is discarded silently. Stations also have a fabricator for equipment and an equipment fitting screen.
 - **Missions and economy:** a ten-mission Guild story chain, per-station contract boards, an exchange where every trade previews its result, and per-ship upgrades (Mk I–III).
@@ -126,7 +137,7 @@ GALAXIA uses web technology so that it runs anywhere a modern browser does, from
 
 ### Testing and deployment
 
-- 1,489 deterministic Vitest tests (seeded, offline, no browser needed), plus a long Classic soak run.
+- 1,603 deterministic Vitest tests (seeded, offline, no browser needed), plus a long Classic soak run.
 - `npm run verify:dist` checks the production build before it is published.
 - Optional browser test scripts (Playwright) for both modes.
 - A GitHub Actions workflow that typechecks, tests, builds, verifies and deploys to GitHub Pages.
@@ -171,9 +182,10 @@ The game has **no runtime dependencies**. The four development dependencies are 
 │   │   ├── classic/           Adapter that runs Classic inside the mode host
 │   │   └── freeroam/          Free Roam (lazy chunk; never imports Classic)
 │   │       ├── galaxy/        Galaxy Map and System Map
-│   │       ├── sector/        Local sector generation and simulation
+│   │       ├── sector/        Local sector generation, simulation and planet gravity
 │   │       ├── catalogue/     Galaxy and star-system data with cited sources
-│   │       ├── combat/        Factions, enemies, AI, weapons, hazards, encounters
+│   │       ├── combat/        Factions, enemies, AI, weapons, missile skill, hazards, encounters
+│   │       ├── gravity/       Gravity Flight test sector (dev and QA builds only)
 │   │       ├── ships/         Ship roster, equipment, hangar, upgrades
 │   │       ├── inventory/     Resources, loot tables, cargo hold, fabricator, milestones
 │   │       ├── progression/   Missions, contracts, economy, reactor cells, discovery record
@@ -271,7 +283,12 @@ On Windows PowerShell, set the variable first: `$env:BASE_PATH="/galaxia/"; npm 
 
 #### Development builds
 
-`npm run dev` and `npm run build:qa` also accept `?stage=<n>` (start at stage *n*), `?debug=1` (hitbox overlay) and `?view=hangar` (sprite viewer). Release builds compile these tools out entirely and ignore the parameters.
+`npm run dev` and `npm run build:qa` also accept these options. Release builds compile the tools out entirely and ignore the parameters.
+
+- `?stage=<n>`: start at stage *n*.
+- `?debug=1`: hitbox overlay.
+- `?view=hangar`: sprite viewer.
+- `?mode=freeroam&lab=gravity`: the experimental Gravity Flight test sector, with its tuning panel and diagnostics.
 
 ---
 
@@ -299,6 +316,7 @@ The mouse can click every menu button. Only two of your shots can be on screen a
 | Aim (optional) | Mouse, when CONTROLS → MOUSE AIM is on | — (shots go where the ship points) | Right stick |
 | Fire (hold; heats the weapon) | Space or J (left mouse button with mouse aim) | **FIRE** | RT, RB or X |
 | Boost (hold; uses energy) | Shift | **BOOST** | LB or LT |
+| Missile (lock on the hostile ahead, then launch) | Q or K | **MSL** | Right-stick click (R3) |
 | Interact with the nearest object (inspect, open, dock, use gate, leave) | E or Enter | **INTERACT** (appears in range) | A |
 | Sector map (pauses) | M | **MAP** | Select / View |
 | Cargo hold (pauses) | I | **CARGO** | Y |
@@ -345,7 +363,13 @@ All saves go through one versioned record loader that sanitises, repairs, migrat
 
 ### Build configuration
 
-`vite.config.ts` turns two compile-time flags into literals. Developer tools exist only in development and QA builds, and read-only test hooks only in development, test and `build:e2e` builds. A release build contains neither, and `verify:dist` rejects a build that does. The same file resolves the deployment base path from `BASE_PATH` and writes a `404.html` that sends unknown URLs back to the game.
+`vite.config.ts` turns three compile-time flags into literals:
+
+- **Developer tools:** development and QA builds only.
+- **Gravity Flight test sector:** development and QA builds only.
+- **Read-only test hooks:** development, test and `build:e2e` builds only.
+
+A release build contains none of them, and `verify:dist` rejects a build that does. The same file resolves the deployment base path from `BASE_PATH` and writes a `404.html` that sends unknown URLs back to the game.
 
 ---
 
@@ -392,20 +416,24 @@ npm test            # Vitest only
 npm run test:soak   # long Classic soak run
 ```
 
-- **Unit and integration tests:** 56 test files, 1,489 tests as of 2026-10-22, all deterministic (seeded) and offline. They cover:
+- **Unit and integration tests:** 61 test files and 1,603 tests as of 2026-10-22, all deterministic (seeded) and offline.
+  - 1,586 run on every check.
+  - The other 17 are opt-in measurement runs (simulated pilots for combat and gravity tuning). They are reported as skipped unless enabled with an environment variable, for example `COMBAT_MEASURE=1` or `GRAVITY_SECTOR_MEASURE=1`.
+
+  The tests cover:
   - the Classic engine: formations, attacks, capture, scoring, stage progression to stage 300, and play sequences driven by real input frames;
-  - Free Roam: generation of all 170 sectors, navigation, combat, loot, missions, economy, saves and migrations, and full journeys flown with flight input;
+  - Free Roam: generation of all 170 sectors, navigation, combat (including the missile skill and enemy shield recovery), planet and star gravity, loot, missions, economy, saves and migrations, and full journeys flown with flight input;
   - layout and viewport maths, adaptive render scale, pause and resume, menu focus, audio and gamepad lifecycles;
   - architecture boundaries and release rules (workflow structure, build flags, asset register).
 - **Soak test:** `npm run test:soak` plays 57 seeded autopilot Classic games (about 149 simulated minutes) and checks game invariants on every tick.
 - **Build verification:** `npm run verify:dist` ([`scripts/verify-dist.ts`](scripts/verify-dist.ts)) fails the build if any of these hold:
   - a URL in `index.html` or `404.html` is missing the base path or names a missing file;
   - JS or CSS references an asset that does not exist;
-  - developer tools, test hooks or source maps are present;
+  - developer tools, the Gravity Flight test sector, test hooks or source maps are present;
   - Free Roam has been bundled into the first download;
   - a gzip size budget is exceeded.
 
-In the release archive, two tests that compare the asset register with internal audit documents are reported as **skipped**, because those documents stay in the source repository. Every other test runs.
+In the release archive, two more tests are reported as **skipped**: they compare the asset register with internal audit documents, which stay in the source repository. The archive therefore shows 1,584 passed and 19 skipped (the 17 opt-in measurement runs plus these two). Every other test runs.
 
 ### Browser test scripts (optional)
 
@@ -429,6 +457,13 @@ node docs/development/playtest/release-smoke.mjs http://localhost:4173/galaxia/ 
 ### What has and has not been verified
 
 - **Verified automatically (2026-10-21):** the checks above in headless Chromium, Firefox and WebKit, including emulated phones and tablets, simulated gamepads, and Free Roam focus and pause behaviour repeated in Firefox.
+- **P03 (2026-10-22, headless Chromium only):**
+  - the missile on keyboard and touch, including the MSL button's placement at several screen sizes;
+  - the gravity ring, the pull arrow, drift and escape near a planet;
+  - the Gravity Flight test sector in a QA build.
+
+  These ran with harnesses kept outside the repository. The release smoke test above was re-run on the P03 release build.
+- **Not playtested:** no person has played the P03 changes since the first feedback was applied.
 - **Not verified:** physical phones and tablets, iOS Safari on a real device, real game controllers, real GPUs and high-refresh displays, and how the audio sounds to a listener.
 - **Performance** was measured only in headless, software-rendered Chromium on a two-core machine. Those numbers do not predict any particular device, and no frame rate is guaranteed.
 
@@ -505,19 +540,21 @@ You do not need to write the repository name anywhere. The workflow asks GitHub 
 
 ### Prototype areas and known limitations
 
-- Free Roam combat pacing is not fully tuned for the starter ship, and touch play has no aim assist.
+- The P03 tuning (missile, light-enemy shield recovery) and the gravity strengths are based on simulated pilots and automated browser checks. Only the first piece of player feedback (a shorter missile lock, a stronger pull in ordinary sectors) has been applied, and the changes have not been playtested since. Touch play has no aim assist.
 - Route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet. Jump costs (reactor cells) do apply.
 - Prices are fixed; there is no market or trading between stations.
 - There is no background music, only sound effects and short jingles. English only.
 - Some original arcade rules that could not be confirmed are kept configurable: the first stage with entry fire, collisions in Challenging Stages, and the wave bonus after the eighth challenge. The score caps at 9,999,990.
 - There is a single high score, with no name entry or top-ten table.
+- The in-flight control hint bar does not list the missile key yet. It is shown in the controls table above and under pause → CONTROLS.
 
 ### Next steps, in priority order
 
 1. **Before publishing:** replace the copyright holder placeholder in `LICENSE`, and settle the owner's open decisions on the name and the Classic presentation (see [Licence and attribution](#licence-and-attribution)).
 2. **First deployment:** push to GitHub, run the workflow and check the live site.
 3. **Real-device testing:** physical phones and tablets (including iOS Safari), real game controllers, and a listening check of the audio.
-4. **Free Roam depth:** make route risk and lane hazards take effect, tune combat pacing, and consider save export and import.
+4. **Playtest P03:** check the missile rhythm, light-enemy recovery and gravity strength with players on desktop and phone, and tune from what they report.
+5. **Free Roam depth:** make route risk and lane hazards take effect, and consider save export and import.
 
 ---
 

@@ -47,7 +47,7 @@ export interface FlightHud {
   readonly notice: HTMLElement;
   render(f: HudFrame): void;
   /** What is visible now (diagnostics and tests). */
-  status(): { readonly cargo: string; readonly objective: string; readonly nearby: string | null; readonly notice: string | null; readonly location: string; readonly critical: boolean; readonly weapon: string };
+  status(): { readonly cargo: string; readonly objective: string; readonly nearby: string | null; readonly notice: string | null; readonly location: string; readonly critical: boolean; readonly weapon: string; readonly missile: string; readonly missileState: string };
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ''): HTMLElementTagNameMap[K] => {
@@ -83,6 +83,7 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
   const hull = bar('HULL', 'fr-meter-hull fr-gauge-hull');
   const energy = bar('ENERGY', 'fr-meter-energy fr-gauge-energy');
   const heat = bar('HEAT', 'fr-meter-heat'); // weapon heat (FR-TD-79)
+  const missile = bar('MISSILE', 'fr-meter-missile'); // missile skill (Combat P03)
 
   // location + objective
   const location = el('div', 'fr-loc');
@@ -143,6 +144,9 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
         paint(energy, c.energy);
         paint(heat, c.heat);
         heat.row.classList.toggle('is-overheated', c.weaponState === 'overheated');
+        paint(missile, c.missile);
+        missile.row.dataset['state'] = c.missileState;
+        missile.row.classList.toggle('is-nudge', c.missileNudge);
         card.classList.toggle('is-boosting', c.boosting);
         card.classList.toggle('is-damaged', c.hull.low);
         card.setAttribute('aria-label', c.label);
@@ -223,6 +227,8 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
         location: location.textContent ?? '',
         critical: host.dataset['danger'] === 'critical',
         weapon: weapon.textContent ?? '',
+        missile: missile.value.textContent ?? '',
+        missileState: missile.row.dataset['state'] ?? '',
       };
     },
   };

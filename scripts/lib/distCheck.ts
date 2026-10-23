@@ -28,6 +28,8 @@ export const DIST_BUDGET = Object.freeze({
 });
 
 /** Automation hook names (window.__galaxia, __galaxiaGame, __galaxiaFreeRoam, __galaxiaHangar); \b keeps __galaxiaBooted out. */
+/** FR-TD-83: marker carried by the Gravity Flight lab chunk (src/modes/freeroam/gravity/labShell.ts). */
+export const GRAVITY_LAB_MARKER = 'GALAXIA · Gravity Lab';
 export const TEST_HOOK_PATTERN = /\b__galaxia(?:Game|FreeRoam|Hangar)?\b/g;
 
 export const REQUIRED_FILES = Object.freeze(['index.html', '404.html', 'favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'THIRD_PARTY_NOTICES.txt']);
@@ -150,6 +152,9 @@ export function checkDist(dir: string, base: string): DistReport {
     if (/sourceMappingURL=/.test(t)) problems.push(`${p}: links a source map`);
     if (/__GALAXIA_DEV_TOOLS__/.test(t)) problems.push(`${p}: build flag __GALAXIA_DEV_TOOLS__ was not replaced`);
     if (/__GALAXIA_TEST_HOOKS__/.test(t)) problems.push(`${p}: build flag __GALAXIA_TEST_HOOKS__ was not replaced`);
+    if (/__GALAXIA_GRAVITY_LAB__/.test(t)) problems.push(`${p}: build flag __GALAXIA_GRAVITY_LAB__ was not replaced`);
+    // FR-TD-83: the experimental Gravity Flight lab is a dev / QA tool only (its chunk carries this marker)
+    if (t.includes(GRAVITY_LAB_MARKER)) problems.push(`${p}: contains the experimental Gravity Flight lab (build with \`npm run build\`, not --mode qa)`);
     // TD-78: the automation hooks stay out of release builds (__galaxiaBooted, the boot watchdog flag, is not a hook)
     for (const m of new Set(t.match(TEST_HOOK_PATTERN) ?? [])) problems.push(`${p}: test hook ${m} shipped (build with \`npm run build\`, not --mode e2e / qa)`);
   }

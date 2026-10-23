@@ -89,7 +89,7 @@ Everything visual and audible in the game is produced by code in this repository
 | Lore, names, missions (170 systems, 10 story missions, contracts, resources) | `src/modes/freeroam/catalogue/data/`, `progression/missionData.ts`, docs | Free Roam | Written | Original (documented) | Incidental overlaps with common words (N-1) |
 | Interface artwork (panels, buttons, notices) | `src/styles.css`, `src/ui/`, `src/modes/freeroam/ui/` | Both | CSS | Original (documented) | — |
 | Review screenshots and contact sheets | `docs/design/review/*.png` (11), `docs/development/playtest/s6`–`s9` (22 files) | Docs only | Rendered from the game by its own scripts / Playwright | Original (documented) | They show the Classic presentation flagged in A-1 |
-| README screenshots | `docs/media/*.png` (6) | Docs only (README; included in the release archive) | Captured 2026-10-22 from the release build in headless Chromium (Playwright) | Original (documented) | Show GALAXIA's own screens only; the Classic captures show the presentation flagged in A-1 |
+| README screenshots | `docs/media/*.png` (6) | Docs only (README; included in the release archive) | Captured 2026-10-22 from the release build in headless Chromium (Playwright); `freeroam-sector.png` recaptured 2026-10-22 for P03 from the same build with read-only test hooks (`build:e2e`), used only to place the ship | Original (documented) | Show GALAXIA's own screens only; the Classic captures show the presentation flagged in A-1 |
 
 ## 3. Third-party code and tools
 

@@ -12,7 +12,7 @@
  * Escape), independent of the flight bindings.
  */
 
-export const FLIGHT_ACTIONS = ['up', 'down', 'left', 'right', 'fire', 'boost', 'interact', 'map', 'cargo', 'pause'] as const;
+export const FLIGHT_ACTIONS = ['up', 'down', 'left', 'right', 'fire', 'boost', 'missile', 'interact', 'map', 'cargo', 'pause'] as const;
 export type FlightAction = (typeof FLIGHT_ACTIONS)[number];
 
 /** Two key slots per action; slot 0 is always filled. */
@@ -26,6 +26,7 @@ export const DEFAULT_BINDINGS: Bindings = Object.freeze({
   right: ['KeyD', 'ArrowRight'],
   fire: ['Space', 'KeyJ'],
   boost: ['ShiftLeft', 'ShiftRight'],
+  missile: ['KeyQ', 'KeyK'],
   interact: ['KeyE', 'Enter'],
   map: ['KeyM', null],
   cargo: ['KeyI', null],
@@ -39,6 +40,7 @@ export const ACTION_LABEL: Readonly<Record<FlightAction, string>> = Object.freez
   right: 'Move right',
   fire: 'Fire',
   boost: 'Boost',
+  missile: 'Missile',
   interact: 'Interact',
   map: 'Sector map',
   cargo: 'Cargo',
@@ -124,10 +126,16 @@ export function clearBinding(b: Bindings, action: FlightAction, slot: 0 | 1): Re
   return { ok: true, bindings: freeze({ ...b, [action]: n }), displaced: null };
 }
 
-/** Accept a stored bindings object; anything malformed falls back to defaults (reported as repaired). */
-/** Actions added after bindings were first saved; a save without them gets their free default keys (not a repair). */
-const ADDED_ACTIONS: readonly FlightAction[] = ['boost'];
+/** Actions added after bindings were first saved; a save without them gets free keys (not a repair). */
+const ADDED_ACTIONS: readonly FlightAction[] = ['boost', 'missile'];
+/**
+ * Spare keys for an added action whose default keys a player already uses
+ * (so an old save is never reset just because Q and K were taken). They avoid
+ * the panel, zoom and gravity-lab hotkeys.
+ */
+const ADDED_FALLBACK: readonly string[] = ['KeyF', 'KeyX', 'KeyC', 'KeyZ', 'KeyB', 'KeyN', 'KeyH', 'KeyL', 'KeyU', 'KeyO', 'KeyY', 'Semicolon', 'Quote', 'Comma', 'Period', 'Slash'];
 
+/** Accept a stored bindings object; anything malformed falls back to defaults (reported as repaired). */
 export function sanitizeBindings(raw: unknown): { bindings: Bindings; repaired: boolean } {
   if (raw === undefined) return { bindings: DEFAULT_BINDINGS, repaired: false };
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { bindings: DEFAULT_BINDINGS, repaired: true };
@@ -135,13 +143,13 @@ export function sanitizeBindings(raw: unknown): { bindings: Bindings; repaired: 
   const used = new Set<string>();
   const out = {} as Record<FlightAction, KeySlots>;
   let repaired = false;
+  // actions missing from an older save are filled last, from keys no saved action uses
+  const added = FLIGHT_ACTIONS.filter((a) => doc[a] === undefined && (ADDED_ACTIONS as readonly string[]).includes(a));
   for (const a of FLIGHT_ACTIONS) {
+    if (added.includes(a)) continue;
     const v = doc[a];
     const keys: string[] = [];
-    if (v === undefined && (ADDED_ACTIONS as readonly string[]).includes(a)) {
-      // an action added after the save was written (boost, Prompt 8): its default keys, if still free
-      for (const k of DEFAULT_BINDINGS[a]) if (k !== null && !used.has(k)) keys.push(k);
-    } else if (Array.isArray(v)) {
+    if (Array.isArray(v)) {
       for (const k of v.slice(0, 2)) {
         if (typeof k === 'string' && isBindable(k) && !used.has(k) && !keys.includes(k)) keys.push(k);
         else if (k !== null) repaired = true;
@@ -149,6 +157,18 @@ export function sanitizeBindings(raw: unknown): { bindings: Bindings; repaired: 
       if (v.length > 2) repaired = true;
     } else repaired = true;
     if (keys.length === 0) return { bindings: DEFAULT_BINDINGS, repaired: true };
+    for (const k of keys) used.add(k);
+    out[a] = [keys[0]!, keys[1] ?? null];
+  }
+  for (const a of added) {
+    // an action added after the save was written (boost, Prompt 8; missile, Combat P03): its default keys if free, else a spare key
+    const keys: string[] = [];
+    for (const k of DEFAULT_BINDINGS[a]) if (k !== null && !used.has(k)) keys.push(k);
+    if (keys.length === 0) {
+      const spare = ADDED_FALLBACK.find((k) => !used.has(k));
+      if (!spare) return { bindings: DEFAULT_BINDINGS, repaired: true };
+      keys.push(spare);
+    }
     for (const k of keys) used.add(k);
     out[a] = [keys[0]!, keys[1] ?? null];
   }

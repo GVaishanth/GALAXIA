@@ -248,6 +248,36 @@ export const FR_SOUNDS = deepFreeze({
     ],
   },
   /** Refused (docking refused, hold full, a dormant gate). */
+  /** Missile lock acquiring (Combat P03): two quick rising pips. */
+  'fr.lock': {
+    bus: 'sfx',
+    gain: 0.13,
+    maxVoices: 1,
+    minGapMs: 150,
+    voices: [
+      { wave: 'triangle', f0: 1320, attackMs: 1, holdMs: 25, decayMs: 25, gain: 0.6 },
+      { wave: 'triangle', f0: 1760, atMs: 70, attackMs: 1, holdMs: 25, decayMs: 40, gain: 0.6 },
+    ],
+  },
+  /** Missile away: a short noise whoosh over a falling tone. */
+  'fr.missile': {
+    bus: 'sfx',
+    gain: 0.16,
+    maxVoices: 1,
+    minGapMs: 200,
+    voices: [
+      { wave: 'noise', f0: 2400, f1: 900, sweep: 'exp', attackMs: 6, holdMs: 60, decayMs: 160, gain: 0.55 },
+      { wave: 'square', duty: 0.25, f0: 420, f1: 180, sweep: 'exp', attackMs: 2, holdMs: 30, decayMs: 120, gain: 0.3 },
+    ],
+  },
+  /** Missile ready again: one soft high pip. */
+  'fr.armed': {
+    bus: 'sfx',
+    gain: 0.11,
+    maxVoices: 1,
+    minGapMs: 400,
+    voices: [{ wave: 'triangle', f0: 1175, attackMs: 1, holdMs: 30, decayMs: 70, gain: 0.6 }],
+  },
   'fr.deny': {
     bus: 'sfx',
     gain: 0.17,

@@ -40,8 +40,9 @@ import type { Viewport } from '../../../render/viewport.ts';
 import type { CameraView } from '../camera.ts';
 import { noseOf } from '../sim.ts';
 import type { Landmark, Poi, Rock, SectorLayout } from './model.ts';
-import { drawCombatMap, drawCombatShips, drawCombatWorld, drawThreatMarkers, type CombatView } from './combatRender.ts';
+import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, drawThreatMarkers, type CombatView } from './combatRender.ts';
 import { drawLootMap, drawLootWorld } from './lootRender.ts';
+import { drawFieldRings, drawPullArrow } from './gravityRender.ts';
 import { isDone, objectiveOf, RUN, type SectorRun } from './run.ts';
 import { SPRITES, type SpriteId } from '../../../assets/sprites/index.ts';
 import { ANIMATION_TIMING } from '../../../config/visual.ts';
@@ -312,6 +313,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
 
   /* obstacles ------------------------------------------------------------ */
   for (const l of L.landmarks) if (visible(l.x, l.y, Math.max(l.r, l.hazardR))) drawLandmark(ctx, l, toX(l.x), toY(l.y), zoom, t);
+  drawFieldRings(ctx, run, toX, toY, zoom, visible); // FR-TD-86
 
   ctx.setTransform(zoom, 0, 0, zoom, cx, cy);
   ctx.fillStyle = ART.rock;
@@ -386,6 +388,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
     }
     ctx.lineCap = 'butt';
   }
+  drawPlayerMissiles(ctx, run, V); // under ships and enemy fire (Combat P03)
   drawCombatShips(ctx, sprites, run, V);
   for (const b of o.bursts ?? []) {
     const age = (o.timeMs - b.startMs) / BURST_MS;
@@ -429,6 +432,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   const fi = state === 'idle' || o.reducedMotion ? 0 : Math.floor(o.timeMs / 90) % 2;
   // invulnerability after a hit: blink (steady half alpha with reduced motion)
   const alpha = run.invuln > 0 ? (o.reducedMotion ? 0.55 : Math.floor(o.timeMs / 80) % 2 ? 0.35 : 1) : 1;
+  drawPullArrow(ctx, run, sx, sy, toX, toY, zoom); // FR-TD-86: under the hull sprite
   drawFrame(ctx, sprites, sprites.frame(run.craft.sprite, state, fi, damaged ? 'scorched' : undefined), v, sx, sy, { rotation: heading, glow: o.glow, alpha });
   ctx.globalAlpha = 1;
   if (damaged && !o.reducedMotion) {

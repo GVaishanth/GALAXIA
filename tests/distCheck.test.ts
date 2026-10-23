@@ -7,7 +7,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkDist, DIST_BUDGET, resolveHtmlUrl } from '../scripts/lib/distCheck.ts';
+import { checkDist, DIST_BUDGET, GRAVITY_LAB_MARKER, resolveHtmlUrl } from '../scripts/lib/distCheck.ts';
+import { LAB_MARKER } from '../src/modes/freeroam/gravity/labShell.ts';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -122,6 +123,15 @@ describe('checkDist', () => {
     expect(all).toContain('assets/index-AAA.js: test hook __galaxiaGame shipped');
     expect(all).toContain('assets/freeRoamMode-CCC.js: test hook __galaxiaFreeRoam shipped');
     expect(all).toContain('__GALAXIA_TEST_HOOKS__ was not replaced');
+  });
+
+  it('fails a release build that contains the Gravity Flight lab or its unreplaced flag (FR-TD-83)', () => {
+    expect(GRAVITY_LAB_MARKER).toBe(LAB_MARKER);
+    const f = goodBuild('/galaxia/');
+    f['assets/freeRoamMode-CCC.js'] += `const m="${LAB_MARKER}";if(__GALAXIA_GRAVITY_LAB__){}`;
+    const all = checkDist(makeDist(f), '/galaxia/').problems.join('\n');
+    expect(all).toContain('assets/freeRoamMode-CCC.js: contains the experimental Gravity Flight lab');
+    expect(all).toContain('__GALAXIA_GRAVITY_LAB__ was not replaced');
   });
 
   it('fails when Free Roam is bundled into the entry instead of lazy-loaded', () => {
