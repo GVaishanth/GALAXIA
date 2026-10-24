@@ -3,15 +3,21 @@
  * progression/discovery.ts explorationStats, entries from discoveryEntries.
  * ASTRONOMY entries (real, cited) and GALAXIA FICTION entries are separate
  * lists with their own labels, so an invented find is never shown as science.
+ *
+ * Economy pass: a GUILD MARKS section lists the balance and the bounded recent
+ * history (ledger.ts; newest first, kept in the profile only, never sent).
  */
 import { MenuList } from '../../../../shared/ui/menuList.ts';
 import type { DiscoveryEntry, StatRow } from '../discovery.ts';
+import { formatDelta, formatMarks, type LedgerEntry } from '../ledger.ts';
 import { btn, el, panelShell } from './common.ts';
 
 export interface RecordDeps {
   readonly stats: () => readonly StatRow[];
   readonly entries: () => readonly DiscoveryEntry[];
   readonly progressLine: () => string;
+  /** Economy pass: the wallet balance and its recent history (oldest first, as stored). */
+  readonly marks?: (() => { readonly balance: number; readonly history: readonly LedgerEntry[]; readonly note: string | null }) | undefined;
   readonly back: () => void;
   readonly sound: (cue: 'uiMove' | 'uiSelect' | 'bonus') => void;
 }
@@ -21,7 +27,7 @@ export interface RecordPanel {
   readonly menu: MenuList;
   open(): void;
   back(): void;
-  status(): { readonly stats: Readonly<Record<string, number>>; readonly facts: number; readonly fiction: number };
+  status(): { readonly stats: Readonly<Record<string, number>>; readonly facts: number; readonly fiction: number; readonly history: readonly string[] };
 }
 
 export function createRecordPanel(d: RecordDeps): RecordPanel {
@@ -42,6 +48,23 @@ export function createRecordPanel(d: RecordDeps): RecordPanel {
     return ul;
   };
 
+  const KIND_TAG: Readonly<Record<string, string>> = { mission: 'MISSION', bounty: 'BOUNTY', encounter: 'ENCOUNTER', discovery: 'DISCOVERY', sale: 'SALE', purchase: 'PURCHASE', upgrade: 'UPGRADE', ship: 'SHIP', travel: 'TRAVEL', refund: 'REFUND' };
+  const historyText = (e: LedgerEntry): string => `${formatDelta(e.delta)} · ${KIND_TAG[e.kind] ?? e.kind.toUpperCase()} · ${e.label}${e.refunded ? ' · REFUNDED' : ''}`;
+  const marksSection = (): HTMLElement[] => {
+    if (!d.marks) return [];
+    const m = d.marks();
+    const ul = el('ul', 'fr-fab-list fr-ledger');
+    ul.setAttribute('aria-label', 'Recent Guild marks changes, newest first');
+    const rows = [...m.history].reverse();
+    if (!rows.length) ul.append(el('li', 'fr-fab-empty', 'No marks earned or spent yet. Missions, bounties, cleared encounters, first discoveries and salvage sales pay Guild marks.'));
+    for (const e of rows) {
+      const li = el('li', `fr-ledger-row ${e.delta >= 0 ? 'is-gain' : 'is-loss'}`);
+      li.append(el('span', 'fr-ledger-delta', formatDelta(e.delta)), el('span', 'fr-ledger-text', `${KIND_TAG[e.kind] ?? e.kind.toUpperCase()} · ${e.label}${e.refunded ? ' · REFUNDED' : ''}`), el('span', 'fr-ledger-bal', formatMarks(e.balance)));
+      ul.append(li);
+    }
+    return [el('p', 'fr-kicker fr-fab-head', `GUILD MARKS · ${formatMarks(m.balance)}`), ...(m.note ? [el('p', 'fr-fab-desc', m.note)] : []), ul];
+  };
+
   function refresh(): void {
     s.head.textContent = d.progressLine();
     const grid = el('dl', 'fr-record-stats');
@@ -53,6 +76,7 @@ export function createRecordPanel(d: RecordDeps): RecordPanel {
     actions.append(btn('', 'BACK', 'back', () => d.back()));
     s.menu.replaceChildren(
       grid,
+      ...marksSection(),
       el('p', 'fr-kicker fr-fab-head', `ASTRONOMY · REAL, CITED · ${facts.length}`),
       entryList(facts, 'Reach galaxies and real objects (verified systems) to log what astronomers know about them.', 'ASTRONOMY'),
       el('p', 'fr-kicker fr-fab-head', `GALAXIA FICTION · IN-GAME FINDS · ${fiction.length}`),
@@ -75,7 +99,7 @@ export function createRecordPanel(d: RecordDeps): RecordPanel {
     },
     status() {
       const all = d.entries();
-      return { stats: Object.fromEntries(d.stats().map((r) => [r.id, r.value])), facts: all.filter((e) => e.kind === 'fact').length, fiction: all.filter((e) => e.kind === 'fiction').length };
+      return { stats: Object.fromEntries(d.stats().map((r) => [r.id, r.value])), facts: all.filter((e) => e.kind === 'fact').length, fiction: all.filter((e) => e.kind === 'fiction').length, history: d.marks ? [...d.marks().history].reverse().map(historyText) : [] };
     },
   };
 }

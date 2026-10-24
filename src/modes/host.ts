@@ -23,7 +23,15 @@ import { PreferencesStore } from '../shared/persistence/preferences.ts';
 import { TitleScreen, type TitleChoice } from '../shared/ui/titleScreen.ts';
 import { createClassicMode } from './classic/classicMode.ts';
 import { ModeController, type HostState } from './controller.ts';
-import { activeSlot, readSlot, slotSummary } from './freeroam/saveSlots.ts';
+import { activeSlot, FR_PREFS_SPEC, readSlot, slotSummary } from './freeroam/saveSlots.ts';
+import { classicRecordShowsGate, FLEET_SPEC } from './crossMode.ts';
+import type { GuideContext, GuideInput, GuideMode } from './guide/guideContent.ts';
+// the dialog (and the roster / armory data its text is built from) loads on demand; only the small state module is in the entry
+import type { GuideDialog, GuideEnd, GuideStatus } from './guide/guideDialog.ts';
+import { acknowledgeGuide, guideDue, readGuide, type GuideRecord } from './guide/guideState.ts';
+import { parseRecord } from '../shared/persistence/record.ts';
+import { createGestureDetector, createSequenceDetector, requestAdminLaunch } from './freeroam/admin/activation.ts';
+import { isEditableTarget } from '../input/keyboard.ts';
 import { MODE_IDS, type ModeContext, type ModeDebug, type ModeId, type ModeRegistry, type SharedServices } from './types.ts';
 
 export const MODE_REGISTRY: ModeRegistry = Object.freeze({
@@ -42,6 +50,8 @@ export interface HostDebug {
   /** Mode containers currently in the DOM (0 or 1). */
   readonly containers: number;
   readonly notices: readonly string[];
+  /** P04.2 guide: the first-run guide (dialog state and the stored record). */
+  readonly guide: GuideStatus & { readonly record: GuideRecord; readonly autoOpened: boolean };
 }
 
 export interface GalaxiaHost {
@@ -83,27 +93,96 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
 
   let controller: ModeController;
   let pendingChoice = false;
+  const choose = (choice: TitleChoice): void => {
+    if (pendingChoice) return; // double click / Enter + click in the same moment
+    pendingChoice = true;
+    sound.unlock(); // a click / Enter is a user gesture
+    sound.play('uiSelect');
+    title.hide();
+    // start on the next task: the key event that chose the mode is still being dispatched, and
+    // the new mode's listeners must not receive it (Enter would also skip Free Roam's briefing)
+    setTimeout(() => {
+      pendingChoice = false;
+      void launch(choice);
+    }, 0);
+  };
   const title = new TitleScreen(root, sprites, {
-    onSelect: (choice: TitleChoice) => {
-      if (pendingChoice) return; // double click / Enter + click in the same moment
-      pendingChoice = true;
-      sound.unlock(); // a click / Enter is a user gesture
-      sound.play('uiSelect');
-      title.hide();
-      // start on the next task: the key event that chose the mode is still being dispatched, and
-      // the new mode's listeners must not receive it (Enter would also skip Free Roam's briefing)
-      setTimeout(() => {
-        pendingChoice = false;
-        void launch(choice);
-      }, 0);
-    },
+    onSelect: choose,
     onMove: () => sound.play('uiMove'),
     // the same rule as the modes: the shared setting, with 'system' following the browser
-    reducedMotion: () => {
-      const pref = prefs.get().display.reducedMotion;
-      return pref === 'on' || (pref === 'system' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-    },
+    reducedMotion: () => reducedMotion(),
+    onGuide: () => openGuide('reference'),
   });
+
+  /* ---- P04.2 guide: first-run tutorial and HOW TO PLAY (modes/guide) ---- */
+  /** Debug status before the dialog chunk has loaded. */
+  const GUIDE_CLOSED: GuideStatus = { open: false, kind: null, step: 'welcome', index: 0, mode: 'classic', input: 'keyboard', highlighted: false, listeners: 0, loops: 0 };
+  const reducedMotion = (): boolean => {
+    const pref = prefs.get().display.reducedMotion;
+    return pref === 'on' || (pref === 'system' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  };
+  /** Opened automatically at most once per page load (also when the choice could not be stored). */
+  let guideAutoOpened = false;
+  const guideInput = (): GuideInput => {
+    const forced = new URLSearchParams(location.search).get('controls');
+    if (forced === 'touch' || forced === 'keyboard') return forced;
+    if (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) return 'touch';
+    const pads = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function' ? [...navigator.getGamepads()] : [];
+    return pads.some((p) => p?.connected) ? 'controller' : 'keyboard';
+  };
+  /** Read-only: the Free Roam keys as saved, and whether Classic Wave 20 is complete (nothing is written). */
+  const guideContext = (mode: GuideMode): GuideContext => {
+    const fr = parseRecord(store.read(FR_PREFS_SPEC.key), FR_PREFS_SPEC).data.controls;
+    const gate = parseRecord(store.read(FLEET_SPEC.key), FLEET_SPEC).data.classicComplete || classicRecordShowsGate(store);
+    return { mode, input: guideInput(), bindings: fr.bindings, mouseAim: fr.mouseAim, classicGate: gate };
+  };
+  const onGuideEnd = (end: GuideEnd): void => {
+    title.setBlocked(false);
+    // only the tutorial is remembered; the HOW TO PLAY reference never changes the stored state
+    if (end.kind === 'tutorial' && end.how !== 'closed') acknowledgeGuide(store, end.how);
+    if (end.play) choose(end.play);
+  };
+  let guide: GuideDialog | null = null;
+  let guideLoad: Promise<GuideDialog | null> | null = null;
+  /** True from the request until the dialog is open (the chunk may still be loading). */
+  let guideOpening = false;
+  const guideActive = (): boolean => guideOpening || (guide?.isOpen() ?? false);
+  const loadGuide = (): Promise<GuideDialog | null> =>
+    (guideLoad ??= import('./guide/guideDialog.ts').then(
+      (m) => {
+        if (hostScope.disposed) return null;
+        const g = new m.GuideDialog(root, { onEnd: onGuideEnd, onMove: () => sound.play('uiMove'), reducedMotion });
+        hostScope.add(() => g.dispose());
+        guide = g;
+        return g;
+      },
+      () => {
+        guideLoad = null; // offline or a stale deploy: try again next time
+        return null;
+      },
+    ));
+  const openGuide = (kind: 'tutorial' | 'reference'): void => {
+    if (!title.visible || pendingChoice || guideActive()) return;
+    guideOpening = true;
+    title.setBlocked(true); // from the request on: nothing on the title reacts while the guide loads
+    const opener = kind === 'reference' ? title.guideButton : null;
+    void loadGuide().then((g) => {
+      guideOpening = false;
+      if (!g || !title.visible || pendingChoice) {
+        title.setBlocked(false);
+        return;
+      }
+      g.open({
+        kind,
+        context: guideContext(title.focusedChoice),
+        canPlay: true,
+        // measured live, skipped when the card would cover them: the two mode cards on the first step,
+        // the HOW TO PLAY button on the last (where the guide can be opened again)
+        highlight: (step) => (step === 'welcome' ? title.root.querySelector('.mode-cards') : step === 'start' ? title.guideButton : null),
+        opener,
+      });
+    });
+  };
 
   /** Read-only peeks at both records for the cards (never writes, never backs up). */
   const titleModel = (error?: string): Parameters<TitleScreen['show']>[0] => {
@@ -135,8 +214,16 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         setUrlMode(null);
         document.title = 'GALAXIA';
         title.show(titleModel(error));
+        // P04.2 guide: a player who has not finished or skipped the current guide gets it once, over the title
+        if (!guideAutoOpened && !error && guideDue(readGuide(store))) {
+          guideAutoOpened = true;
+          openGuide('tutorial');
+        }
       },
-      hide: () => title.hide(),
+      hide: () => {
+        guide?.dismiss();
+        title.hide();
+      },
     },
     makeContext: (id, binding): ModeContext => {
       const container = document.createElement('div');
@@ -162,6 +249,45 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   }
 
   installAudioUnlock(hostScope, window, sound);
+
+  // P04: hidden Admin Access on the title screen (docs/development/ADMIN_ACCESS.md; nothing on screen
+  // mentions it). The detectors only observe: no title key or tap behaves differently unless the whole
+  // sequence / gesture completes, which hands a one-shot request to Free Roam and starts it.
+  const adminKeys = createSequenceDetector();
+  const adminGesture = createGestureDetector();
+  const startAdmin = (): void => {
+    if (!title.visible || pendingChoice || guideActive()) return;
+    requestAdminLaunch(performance.now());
+    choose('freeroam');
+  };
+  hostScope.on<KeyboardEvent>(
+    window,
+    'keydown',
+    (e) => {
+      if (!title.visible || guideActive() || e.isComposing || isEditableTarget(e.target)) {
+        adminKeys.reset();
+        return;
+      }
+      if (adminKeys.feed({ code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, repeat: e.repeat, t: e.timeStamp })) {
+        e.preventDefault();
+        startAdmin();
+      }
+    },
+    { capture: true },
+  );
+  const logo = title.root.querySelector<HTMLElement>('.title-logo');
+  if (logo) {
+    hostScope.on<PointerEvent>(logo, 'pointerdown', (e) => {
+      if (title.visible && !guideActive()) adminGesture.down(e.pointerId, e.clientX, e.clientY, e.timeStamp);
+    });
+    hostScope.on<PointerEvent>(logo, 'pointermove', (e) => adminGesture.move(e.pointerId, e.clientX, e.clientY));
+    hostScope.on<PointerEvent>(logo, 'pointerup', (e) => {
+      if (adminGesture.up(e.pointerId, e.timeStamp)) startAdmin();
+    });
+    hostScope.on<PointerEvent>(logo, 'pointercancel', () => adminGesture.cancel());
+    // a long press on the logo must not open the browser's context / image menu
+    hostScope.on<Event>(logo, 'contextmenu', (e) => e.preventDefault());
+  }
   hostScope.on(window, 'blur', () => controller.pause('blur'));
   // audio suspension stays with the modes (Classic suspends while its pause menu is open)
   hostScope.on(document, 'visibilitychange', () => {
@@ -180,6 +306,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
       active: controller.mode?.debug() ?? null,
       containers: root.querySelectorAll(':scope > [data-mode-root]').length,
       notices: [...notices],
+      guide: { ...(guide?.status() ?? GUIDE_CLOSED), record: readGuide(store), autoOpened: guideAutoOpened },
     }),
   };
   // TD-78: test the literal so the release build drops the hook entirely

@@ -12,6 +12,12 @@ export interface InputFrame {
    * Absent or false = the original press-per-shot behaviour (scripts, tests).
    */
   readonly fireHeld?: boolean;
+  /**
+   * Combat P03C: NEXT / PREVIOUS weapon pressed this tick (edge; 1 = next,
+   * -1 = previous). Only read when the game has a post-Wave-20 loadout;
+   * absent = no switch (the legacy fighter has one weapon).
+   */
+  readonly cycle?: 1 | -1 | 0;
   /** Pause toggle pressed this tick (edge). */
   readonly pause: boolean;
   /** Start / confirm pressed this tick (edge). */

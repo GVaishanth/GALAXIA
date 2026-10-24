@@ -14,6 +14,7 @@ import { setState, type SimContext } from './context.ts';
 import { slotPosition } from './formation.ts';
 import { buildPath, chain, line, pointAt, type Pt, type Vec } from './paths.ts';
 import { spawnEnemyShot } from './projectiles.ts';
+import { zoneScale } from './timeZones.ts';
 
 const tmp: Vec = { x: 0, y: 0 };
 const dir: Vec = { x: 0, y: 1 };
@@ -63,7 +64,8 @@ export function startReturnToSlot(ctx: SimContext, e: Enemy): void {
 /** Advance one enemy along its scripted run; returns true when the run finished this tick. */
 function advanceRun(ctx: SimContext, e: Enemy, dtMs: number): boolean {
   const run = e.run!;
-  run.s += (run.speed * dtMs) / 1000;
+  // Combat P03C: inside a nuke's time zone an enemy on a flight path runs at the zone's scale (no zone = 1)
+  run.s += (run.speed * dtMs * zoneScale(ctx.world, e.x, e.y)) / 1000;
   pointAt(run.path, run.s, tmp, dir);
   e.x = tmp.x;
   e.y = tmp.y;

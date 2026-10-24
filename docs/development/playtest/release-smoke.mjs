@@ -14,6 +14,9 @@
  *    Responsive and Arcade Display at phone, landscape-phone and desktop sizes
  * E. preferences survive a reload (Arcade Display + mute in galaxia:prefs)
  * F. no page errors, failed requests or requests outside the base
+ * G. first visit (P04.2 guide): the first-run guide opens over the title, SKIP is
+ *    remembered across a reload, HOW TO PLAY opens it again. The other runs seed
+ *    only `galaxia:guide` so they start as a returning player.
  */
 import { chromium, firefox, webkit } from 'playwright';
 
@@ -56,11 +59,20 @@ async function animates(p, sel, n = 6, ms = 180) {
 }
 const press = async (p, sel, touch) => (touch ? p.tap(sel) : p.click(sel));
 
-async function launch(bname, { w, h, touch = false, dpr = 1, query = '' }) {
+async function launch(bname, { w, h, touch = false, dpr = 1, query = '', fresh = false }) {
   const browser = await BT[bname].launch();
   const opts = { viewport: { width: w, height: h }, hasTouch: touch, deviceScaleFactor: dpr };
   if (touch && bname !== 'firefox') opts.isMobile = true;
   const ctx = await browser.newContext(opts);
+  // P04.2 guide: the first-run guide opens over a fresh title; the flows below start as a returning player.
+  // Only the guide record is seeded (and only when absent); `fresh` checks the first visit itself.
+  if (!fresh) {
+    await ctx.addInitScript(() => {
+      try {
+        if (!localStorage.getItem('galaxia:guide')) localStorage.setItem('galaxia:guide', JSON.stringify({ version: 1, seen: 1, outcome: 'skipped' }));
+      } catch {}
+    });
+  }
   const p = await ctx.newPage();
   const errs = [];
   const offBase = [];
@@ -286,7 +298,33 @@ async function hud(bname, vp) {
   }
 }
 
+/* ---------- G: first visit (P04.2 guide) ---------- */
+async function firstVisit(bname) {
+  const { browser, p, errs } = await launch(bname, { w: 1366, h: 768, fresh: true });
+  try {
+    const shown = await waitVisible(p, '.guide:not([hidden]) .guide-card', 6000);
+    const counter = shown ? await p.evaluate(() => document.querySelector('.guide:not([hidden]) .guide-count')?.textContent ?? '') : '';
+    check(`${bname}: G first visit: the guide opens over the title (STEP 1 OF 6)`, shown && counter === 'STEP 1 OF 6', { shown, counter });
+    await p.click('.guide:not([hidden]) .guide-close');
+    await sleep(200);
+    const rec = await p.evaluate(() => JSON.parse(localStorage.getItem('galaxia:guide') ?? 'null'));
+    await p.goto(URL0, { waitUntil: 'load' });
+    await waitVisible(p, '.mode-card-classic');
+    await sleep(500);
+    const again = await p.evaluate(() => !!document.querySelector('.guide:not([hidden])'));
+    check(`${bname}: G SKIP TUTORIAL is remembered across a reload`, rec?.outcome === 'skipped' && !again, { rec, again });
+    await p.click('.title-guide');
+    const ref = await waitVisible(p, '.guide:not([hidden]) .guide-card', 4000);
+    const kind = await p.evaluate(() => document.querySelector('.guide:not([hidden])')?.dataset.kind ?? null);
+    check(`${bname}: G HOW TO PLAY opens the guide again`, ref && kind === 'reference', { ref, kind });
+    check(`${bname}: G no errors`, errs.length === 0, errs);
+  } finally {
+    await browser.close();
+  }
+}
+
 for (const b of ENGINES) {
+  try { await firstVisit(b); } catch (e) { check(`${b}: first-visit run completed`, false, String(e)); }
   try { await session(b); } catch (e) { check(`${b}: session completed`, false, String(e)); }
   for (const vp of VIEWPORTS) {
     try { await hud(b, vp); } catch (e) { check(`${b} ${vp.w}x${vp.h}: HUD run completed`, false, String(e)); }

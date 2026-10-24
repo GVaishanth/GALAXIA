@@ -12,13 +12,21 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: str
   return n;
 }
 
-export function btn(className: string, text: string, key: string, onClick: () => void): HTMLButtonElement {
+export function btn(className: string, text: string, key: string, onClick: (e: MouseEvent) => void): HTMLButtonElement {
   const b = el('button', `fr-btn ${className}`, text);
   b.type = 'button';
   b.dataset['key'] = key;
   b.addEventListener('click', onClick);
   return b;
 }
+
+/**
+ * Economy pass: true for the second click of a mouse double-click (`detail`
+ * counts rapid clicks; keyboard and touch activation report 0 or 1). A paid
+ * action's CONFIRM ignores it, so a double-click arms a trade and never also
+ * buys it: confirming takes a deliberate second press.
+ */
+export const strayRepeat = (e: MouseEvent | undefined): boolean => !!e && e.detail >= 2;
 
 /** Before -> after table of a quote. */
 export function quoteTable(lines: readonly QuoteLine[]): HTMLElement {

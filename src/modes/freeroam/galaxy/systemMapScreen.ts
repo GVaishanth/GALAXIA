@@ -70,6 +70,8 @@ export interface SystemFuelDeps {
   /** R2: the free emergency jump target from the pilot's system (null = not due). */
   readonly emergency: () => string | null;
   readonly emergencyJump: (to: string) => SystemTravelResult;
+  /** Economy pass: the marks side of a route in the confirmation (travel has no marks fee: "TRAVEL FEE FREE (0 MARKS) · BALANCE …"). */
+  readonly fee?: (() => string) | undefined;
   /** Systems with an active mission target -> mission titles. */
   readonly missions: () => ReadonlyMap<string, readonly string[]>;
   /** The pilot's system has a station (dock there for free cells). */
@@ -574,7 +576,8 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     cTitle.textContent = name(id).toUpperCase();
     cRoute.textContent = plan.path.map(name).join(' → ');
     const hazards = [...new Set(plan.lanes.map(laneHazardText).filter((t) => t !== 'clear'))];
-    cStats.textContent = `${plan.jumps} ${plan.jumps === 1 ? 'JUMP' : 'JUMPS'} · ${costText(plan.lanes)} · ${hazards.length ? hazards.join(', ').toUpperCase() : 'NO KNOWN HAZARDS'}`;
+    const fee = deps.fuel?.fee?.();
+    cStats.textContent = `${plan.jumps} ${plan.jumps === 1 ? 'JUMP' : 'JUMPS'} · ${costText(plan.lanes)}${fee ? ` · ${fee}` : ''} · ${hazards.length ? hazards.join(', ').toUpperCase() : 'NO KNOWN HAZARDS'}`;
     confirmLayer.hidden = false;
     root.dataset['confirm'] = 'open';
     shell.setInert(true);

@@ -14,6 +14,10 @@
  * - Fire is also a per-source hold (TD-74): holding a fire key, the FIRE
  *   button or pad A keeps firing (the engine paces it and heats the weapon).
  *   The hold ends when the last source releases; clear() drops it.
+ * - Weapon switching (Combat P03C, post-Wave-20 roster ships only): `next` /
+ *   `prev` presses queue one step each (at most 3 pending, one step per tick),
+ *   so rapid taps are never merged or doubled. A switch never fires. (Since
+ *   P04.1 nothing sends `prev`: the wheel no longer switches weapons.)
  * - Fire doubles as "confirm" only where the caller allows it (the title
  *   screen), so mashing fire through a death cannot skip game over.
  *
@@ -22,7 +26,7 @@
 import type { InputFrame } from '../core/game/input.ts';
 
 /** Logical actions. `start` is the confirm action (Enter, tap to start). */
-export type Action = 'left' | 'right' | 'fire' | 'pause' | 'start';
+export type Action = 'left' | 'right' | 'fire' | 'pause' | 'start' | 'next' | 'prev';
 export type MoveDir = -1 | 0 | 1;
 export type InputSource = 'keyboard' | 'touch' | 'pointer' | 'gamepad' | 'script';
 
@@ -44,6 +48,8 @@ export class InputHub {
   private readonly fireHolds = new Set<InputSource>();
   private pausePressed = false;
   private startPressed = false;
+  /** Weapon switch steps waiting for the next ticks (+ next, - previous; |n| <= 3). */
+  private cyclePending = 0;
   /** Source of the latest user action (UI adapts touch vs keyboard layouts). */
   lastSource: InputSource | null = null;
   /** Presses accepted per source (diagnostics for automated checks). */
@@ -106,6 +112,12 @@ export class InputHub {
       case 'start':
         this.startPressed = true;
         break;
+      case 'next':
+        this.cyclePending = Math.min(3, this.cyclePending + 1);
+        break;
+      case 'prev':
+        this.cyclePending = Math.max(-3, this.cyclePending - 1);
+        break;
     }
   }
 
@@ -126,6 +138,7 @@ export class InputHub {
     this.holds.clear();
     this.fireHolds.clear();
     this.firePressed = this.pausePressed = this.startPressed = false;
+    this.cyclePending = 0;
   }
 
   /** Consume one tick of input. */
@@ -137,7 +150,9 @@ export class InputHub {
       fireHeld: this.fireHolds.size > 0,
       pause: this.pausePressed,
       start: this.startPressed || (fireConfirms && this.firePressed),
+      ...(this.cyclePending !== 0 ? { cycle: this.cyclePending > 0 ? (1 as const) : (-1 as const) } : {}),
     };
+    this.cyclePending -= Math.sign(this.cyclePending);
     this.firePressed = this.pausePressed = this.startPressed = false;
     return f;
   }

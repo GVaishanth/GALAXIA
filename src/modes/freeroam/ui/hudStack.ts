@@ -10,6 +10,8 @@
  *
  *   --fr-card-bottom  the ship card's bottom edge (the location block on
  *                     phones and the cargo chip hang under it);
+ *   --fr-card-right   the ship card's right edge (P04.1: the LOCK touch button
+ *                     sits beside the card in short landscape);
  *   --fr-feed-top     below every visible top-HUD element in the log's column
  *                     (small screens place the collection log there);
  *   [data-tight]      on the log, when two lines would reach the ship drawn at
@@ -66,7 +68,10 @@ export function stackFlightHud(scope: DisposableScope, root: HTMLElement, card: 
     if (box.width === 0) return;
     // the card first: what hangs under it moves before the obstacles are measured
     const cardBox = card.getBoundingClientRect();
-    if (cardBox.height > 0) root.style.setProperty('--fr-card-bottom', `${Math.ceil(cardBox.bottom - box.top)}px`);
+    if (cardBox.height > 0) {
+      root.style.setProperty('--fr-card-bottom', `${Math.ceil(cardBox.bottom - box.top)}px`);
+      root.style.setProperty('--fr-card-right', `${Math.ceil(cardBox.right - box.left)}px`);
+    }
     // the log's column: an oversized width is clamped by max-width (set and restored in the
     // same task, so it is never painted); measuring the text width instead could oscillate
     const f = feed.getBoundingClientRect();

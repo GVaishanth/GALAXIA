@@ -32,6 +32,7 @@
  * acquiring a target, in its first COMBAT.spawnFireDelay ticks, or at a pilot
  * inside the arrival sanctuary.
  */
+import { agentSteps } from './dilation.ts';
 import type { SectorEvent, SectorRun } from '../sector/run.ts';
 import { dist, segmentDistance } from '../sector/grid.ts';
 import { COMBAT } from './difficulty.ts';
@@ -667,7 +668,8 @@ function separate(run: SectorRun): void {
 export function stepAgents(run: SectorRun, events: SectorEvent[]): void {
   const fights = { n: 0 };
   for (const a of run.hostiles) if (typeof a.target === 'number' && a.state !== 'destroyed') fights.n += 1;
-  for (const a of run.hostiles) stepAgent(run, a, fights, events);
+  // Combat P03C: a ship inside a nuke's dilation zone runs its whole step only on the ticks its accumulator allows
+  for (const a of run.hostiles) if (agentSteps(run, a)) stepAgent(run, a, fights, events);
   separate(run);
   for (let i = run.hostiles.length - 1; i >= 0; i--) {
     const a = run.hostiles[i]!;

@@ -1,102 +1,126 @@
 /**
- * Pilot missile skill (Combat P03, FR-TD-85). One guided missile on a
- * cooldown, launched by a deliberate press in normal Free Roam flight.
- * Pure simulation on the fixed 60 Hz step (no DOM, no wall clock, no unseeded randomness).
+ * Pilot ordnance (Combat P03 missile skill, generalised in Combat P03C,
+ * FR-TD-89): the heavy missile, the lock-on missile and the nuke, fired with
+ * FIRE while selected. Pure simulation on the fixed 60 Hz step (no DOM, no
+ * wall clock, no unseeded randomness). Every gameplay number comes from the
+ * shared catalogue (config/weapons.ts); the selection, per-weapon cooldowns
+ * and fire checks are the mode-neutral arsenal (core/weapons/arsenal.ts).
  *
- * Lifecycle (one press):
- *   press (rising edge of SectorInput.missile; holding never repeats)
- *   -> validate: phase is flight, not docked, not cooling down, energy >= cost,
- *      and a valid target in front of the nose (see `pickTarget`)
- *        refused: a `missileRefused` event (no target / low energy / cooling);
- *        nothing is consumed, so the pilot can line up and press again
- *   -> acquiring: lock brackets close on the target for `lockTicks`; the lock
- *      holds while the target stays alive, hostile, in sight and inside the
- *      looser keep range / cone. Lost -> `missileLockLost`, nothing consumed
- *   -> launch: energy is spent and the cooldown starts; the missile leaves the
- *      nose at the ship's forward speed plus `launchSpeed`
- *   -> guidance: accelerates to `speed`, turns at most `turn` rad/s toward the
- *      target (pure pursuit: predictable, and a hard break can outturn it).
- *      Elites see it coming and may dodge (ai.ts `incoming`)
- *   -> impact / expiry: the first ship it sweeps through (its target or any
- *      ship hostile to the pilot; the nearest along the sweep when two overlap)
- *      takes `damage` once through damageAgent (shield first, the usual kill /
- *      salvage / provoke rules), and the missile is removed in the same step.
- *      Rocks, landmarks, solid POIs, the sector edge and the end of its life
- *      remove it with no damage. If its target dies or becomes invalid it flies
- *      straight for at most `lostLife` more ticks
- *   -> cleanup: recall, restart and sector unload drop every missile and reset
- *      the skill; a paused run is not stepped, so nothing advances while paused.
+ * Trigger (one press = at most one launch; holding never repeats; plasma
+ * keeps its hold-to-fire gun in sector/run.ts):
+ *   press -> fireGate: not mountable / not in the rotation -> 'unavailable';
+ *            cooling, a full live cap, an empty magazine or too little
+ *            energy -> refused with a `missileRefused` event; nothing is
+ *            consumed, so the pilot can press again
+ *   heavy missile, nuke -> launch at once along the nose
+ *   lock-on -> needs a valid target in front of the nose (`pickTarget`); the
+ *            lock closes over `lockTicks` while the target stays valid, then
+ *            launches. No target / lock lost / switching weapon: nothing is
+ *            consumed
+ *   launch -> the magazine (stock) or the energy (lock-on) is spent and that
+ *            weapon's cooldown starts (the others keep theirs)
  *
- * Bounded: at most `maxLive` missiles exist (the cooldown is longer than a
- * missile's life, so in practice one), each lives at most `lifeTicks`.
- * No new resource: it spends the ship's existing boost energy.
+ * Flight: accelerates to `speed`; the lock-on turns at most `turn` rad/s
+ * toward its target (pure pursuit, never snaps; a hard break outturns it) and
+ * flies straight for `lostLife` ticks once the target is gone. Unguided
+ * weapons fly straight.
+ *
+ * End of flight (each missile resolves exactly once, in the step it ends):
+ *   ship hit (the nearest hostile along the sweep; wary ships it was not
+ *     aimed at are passed): that ship takes `impactDamage` once, then the
+ *     blast (if any) damages every OTHER hostile ship within `blast.radius`,
+ *     falling linearly to `edgeMul` at the edge, once each; enemy missiles in
+ *     the radius are shot down and mines are set off
+ *   rock / landmark / solid POI: detonate there (onExpiry 'detonate': heavy,
+ *     nuke) or fizzle with no damage (lock-on)
+ *   end of life: the same choice (a timed fuse, or a fizzle)
+ *   sector edge: removed with no blast
+ * Capital-class bosses take `bossMul` of every hit. The nuke's detonation
+ * also opens a time-dilation zone (combat/dilation.ts).
+ *
+ * Cleanup: recall, restart and sector unload drop every missile, the lock
+ * and every dilation zone; a paused run is not stepped.
  */
-import type { SectorEvent, SectorInput, SectorRun } from '../sector/run.ts';
+import { WEAPON_BY_ID, type AmmoRule, type Guidance, type OrdnanceWeapon, type WeaponId } from '../../../config/weapons.ts';
+import { cycleWeapon, fireGate, startCooldown, tickArsenal, type FireGate } from '../../../core/weapons/arsenal.ts';
+import type { SectorEvent, SectorRun } from '../sector/run.ts';
+import { openZone } from './dilation.ts';
 import { FAMILIES } from './families.ts';
 import { inInterference } from './hazards.ts';
+import { triggerMine } from './projectiles.ts';
 import type { Agent } from './state.ts';
 import { damageAgent, hostileTo, shotBlocked, sweptHit, TICK } from './world.ts';
+
+const LOCK = WEAPON_BY_ID.get('lock-missile') as OrdnanceWeapon;
+const LOCK_GUIDE = LOCK.guidance as Extract<Guidance, { kind: 'lock' }>;
+const LOCK_AMMO = LOCK.ammo as Extract<AmmoRule, { kind: 'energy' }>;
 
 /**
  * Tunables (measured in tests/combatMeasure.test.ts; reasoning in
  * docs/freeroam/COMBAT_P03.md). Distances in art px, times in 60 Hz ticks.
+ * The lock-on missile's values as the HUD and tests read them; every gameplay
+ * value comes from the shared weapon catalogue (config/weapons.ts,
+ * `lock-missile`), the same definition the Armory shows; only the HUD notice
+ * time lives here.
  */
 export const MISSILE = Object.freeze({
   /** Acquisition: a target must be this close... */
-  range: 600,
+  range: LOCK_GUIDE.acquire.range,
   /** ...and within this half-angle of the nose (rad, ~31 deg): aim decides the target. */
-  cone: 0.55,
+  cone: LOCK_GUIDE.acquire.cone,
   /** The lock holds while the target stays inside this range and half-angle. */
-  keepRange: 720,
-  keepCone: 1.0,
+  keepRange: LOCK_GUIDE.acquire.keepRange,
+  keepCone: LOCK_GUIDE.acquire.keepCone,
   /** Sensor interference (pilot or target inside it) shortens the acquisition range. */
-  jammedRangeMul: 0.6,
+  jammedRangeMul: LOCK_GUIDE.acquire.jammedRangeMul,
   /** Lock time before launch (0.3 s; was 0.5 s in the first P03 cut, shortened after playtest feedback). */
-  lockTicks: 18,
+  lockTicks: LOCK_GUIDE.acquire.lockTicks,
   /** Speed added to the ship's forward speed at launch, top speed and acceleration (px/s, px/s^2). */
-  launchSpeed: 200,
-  speed: 470,
-  accel: 900,
+  launchSpeed: LOCK.projectile.launchSpeed,
+  speed: LOCK.projectile.speed,
+  accel: LOCK.projectile.accel,
   /** Turn limit (rad/s): turning radius ~150 px at top speed. */
-  turn: 3.2,
+  turn: LOCK_GUIDE.turn,
   /** Flight time (2.5 s) and the straight flight left after the target is lost. */
-  lifeTicks: 150,
-  lostLife: 45,
-  /** Damage of the one impact (shield first, like every hit). */
-  damage: 18,
+  lifeTicks: LOCK.projectile.lifeTicks,
+  lostLife: LOCK_GUIDE.lostLife,
+  /** Damage of the direct impact (shield first, like every hit); its small blast hits the ships around it. */
+  damage: LOCK.impactDamage,
   /** Cooldown from launch (12 s) and the energy spent at launch. */
-  cooldownTicks: 720,
-  energy: 30,
+  cooldownTicks: LOCK.cooldownTicks,
+  energy: LOCK_AMMO.cost,
   /** Collision radius and the live cap. */
-  radius: 4,
-  maxLive: 2,
+  radius: LOCK.projectile.radius,
+  maxLive: LOCK.projectile.maxLive,
   /** How long a notice (NO TARGET, LOCK LOST, HIT...) stays on the HUD. */
   noticeTicks: 60,
 });
 
-export type MissileSkillState = 'ready' | 'acquiring' | 'cooldown';
-export type MissileNotice = 'noTarget' | 'lowEnergy' | 'cooling' | 'lockLost' | 'launched' | 'hit' | 'kill' | 'miss';
+/** Lock-on acquisition (the other weapons launch on the press). */
+export type MissileSkillState = 'ready' | 'acquiring';
+export type MissileNotice = 'noTarget' | 'lowEnergy' | 'cooling' | 'empty' | 'unavailable' | 'busy' | 'lockLost' | 'launched' | 'hit' | 'kill' | 'miss' | 'blast';
+export type RefusalReason = Exclude<FireGate, 'ok'> | 'noTarget';
 
 export interface MissileSkill {
   state: MissileSkillState;
   /** Acquiring: the hostile being locked and the ticks locked so far. */
   target: number | null;
   lock: number;
-  /** Cooling down: ticks left. */
-  cooldown: number;
-  /** The input last tick (edge detection: holding never repeats). */
+  /** FIRE last tick (edge detection: holding never repeats a launch). */
   held: boolean;
-  /** The latest feedback for the HUD, and ticks left to show it. */
+  /** The latest feedback for the HUD, the weapon it is about, and ticks left to show it. */
   notice: MissileNotice | null;
+  noticeWeapon: WeaponId | null;
   noticeTicks: number;
   /** Counters for this visit (diagnostics / tests). */
   launches: number;
   hits: number;
 }
 
-/** A pilot missile in flight (temporary entity). */
+/** A pilot missile or warhead in flight (temporary entity). */
 export interface PlayerMissile {
   readonly id: number;
+  readonly weapon: WeaponId;
   x: number;
   y: number;
   px: number;
@@ -105,18 +129,21 @@ export interface PlayerMissile {
   vy: number;
   speed: number;
   life: number;
-  /** Hostile id it homes on; null once lost (then it flies straight). */
+  /** Hostile id it homes on (lock-on); null for unguided weapons and once lost (then it flies straight). */
   target: number | null;
 }
 
 export function freshMissileSkill(): MissileSkill {
-  return { state: 'ready', target: null, lock: 0, cooldown: 0, held: false, notice: null, noticeTicks: 0, launches: 0, hits: 0 };
+  return { state: 'ready', target: null, lock: 0, held: false, notice: null, noticeWeapon: null, noticeTicks: 0, launches: 0, hits: 0 };
 }
 
-/** Drop every missile and reset the skill (recall, restart, unload). */
+/** Drop every missile, the lock and every dilation zone (recall, restart, unload). Cooldowns and magazines are kept. */
 export function resetMissiles(run: SectorRun): void {
   run.missiles.length = 0;
+  run.dilation.length = 0;
+  const held = run.missile.held;
   run.missile = freshMissileSkill();
+  run.missile.held = held; // a FIRE still held through a reset must not count as a new press
 }
 
 const angleDiff = (a: number, b: number): number => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
@@ -156,8 +183,13 @@ export function validTarget(run: SectorRun, a: Agent, range: number, cone: numbe
  * The target a press would lock: among valid hostiles in front of the nose,
  * the one closest to the aim line, nearer ones breaking ties (the pilot picks
  * by pointing). Wary factions that have not been provoked are never picked.
+ * P04.1: the ship-locked hostile (X, combat/shipLock.ts) comes first, but only
+ * when it passes this missile's own range, cone and line-of-sight rules; the
+ * acquisition time, energy and cooldown are unchanged.
  */
 export function pickTarget(run: SectorRun): Agent | null {
+  const locked = agentById(run, run.shipLock.target);
+  if (locked && validTarget(run, locked, MISSILE.range, MISSILE.cone)) return locked;
   const s = run.ship;
   const nose = noseAngle(s.heading);
   let best: Agent | null = null;
@@ -175,95 +207,125 @@ export function pickTarget(run: SectorRun): Agent | null {
 }
 
 const agentById = (run: SectorRun, id: number | null): Agent | null => (id === null ? null : (run.hostiles.find((a) => a.id === id && a.state !== 'destroyed') ?? null));
+const ordnance = (id: WeaponId): OrdnanceWeapon | null => {
+  const w = WEAPON_BY_ID.get(id);
+  return w && w.fire === 'ordnance' ? w : null;
+};
 
-function notify(run: SectorRun, n: MissileNotice): void {
+function notify(run: SectorRun, n: MissileNotice, weapon: WeaponId | null): void {
   run.missile.notice = n;
+  run.missile.noticeWeapon = weapon;
   run.missile.noticeTicks = MISSILE.noticeTicks;
 }
 
-function launch(run: SectorRun, target: Agent, events: SectorEvent[]): void {
+function refuse(run: SectorRun, weapon: WeaponId, reason: RefusalReason, events: SectorEvent[]): void {
+  notify(run, reason, weapon);
+  events.push({ type: 'missileRefused', reason, weapon });
+}
+
+const liveOf = (run: SectorRun, id: WeaponId): number => run.missiles.reduce((n, m) => n + (m.weapon === id ? 1 : 0), 0);
+
+/** Whether `id` could fire right now (the HUD and the touch button show the same answer the trigger acts on). */
+export function gateOf(run: SectorRun, id: WeaponId): FireGate {
+  // P04 admin sandbox: magazines never run dry and launches need no energy (the cooldown still gates)
+  if (run.unlimitedAmmo) return fireGate(run.arsenal, id, { stock: () => Number.POSITIVE_INFINITY, energy: null, live: liveOf(run, id) });
+  return fireGate(run.arsenal, id, { stock: (w) => run.ammo[w] ?? 0, energy: run.energy, live: liveOf(run, id) });
+}
+
+function cancelLock(run: SectorRun): void {
+  const sk = run.missile;
+  sk.state = 'ready';
+  sk.target = null;
+  sk.lock = 0;
+}
+
+/**
+ * Switch weapons one step (1 = next, -1 = previous) through the rotation,
+ * wrapping. Never fires; a lock in progress is cancelled (nothing consumed);
+ * cooldowns and magazines are untouched.
+ */
+export function switchWeapon(run: SectorRun, dir: 1 | -1, events: SectorEvent[]): boolean {
+  if (!cycleWeapon(run.arsenal, dir)) return false;
+  if (run.missile.state === 'acquiring') cancelLock(run);
+  run.missile.notice = null;
+  run.missile.noticeTicks = 0;
+  events.push({ type: 'weaponSwitched', weapon: run.arsenal.selected });
+  return true;
+}
+
+function launch(run: SectorRun, w: OrdnanceWeapon, target: Agent | null, events: SectorEvent[]): void {
   const sk = run.missile;
   const s = run.ship;
   const nose = noseAngle(s.heading);
   const nx = Math.cos(nose);
   const ny = Math.sin(nose);
-  const speed = MISSILE.launchSpeed + Math.max(0, s.vx * nx + s.vy * ny);
+  const speed = w.projectile.launchSpeed + Math.max(0, s.vx * nx + s.vy * ny);
   const x = s.x + nx * (run.tune.radius + 6);
   const y = s.y + ny * (run.tune.radius + 6);
-  run.missiles.push({ id: run.nextMissile++, x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, speed, life: MISSILE.lifeTicks, target: target.id });
-  run.energy = Math.max(0, run.energy - MISSILE.energy);
-  sk.state = 'cooldown';
-  sk.cooldown = MISSILE.cooldownTicks;
-  sk.target = null;
-  sk.lock = 0;
+  run.missiles.push({ id: run.nextMissile++, weapon: w.id, x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, speed, life: w.projectile.lifeTicks, target: target ? target.id : null });
+  if (w.ammo.kind === 'energy' && !run.unlimitedAmmo) run.energy = Math.max(0, run.energy - w.ammo.cost);
+  if (w.ammo.kind === 'stock' && !run.unlimitedAmmo) {
+    const left = Math.max(0, (run.ammo[w.id] ?? 0) - 1);
+    run.ammo[w.id] = left;
+    events.push({ type: 'ordnanceSpent', weapon: w.id, left });
+  }
+  startCooldown(run.arsenal, w.id);
+  cancelLock(run);
   sk.launches += 1;
-  notify(run, 'launched');
-  events.push({ type: 'missileLaunched', hostile: target.id, x, y });
+  notify(run, 'launched', w.id);
+  events.push({ type: 'missileLaunched', weapon: w.id, hostile: target ? target.id : null, x, y });
 }
 
-/** The skill for one tick: edge-triggered activation, the lock, the cooldown. Call before stepMissiles. */
-export function stepMissileSkill(run: SectorRun, input: SectorInput, events: SectorEvent[]): void {
+/**
+ * The trigger for one tick: cooldowns, the FIRE press edge for the selected
+ * ordnance weapon, the lock-on acquisition. Call before stepMissiles. FIRE
+ * with plasma selected is the gun (sector/run.ts) and does nothing here.
+ */
+export function stepMissileSkill(run: SectorRun, fireDown: boolean, events: SectorEvent[]): void {
   const sk = run.missile;
-  const down = input.missile === true;
-  const pressed = down && !sk.held;
-  sk.held = down;
-  if (sk.noticeTicks > 0 && --sk.noticeTicks === 0) sk.notice = null;
-
-  if (sk.state === 'cooldown') {
-    sk.cooldown -= 1;
-    if (sk.cooldown <= 0) {
-      sk.cooldown = 0;
-      sk.state = 'ready';
-      events.push({ type: 'missileReady' });
-    } else if (pressed) {
-      notify(run, 'cooling');
-      events.push({ type: 'missileRefused', reason: 'cooling' });
-    }
-    return;
+  const pressed = fireDown && !sk.held;
+  sk.held = fireDown;
+  if (sk.noticeTicks > 0 && --sk.noticeTicks === 0) {
+    sk.notice = null;
+    sk.noticeWeapon = null;
   }
-
+  for (const id of tickArsenal(run.arsenal)) events.push({ type: 'missileReady', weapon: id as WeaponId });
+  const id = run.arsenal.selected;
+  const w = ordnance(id);
   if (sk.state === 'acquiring') {
     const t = agentById(run, sk.target);
-    if (!t || run.docked || !validTarget(run, t, MISSILE.keepRange, MISSILE.keepCone)) {
-      sk.state = 'ready';
-      sk.target = null;
-      sk.lock = 0;
-      notify(run, 'lockLost');
+    if (!w || w.guidance.kind !== 'lock' || !t || run.docked || !validTarget(run, t, MISSILE.keepRange, MISSILE.keepCone)) {
+      cancelLock(run);
+      notify(run, 'lockLost', id);
       events.push({ type: 'missileLockLost' });
       return;
     }
     sk.lock += 1;
-    if (sk.lock >= MISSILE.lockTicks) {
-      if (run.energy < MISSILE.energy) {
-        // energy spent on boost during the lock: refuse, nothing consumed
-        sk.state = 'ready';
-        sk.target = null;
-        sk.lock = 0;
-        notify(run, 'lowEnergy');
-        events.push({ type: 'missileRefused', reason: 'lowEnergy' });
+    if (sk.lock >= w.guidance.acquire.lockTicks) {
+      // re-checked at launch: boost may have spent the energy during the lock (refused, nothing consumed)
+      const gate = gateOf(run, id);
+      if (gate !== 'ok') {
+        cancelLock(run);
+        refuse(run, id, gate, events);
         return;
       }
-      launch(run, t, events);
+      launch(run, w, t, events);
     }
     return;
   }
-
-  // ready
-  if (!pressed || run.docked) return;
-  if (run.missiles.length >= MISSILE.maxLive) {
-    notify(run, 'cooling');
-    events.push({ type: 'missileRefused', reason: 'cooling' });
+  if (!pressed || run.docked || !w) return;
+  const gate = gateOf(run, id);
+  if (gate !== 'ok') {
+    refuse(run, id, gate, events);
     return;
   }
-  if (run.energy < MISSILE.energy) {
-    notify(run, 'lowEnergy');
-    events.push({ type: 'missileRefused', reason: 'lowEnergy' });
+  if (w.guidance.kind !== 'lock') {
+    launch(run, w, null, events);
     return;
   }
   const t = pickTarget(run);
   if (!t) {
-    notify(run, 'noTarget');
-    events.push({ type: 'missileRefused', reason: 'noTarget' });
+    refuse(run, id, 'noTarget', events);
     return;
   }
   sk.state = 'acquiring';
@@ -272,24 +334,66 @@ export function stepMissileSkill(run: SectorRun, input: SectorInput, events: Sec
   events.push({ type: 'missileLock', hostile: t.id, x: t.x, y: t.y });
 }
 
-/** Move every missile; guide, collide, damage once, expire. */
+const bossClass = (a: Agent): boolean => a.role === 'boss' || a.family === 'capital';
+
+/**
+ * Detonation at (x, y): the blast damages every hostile ship within its
+ * radius except the one struck directly, once each; shoots down enemy
+ * missiles and sets off mines inside it; the nuke opens its dilation zone.
+ */
+function detonate(run: SectorRun, w: OrdnanceWeapon, x: number, y: number, direct: Agent | null, events: SectorEvent[]): void {
+  let hits = direct ? 1 : 0;
+  let kills = direct && direct.state === 'destroyed' ? 1 : 0;
+  const b = w.blast;
+  if (b) {
+    for (const a of run.hostiles) {
+      if (a === direct || a.state === 'destroyed' || !hostileTo(run, a.faction, 'player')) continue;
+      const d = Math.max(0, Math.hypot(a.x - x, a.y - y) - FAMILIES[a.family].radius);
+      if (d > b.radius) continue;
+      const dmg = b.damage * (1 - (1 - b.edgeMul) * (d / b.radius)) * (bossClass(a) ? w.damageRules.bossMul : 1);
+      damageAgent(run, a, dmg, 'player', events);
+      hits += 1;
+      if ((a.state as string) === 'destroyed') kills += 1;
+    }
+    for (let j = run.enemyShots.length - 1; j >= 0; j--) {
+      const m = run.enemyShots[j]!;
+      if (m.kind !== 'missile' || Math.hypot(m.x - x, m.y - y) > b.radius) continue;
+      run.enemyShots.splice(j, 1);
+      events.push({ type: 'shotDown', x: m.x, y: m.y });
+    }
+    for (const m of run.mines) if (Math.hypot(m.x - x, m.y - y) <= b.radius) triggerMine(m);
+  }
+  if (w.dilation) openZone(run, x, y, w.dilation, events);
+  run.missile.hits += hits > 0 ? 1 : 0;
+  if (hits > 0) notify(run, kills > 0 ? 'kill' : direct ? 'hit' : 'blast', w.id);
+  else notify(run, 'miss', w.id);
+  events.push({ type: 'detonation', weapon: w.id, x, y, r: b ? b.radius : 0, hits, kills });
+}
+
+/** Move every missile; guide, collide, damage once, detonate or fizzle, expire. */
 export function stepMissiles(run: SectorRun, events: SectorEvent[]): void {
   const L = run.layout;
   for (let i = run.missiles.length - 1; i >= 0; i--) {
     const m = run.missiles[i]!;
+    const w = ordnance(m.weapon);
+    if (!w) {
+      run.missiles.splice(i, 1);
+      continue;
+    }
+    const g = w.guidance;
     m.px = m.x;
     m.py = m.y;
     const t = agentById(run, m.target);
-    if (m.target !== null && (!t || !hostileTo(run, t.faction, 'player'))) {
+    if (g.kind === 'lock' && m.target !== null && (!t || !hostileTo(run, t.faction, 'player'))) {
       m.target = null; // target gone: fly straight, briefly
-      m.life = Math.min(m.life, MISSILE.lostLife);
+      m.life = Math.min(m.life, g.lostLife);
     }
-    m.speed = Math.min(MISSILE.speed, m.speed + MISSILE.accel * TICK);
+    m.speed = Math.min(w.projectile.speed, m.speed + w.projectile.accel * TICK);
     let ang = Math.atan2(m.vy, m.vx);
-    if (t && m.target !== null) {
+    if (g.kind === 'lock' && t && m.target !== null) {
       let d = Math.atan2(t.y - m.y, t.x - m.x) - ang;
       d = Math.atan2(Math.sin(d), Math.cos(d));
-      const turn = MISSILE.turn * TICK;
+      const turn = g.turn * TICK;
       ang += Math.max(-turn, Math.min(turn, d));
     }
     m.vx = Math.cos(ang) * m.speed;
@@ -297,14 +401,14 @@ export function stepMissiles(run: SectorRun, events: SectorEvent[]): void {
     m.x += m.vx * TICK;
     m.y += m.vy * TICK;
     m.life -= 1;
-
+    const r = w.projectile.radius;
     // one impact: the nearest ship along this tick's sweep
     let hit: Agent | null = null;
     let hitD = Infinity;
     for (const a of run.hostiles) {
       if (a.state === 'destroyed') continue;
       if (a.id !== m.target && !hostileTo(run, a.faction, 'player')) continue; // passes wary ships it was not aimed at
-      if (!sweptHit(m.px, m.py, m.x, m.y, a.x, a.y, FAMILIES[a.family].radius + MISSILE.radius)) continue;
+      if (!sweptHit(m.px, m.py, m.x, m.y, a.x, a.y, FAMILIES[a.family].radius + r)) continue;
       const d = Math.hypot(a.x - m.px, a.y - m.py);
       if (d < hitD) {
         hitD = d;
@@ -312,19 +416,31 @@ export function stepMissiles(run: SectorRun, events: SectorEvent[]): void {
       }
     }
     if (hit) {
-      damageAgent(run, hit, MISSILE.damage, 'player', events);
-      const killed = hit.state === 'destroyed';
-      run.missile.hits += 1;
-      notify(run, killed ? 'kill' : 'hit');
-      events.push({ type: 'missileHit', hostile: hit.id, x: m.x, y: m.y, damage: MISSILE.damage, killed });
+      const dmg = w.impactDamage * (bossClass(hit) ? w.damageRules.bossMul : 1);
+      damageAgent(run, hit, dmg, 'player', events);
+      events.push({ type: 'missileHit', weapon: w.id, hostile: hit.id, x: m.x, y: m.y, damage: dmg, killed: hit.state === 'destroyed' });
+      run.missiles.splice(i, 1);
+      detonate(run, w, m.x, m.y, hit, events);
+      continue;
+    }
+    if (m.x < 0 || m.y < 0 || m.x > L.width || m.y > L.height) {
+      // left the sector: gone, no blast
+      notify(run, 'miss', w.id);
+      events.push({ type: 'missileExpired', weapon: w.id, x: m.px, y: m.py });
       run.missiles.splice(i, 1);
       continue;
     }
-    const blocked = shotBlocked(L, m.px, m.py, m.x, m.y, MISSILE.radius) || (run.flight?.sightBlocked?.(m.px, m.py, m.x, m.y) ?? false);
-    if (m.life <= 0 || blocked || m.x < 0 || m.y < 0 || m.x > L.width || m.y > L.height) {
-      if (run.missile.notice === 'launched' || run.missile.notice === null) notify(run, 'miss');
-      events.push({ type: 'missileExpired', x: m.x, y: m.y });
+    const blocked = shotBlocked(L, m.px, m.py, m.x, m.y, r) || (run.flight?.sightBlocked?.(m.px, m.py, m.x, m.y) ?? false);
+    if (blocked || m.life <= 0) {
       run.missiles.splice(i, 1);
+      // a solid stops it where it touched (the last free point); the fuse bursts it where it is
+      const x = blocked ? m.px : m.x;
+      const y = blocked ? m.py : m.y;
+      if (w.projectile.onExpiry === 'detonate') detonate(run, w, x, y, null, events);
+      else {
+        notify(run, 'miss', w.id);
+        events.push({ type: 'missileExpired', weapon: w.id, x, y });
+      }
     }
   }
 }

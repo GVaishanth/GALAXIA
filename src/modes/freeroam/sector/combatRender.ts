@@ -31,7 +31,9 @@ import { siteOf } from '../combat/encounters.ts';
 import { FACTIONS, type Emblem } from '../combat/factions.ts';
 import { FAMILIES } from '../combat/families.ts';
 import { eruptionAt, inInterference } from '../combat/hazards.ts';
+import { agentAlpha } from '../combat/dilation.ts';
 import { MISSILE } from '../combat/playerMissile.ts';
+import { SHIP_LOCK } from '../combat/shipLock.ts';
 import type { Agent } from '../combat/state.ts';
 import { WEAPONS } from '../combat/weapons.ts';
 import type { FactionId } from '../catalogue/types.ts';
@@ -120,6 +122,30 @@ export function drawCombatWorld(ctx: CanvasRenderingContext2D, run: SectorRun, V
   ctx.font = `${Math.round(10 * ratio)}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
+  /* Combat P03C: nuke dilation zones. A faint tint and a slow dashed rim (no flash); they fade over the last half second */
+  for (const z of run.dilation) {
+    if (!V.visible(z.x, z.y, z.r)) continue;
+    const fade = Math.min(1, z.ticksLeft / 30, (z.duration - z.ticksLeft + 1) / 8);
+    const X = toX(z.x);
+    const Y = toY(z.y);
+    const R = z.r * zoom;
+    ctx.globalAlpha = 0.07 * fade;
+    ctx.fillStyle = COLORS['fx.blue'];
+    ctx.beginPath();
+    ctx.arc(X, Y, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.55 * fade;
+    ctx.strokeStyle = COLORS['fx.cyan'];
+    ctx.lineWidth = lw(1.5);
+    ctx.setLineDash([lw(6), lw(8)]);
+    ctx.lineDashOffset = V.reducedMotion ? 0 : -(V.timeMs / 90) % 1000;
+    ctx.beginPath();
+    ctx.arc(X, Y, R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.globalAlpha = 1;
+  }
   for (const z of L.hazards) {
     if (!V.visible(z.x, z.y, z.r)) continue;
     const x = toX(z.x);
@@ -389,8 +415,9 @@ export function drawCombatShips(ctx: CanvasRenderingContext2D, sprites: SpriteCa
 
   /* telegraphs first, under the ships */
   for (const a of run.hostiles) {
-    const x = a.px + (a.x - a.px) * k;
-    const y = a.py + (a.y - a.py) * k;
+    const ka = agentAlpha(a, k); // a ship slowed by a nuke spreads each step over several frames
+    const x = a.px + (a.x - a.px) * ka;
+    const y = a.py + (a.y - a.py) * ka;
     const wd = a.windup;
     if (wd && V.visible(x, y, WEAPONS[wd.weapon].range)) {
       const w = WEAPONS[wd.weapon];
@@ -483,8 +510,9 @@ export function drawCombatShips(ctx: CanvasRenderingContext2D, sprites: SpriteCa
   /* ships */
   for (const a of run.hostiles) {
     const F = FAMILIES[a.family];
-    const x = a.px + (a.x - a.px) * k;
-    const y = a.py + (a.y - a.py) * k;
+    const ka = agentAlpha(a, k); // a ship slowed by a nuke spreads each step over several frames
+    const x = a.px + (a.x - a.px) * ka;
+    const y = a.py + (a.y - a.py) * ka;
     if (!V.visible(x, y, F.radius * 3 + 30)) continue;
     const fac = FACTIONS[a.faction];
     const worn = a.hull < a.maxHull * F.wornAt;
@@ -607,7 +635,7 @@ export function drawCombatShips(ctx: CanvasRenderingContext2D, sprites: SpriteCa
 
 /* ------------------------------------------------------- pilot missile */
 
-/** The lock ring on the target being acquired, then every missile in flight (Combat P03). Drawn before the ships. */
+/** The lock ring on the target being acquired, then every missile and warhead in flight (Combat P03 / P03C). Drawn before the ships. */
 export function drawPlayerMissiles(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
   const { toX, toY, zoom, ratio, visible, alpha: k } = V;
   const lw = (n: number): number => Math.max(1, Math.round(n * ratio));
@@ -615,8 +643,9 @@ export function drawPlayerMissiles(ctx: CanvasRenderingContext2D, run: SectorRun
   if (sk.state === 'acquiring' && sk.target !== null) {
     const a = run.hostiles.find((h) => h.id === sk.target && h.state !== 'destroyed');
     if (a) {
-      const x = a.px + (a.x - a.px) * k;
-      const y = a.py + (a.y - a.py) * k;
+      const ka = agentAlpha(a, k);
+      const x = a.px + (a.x - a.px) * ka;
+      const y = a.py + (a.y - a.py) * ka;
       if (visible(x, y, 60)) {
         const p = Math.min(1, sk.lock / MISSILE.lockTicks);
         const r = (FAMILIES[a.family].radius + 18 - 8 * p) * zoom;
@@ -644,11 +673,44 @@ export function drawPlayerMissiles(ctx: CanvasRenderingContext2D, run: SectorRun
   for (const m of run.missiles) {
     const x = m.px + (m.x - m.px) * k;
     const y = m.py + (m.y - m.py) * k;
-    if (!visible(x, y, 30)) continue;
+    if (!visible(x, y, 40)) continue;
     const sp = Math.hypot(m.vx, m.vy) || 1;
     const ux = m.vx / sp;
     const uy = m.vy / sp;
-    // trail (cyan, faint), body (ivory), seeker tip (cyan-white)
+    if (m.weapon === 'heavy-missile' || m.weapon === 'nuke') {
+      // Combat P03C: unguided warheads. Heavy: a long orange-flame body; nuke: a slow round warhead with a pulsing ring
+      const nuke = m.weapon === 'nuke';
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = COLORS['fx.orange'];
+      ctx.lineWidth = Math.max(lw(2), (nuke ? 4 : 3.5) * zoom);
+      ctx.beginPath();
+      ctx.moveTo(toX(x - ux * 7), toY(y - uy * 7));
+      ctx.lineTo(toX(x - ux * (nuke ? 20 : 30)), toY(y - uy * (nuke ? 20 : 30)));
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = COLORS['player.hull.light'];
+      ctx.lineWidth = Math.max(lw(2.5), (nuke ? 7 : 5) * zoom);
+      ctx.beginPath();
+      ctx.moveTo(toX(x - ux * 7), toY(y - uy * 7));
+      ctx.lineTo(toX(x + ux * 5), toY(y + uy * 5));
+      ctx.stroke();
+      ctx.fillStyle = nuke ? COLORS['fx.yellow'] : COLORS['fx.orange'];
+      ctx.beginPath();
+      ctx.arc(toX(x + ux * 5), toY(y + uy * 5), Math.max(2, (nuke ? 3.2 : 2.2) * zoom), 0, Math.PI * 2);
+      ctx.fill();
+      if (nuke) {
+        const pulse = V.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(V.timeMs / 90);
+        ctx.globalAlpha = 0.35 + 0.4 * pulse;
+        ctx.strokeStyle = COLORS['fx.yellow'];
+        ctx.lineWidth = lw(1.5);
+        ctx.beginPath();
+        ctx.arc(toX(x), toY(y), (10 + 4 * pulse) * zoom, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      continue;
+    }
+    // lock-on: trail (cyan, faint), body (ivory), seeker tip (cyan-white)
     ctx.globalAlpha = 0.45;
     ctx.strokeStyle = COLORS['shot.player.edge'];
     ctx.lineWidth = Math.max(lw(1.5), 2.5 * zoom);
@@ -669,6 +731,96 @@ export function drawPlayerMissiles(ctx: CanvasRenderingContext2D, run: SectorRun
     ctx.fill();
   }
   ctx.lineCap = 'butt';
+}
+
+/* ------------------------------------------------------ ship target lock */
+
+/** Where the locked ship is drawn this frame (interpolated like the ship itself), or null without a lock. */
+function lockPoint(run: SectorRun, k: number): { a: Agent; x: number; y: number } | null {
+  const id = run.shipLock.target;
+  if (id === null) return null;
+  const a = run.hostiles.find((h) => h.id === id && h.state !== 'destroyed');
+  if (!a) return null;
+  const ka = agentAlpha(a, k);
+  return { a, x: a.px + (a.x - a.px) * ka, y: a.py + (a.y - a.py) * ka };
+}
+
+/**
+ * P04.1: four corner brackets and a small LOCK tag around the locked ship
+ * (the missile's lock is a broken ring, so the two never look alike). Drawn
+ * under the ships and every shot. On acquisition the brackets close in over
+ * ~0.2 s; then a slow, slight breathing. Neither with reduced motion.
+ */
+export function drawShipLock(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
+  const { toX, toY, zoom, ratio, visible, alpha: k } = V;
+  const p = lockPoint(run, k);
+  if (!p || !visible(p.x, p.y, 80)) return;
+  const L = run.shipLock;
+  // a fresh lock (X) or a newly cycled target (C) settles in once; never with reduced motion
+  const fresh = !V.reducedMotion && (L.notice === 'acquired' || L.notice === 'switched') ? Math.max(0, (L.noticeTicks - (SHIP_LOCK.noticeTicks - 12)) / 12) : 0;
+  const breathe = V.reducedMotion ? 0 : 0.04 * Math.sin(V.timeMs / 420);
+  const r = (FAMILIES[p.a.family].radius + 12) * zoom * (1 + 0.7 * fresh + breathe);
+  const X = Math.round(toX(p.x));
+  const Y = Math.round(toY(p.y));
+  const c = r * 0.45;
+  ctx.save();
+  ctx.strokeStyle = COLORS['player.trim'];
+  ctx.lineWidth = Math.max(1, Math.round(2 * ratio));
+  ctx.globalAlpha = 0.9 - 0.4 * fresh;
+  ctx.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+    ctx.moveTo(X + sx * r, Y + sy * (r - c));
+    ctx.lineTo(X + sx * r, Y + sy * r);
+    ctx.lineTo(X + sx * (r - c), Y + sy * r);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = COLORS['player.trim'];
+  ctx.font = `${Math.round(9 * ratio)}px ui-monospace, Menlo, Consolas, monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('LOCK', X, Math.round(Y + r + 4 * ratio));
+  ctx.restore();
+}
+
+/** P04.1: a hollow chevron at the screen edge pointing to a locked ship that is off screen (inboard of the threat markers). */
+export function drawShipLockMarker(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
+  const { toX, toY, W, H, ratio, alpha: k } = V;
+  const p = lockPoint(run, k);
+  if (!p) return;
+  const x = toX(p.x);
+  const y = toY(p.y);
+  if (x >= 0 && y >= 0 && x <= W && y <= H) return;
+  const inset = 30 * ratio;
+  const ang = Math.atan2(y - H / 2, x - W / 2);
+  const ex = Math.max(inset, Math.min(W - inset, W / 2 + Math.cos(ang) * W));
+  const ey = Math.max(inset, Math.min(H - inset, H / 2 + Math.sin(ang) * H));
+  const s = 8 * ratio;
+  ctx.save();
+  ctx.translate(Math.round(ex), Math.round(ey));
+  ctx.rotate(ang);
+  ctx.globalAlpha = 0.95;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(1, Math.round(3.5 * ratio));
+  ctx.strokeStyle = '#05060c';
+  const chevron = (): void => {
+    ctx.beginPath();
+    ctx.moveTo(s, 0);
+    ctx.lineTo(-s * 0.6, -s * 0.75);
+    ctx.lineTo(-s * 0.6, s * 0.75);
+    ctx.closePath();
+  };
+  chevron();
+  ctx.stroke();
+  ctx.lineWidth = Math.max(1, Math.round(1.6 * ratio));
+  ctx.strokeStyle = COLORS['player.trim'];
+  chevron();
+  ctx.stroke();
+  ctx.fillStyle = COLORS['player.trim'];
+  ctx.beginPath();
+  ctx.arc(0, 0, Math.max(1, 1.6 * ratio), 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 /* ------------------------------------------------------------- UI layer */

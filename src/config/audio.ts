@@ -170,6 +170,41 @@ export const SOUNDS = deepFreeze({
   extraLife: { bus: 'sfx', gain: 0.3, maxVoices: 1, minGapMs: 400, voices: motif(['E6', 'B6', 'E6', 'B6', 'E7'], 70, { duty: 0.125, lastMs: 220 }) },
   perfect: { bus: 'music', gain: 0.32, maxVoices: 1, minGapMs: 800, voices: motif(['C6', 'E6', 'G6', 'C7', '-', 'A6', 'C7', 'E7', '-', 'D7', 'E7', 'G7'], 80, { lastMs: 480, layer: 'triangle' }) },
   gameOver: { bus: 'music', gain: 0.32, maxVoices: 1, minGapMs: 800, voices: motif(['G4', 'D4', 'Eb4', 'Bb3', '-', 'C4', 'G3'], 190, { wave: 'triangle', lastMs: 700, layer: 'square', layerGain: 0.12 }) },
+  /* Combat P03C (Classic, post-Wave-20 roster ships only) */
+  missileLaunch: {
+    bus: 'sfx',
+    gain: 0.26,
+    maxVoices: 2,
+    minGapMs: 60,
+    voices: [
+      { wave: 'noise', f0: 2400, f1: 6000, sweep: 'exp', attackMs: 4, holdMs: 60, decayMs: 160, gain: 0.55 },
+      { wave: 'square', duty: 0.25, f0: 220, f1: 520, sweep: 'exp', attackMs: 2, holdMs: 40, decayMs: 120, gain: 0.3 },
+    ],
+  },
+  missileBlast: {
+    bus: 'sfx',
+    gain: 0.4,
+    maxVoices: 3,
+    minGapMs: 40,
+    voices: [
+      { wave: 'noise', f0: 3000, f1: 300, sweep: 'exp', attackMs: 1, holdMs: 40, decayMs: 380, gain: 0.85 },
+      { wave: 'triangle', f0: 160, f1: 50, sweep: 'exp', attackMs: 1, holdMs: 30, decayMs: 300, gain: 0.5 },
+    ],
+  },
+  nukeBlast: {
+    bus: 'sfx',
+    gain: 0.38, // peaks under the limiter threshold on its own (audioLifecycle test)
+    maxVoices: 1,
+    minGapMs: 300,
+    voices: [
+      { wave: 'noise', f0: 1800, f1: 90, sweep: 'exp', attackMs: 3, holdMs: 160, decayMs: 1300, gain: 0.9 },
+      { wave: 'triangle', f0: 110, f1: 30, sweep: 'exp', attackMs: 3, holdMs: 120, decayMs: 1200, gain: 0.7 },
+      { wave: 'square', duty: 0.5, f0: 440, f1: 110, sweep: 'exp', atMs: 90, attackMs: 2, holdMs: 30, decayMs: 500, gain: 0.2 },
+    ],
+  },
+  lockTone: { bus: 'sfx', gain: 0.16, maxVoices: 1, minGapMs: 120, voices: motif(['A6', 'E7'], 50, { duty: 0.125, lastMs: 70 }) },
+  weaponSwitch: { bus: 'sfx', gain: 0.18, maxVoices: 1, minGapMs: 40, voices: motif(['E6', 'B6'], 30, { duty: 0.25, lastMs: 50 }) },
+  refused: { bus: 'sfx', gain: 0.16, maxVoices: 1, minGapMs: 150, voices: [{ wave: 'square', duty: 0.5, f0: 180, f1: 140, sweep: 'lin', attackMs: 2, holdMs: 60, decayMs: 60, gain: 0.6 }] },
   uiMove: { bus: 'sfx', gain: 0.16, maxVoices: 1, minGapMs: 40, voices: [{ wave: 'square', duty: 0.25, f0: 990, attackMs: 1, holdMs: 14, decayMs: 22, gain: 0.6 }] },
   uiSelect: { bus: 'sfx', gain: 0.2, maxVoices: 1, minGapMs: 60, voices: motif(['A5', 'E6'], 45, { duty: 0.25, lastMs: 80 }) },
   pause: { bus: 'sfx', gain: 0.18, maxVoices: 1, minGapMs: 100, voices: motif(['E6', 'A5'], 60, { duty: 0.25, lastMs: 70 }) },

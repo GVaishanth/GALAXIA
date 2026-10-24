@@ -55,6 +55,17 @@ export interface ScreensOptions {
   readonly onSetting: (change: SettingChange) => void;
   /** Focus moved between items (UI blip). */
   readonly onNavigate?: () => void;
+  /** Combat P03C: step the title SHIP selector (1 next, -1 previous; wraps). */
+  readonly onShip?: (dir: 1 | -1) => void;
+}
+
+/** Combat P03C: what the title SHIP selector shows (null = hidden: the original title). */
+export interface ShipChoiceView {
+  readonly name: string;
+  /** Weapons in rotation order, e.g. "PLASMA · HEAVY · LOCK-ON · NUKE". */
+  readonly weapons: string;
+  /** Choices in the selector (legacy fighter + unlocked ships). */
+  readonly count: number;
 }
 
 export interface GameOverInfo {
@@ -131,6 +142,9 @@ export class Screens {
   private detachKeys: (() => void) | null = null;
   /** TD-77: keeps the focused item in view whenever a panel box changes size, whatever caused it. */
   private focusObserver: ResizeObserver | null = null;
+  /** P03C: the title SHIP selector (hidden and disabled until Classic Wave 20 is completed). */
+  private readonly ship: { button: HTMLButtonElement; name: HTMLElement; weapons: HTMLElement };
+  private shipKey = '';
   /** TD-77: the menu button that opened SETTINGS / HOW TO PLAY; focus returns to it when that panel closes. */
   private opener: HTMLElement | null = null;
 
@@ -139,7 +153,10 @@ export class Screens {
     this.root = el('div', 'screens');
 
     const title = this.panel('title', 'screen-title', 'GALAXIA main menu');
-    title.append(this.menu(MENUS.title), this.hint('↑ ↓ · ENTER TO SELECT', 'TAP TO SELECT', 'D-PAD · A TO SELECT'));
+    const titleMenu = this.menu(MENUS.title);
+    this.ship = this.shipChoice();
+    titleMenu.children[0]?.after(this.ship.button); // START GAME, SHIP, HOW TO PLAY, SETTINGS
+    title.append(titleMenu, this.hint('↑ ↓ · ENTER TO SELECT', 'TAP TO SELECT', 'D-PAD · A TO SELECT'));
 
     const pause = this.panel('pause', 'screen-pause', 'Paused');
     pause.append(el('h2', 'screen-heading', 'PAUSED'), this.menu(MENUS.pause), this.hint('P / ESC TO RESUME', 'II TO RESUME', 'START / B TO RESUME'));
@@ -362,6 +379,41 @@ export class Screens {
     return nav;
   }
 
+  /**
+   * P03C title SHIP selector: one menu button (Enter / tap / pad A = next
+   * ship; ← → / pad left-right while focused step either way). Disabled and
+   * hidden until setShip() is given a view, so the original menu is unchanged.
+   */
+  private shipChoice(): { button: HTMLButtonElement; name: HTMLElement; weapons: HTMLElement } {
+    const button = el('button', 'screen-btn screen-ship');
+    button.type = 'button';
+    button.setAttribute('role', 'menuitem');
+    button.dataset['action'] = 'ship';
+    button.hidden = true;
+    button.disabled = true;
+    const line = el('span', 'screen-ship-line');
+    const name = el('span', 'screen-ship-name');
+    line.append(el('span', 'screen-ship-label', 'SHIP'), el('span', 'screen-ship-arrow', '‹'), name, el('span', 'screen-ship-arrow', '›'));
+    const weapons = el('span', 'screen-ship-weapons');
+    button.append(line, weapons);
+    button.addEventListener('click', () => this.opts.onShip?.(1));
+    return { button, name, weapons };
+  }
+
+  /** P03C: show the SHIP selector with the current choice (null hides and disables it). */
+  setShip(view: ShipChoiceView | null): void {
+    const key = view ? `${view.name}|${view.weapons}|${view.count}` : 'off';
+    if (key === this.shipKey) return;
+    this.shipKey = key;
+    const b = this.ship.button;
+    b.hidden = view === null;
+    b.disabled = view === null;
+    if (!view) return;
+    this.ship.name.textContent = view.name;
+    this.ship.weapons.textContent = view.weapons;
+    b.setAttribute('aria-label', `Ship: ${view.name}. ${view.weapons}. ${view.count} choices, press to change.`);
+  }
+
   /** Hint with keyboard, touch and gamepad wording; CSS shows the one matching the device in use. */
   private hint(keys: string, touch: string, pad: string): HTMLElement {
     const p = el('p', 'screen-hint');
@@ -426,6 +478,7 @@ export class Screens {
       ['MOVE', '← → / A D'],
       ['FIRE', 'SPACE / Z / X'], // holding is explained in the rules line (one line at 320 px)
       ['PAUSE', 'P / ESC'],
+      ['NEXT WPN', 'Q / Y · AFTER WAVE 20'], // P03C: only once the Wave 20 milestone opens the ship selector
       ['SELECT', '↑ ↓ + ENTER'],
       ['SOUND', 'M  (MUTE)'],
       ['TOUCH', 'SLIDE ◀ ▶ · FIRE · II · i'],
@@ -499,6 +552,10 @@ export class Screens {
   /** Step a focused slider left (-1) or right (1), like arrow keys on a range input. */
   adjust(dir: 1 | -1): boolean {
     const n = document.activeElement;
+    if (this.current === 'title' && n === this.ship.button && !this.ship.button.disabled) {
+      this.opts.onShip?.(dir);
+      return true;
+    }
     if (this.current === 'none' || !(n instanceof HTMLInputElement) || n.type !== 'range' || !this.panels[this.current].contains(n)) return false;
     const before = n.value;
     if (dir > 0) n.stepUp();
@@ -518,6 +575,12 @@ export class Screens {
         e.preventDefault();
         e.stopPropagation();
         this.opts.onAction('back');
+        return;
+      }
+      // P03C: ← → on the focused SHIP selector step the ship
+      if (this.current === 'title' && document.activeElement === this.ship.button && !this.ship.button.disabled && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+        e.preventDefault();
+        this.opts.onShip?.(e.code === 'ArrowRight' ? 1 : -1);
         return;
       }
       const vertical = e.code === 'ArrowDown' || e.code === 'ArrowUp' || e.code === 'KeyS' || e.code === 'KeyW';

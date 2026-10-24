@@ -1,7 +1,9 @@
 /**
  * Station exchange (Free Roam Prompt 11): a local, offline economy.
  *
- * Currency: Guild marks, earned by selling salvage and by missions. Every
+ * Currency: Guild marks, earned by selling salvage, missions, bounties,
+ * encounters and discoveries (marksRewards.ts); the balance and its history
+ * are handled by ledger.ts, and this module only quotes trades. Every
  * transaction is two steps: a quote (cost, gain and the resulting balances,
  * shown before confirming) and a commit that re-validates and applies the
  * same quote. Quotes never mutate; a commit returns a new wallet or null.
@@ -15,6 +17,11 @@
  *  - upgrades: ships/upgrades.ts (marks + materials);
  *  - repair: free, shown as a line item.
  *
+ * Admin Access (P04, Economy pass): a buy quote can be made `free` (the marks
+ * price resolves to 0 and the balance line stays unchanged, marked ADMIN ACCESS
+ * — FREE). The wallet is never raised to pay for it, and selling is refused by
+ * the shell during a session, so a sandbox never changes the balance.
+ *
  * Pure (no DOM, no storage, no network).
  */
 import { EQUIPMENT_BY_ID } from '../ships/equipment.ts';
@@ -23,10 +30,11 @@ import { addLoot, freeSpace, removeLoot, storeModule, storedTotal, MAX_STORED_MO
 import { RESOURCES, isResourceId, resourceName, resourceValue } from '../inventory/resources.ts';
 import type { LootEntry } from '../sector/model.ts';
 import { hashId } from './contracts.ts';
+import { formatMarks, groupDigits, insufficientText, MARKS } from './ledger.ts';
 
 export const ECONOMY = Object.freeze({
-  /** Marks cap (the wallet never overflows). */
-  marksMax: 9_999_999,
+  /** Marks cap (the wallet never overflows; ledger.ts MARKS.max). */
+  marksMax: MARKS.max,
   /** Marks per unit of resource value at a neutral station. */
   sellRate: 3,
   /** Price of one reactor cell. */
@@ -72,7 +80,7 @@ export type Quote =
 const clampMarks = (n: number): number => Math.max(0, Math.min(ECONOMY.marksMax, Math.floor(n)));
 const holdUnits = (h: Hold): number => Object.values(h).reduce((a, b) => a + b, 0);
 const holdLine = (before: Wallet, after: Hold): QuoteLine => ({ label: 'Hold', before: `${holdUnits(before.hold)}/${before.holdCap}`, after: `${holdUnits(after)}/${before.holdCap}` });
-const marksLine = (before: number, after: number): QuoteLine => ({ label: 'Marks', before: String(before), after: String(after) });
+const marksLine = (before: number, after: number, free = false): QuoteLine => ({ label: 'Marks', before: formatMarks(before), after: free ? `${formatMarks(after)} · ADMIN ACCESS — FREE` : formatMarks(after) });
 
 /* ------------------------------------------------------------------ prices */
 
@@ -106,22 +114,22 @@ export function quoteSell(w: Wallet, station: string, resource: string, qty: num
   if (!hold) return { ok: false, lines: [], reason: 'None in the hold.' };
   const marks = clampMarks(w.marks + price * n);
   const lines = [marksLine(w.marks, marks), { label: resourceName(resource), before: String(have), after: String(have - n) }, holdLine(w, hold)];
-  return { ok: true, lines, result: { ...w, marks, hold }, summary: `Sell ${n} ${resourceName(resource)} for ${price * n} marks (${price} each).` };
+  return { ok: true, lines, result: { ...w, marks, hold }, summary: `Sell ${n} ${resourceName(resource)} for ${formatMarks(price * n)} (${groupDigits(price)} each).` };
 }
 
 /* --------------------------------------------------------------------- buy */
 
-export function quoteBuyCells(w: Wallet, qty: number): Quote {
+export function quoteBuyCells(w: Wallet, qty: number, free = false): Quote {
   const n = Math.floor(qty);
-  const cost = ECONOMY.cellPrice * n;
-  if (!(n > 0)) return { ok: false, lines: [], reason: 'Nothing to buy.' };
-  if (cost > w.marks) return { ok: false, lines: [marksLine(w.marks, w.marks - cost)], reason: `Needs ${cost} marks; you have ${w.marks}.` };
+  if (!(n > 0) || !Number.isSafeInteger(n)) return { ok: false, lines: [], reason: 'Nothing to buy.' };
+  const cost = free ? 0 : ECONOMY.cellPrice * n;
+  if (cost > w.marks) return { ok: false, lines: [marksLine(w.marks, w.marks)], reason: insufficientText(cost, w.marks) };
   const space = freeSpace(w.hold, w.holdCap);
   if (space < n) return { ok: false, lines: [], reason: `Hold full: ${space} free, ${n} needed.` };
   const add = addLoot(w.hold, [{ resource: 'fuel', amount: n }], w.holdCap);
   const have = w.hold['fuel'] ?? 0;
-  const lines = [marksLine(w.marks, w.marks - cost), { label: resourceName('fuel'), before: String(have), after: String(have + n) }, holdLine(w, add.hold)];
-  return { ok: true, lines, result: { ...w, marks: w.marks - cost, hold: add.hold }, summary: `Buy ${n} reactor cell${n === 1 ? '' : 's'} for ${cost} marks.` };
+  const lines = [marksLine(w.marks, w.marks - cost, free), { label: resourceName('fuel'), before: String(have), after: String(have + n) }, holdLine(w, add.hold)];
+  return { ok: true, lines, result: { ...w, marks: w.marks - cost, hold: add.hold }, summary: `Buy ${n} reactor cell${n === 1 ? '' : 's'} for ${free ? 'nothing (admin access)' : formatMarks(cost)}.` };
 }
 
 /** Can a ship fit this module type at all (slot present, weapon class accepted)? */
@@ -138,12 +146,13 @@ export function moduleStock(ship: ShipDef): string[] {
     .sort((a, b) => MODULE_PRICES[a]!.marks - MODULE_PRICES[b]!.marks || a.localeCompare(b));
 }
 
-export function quoteBuyModule(w: Wallet, ship: ShipDef, moduleId: string): Quote {
+export function quoteBuyModule(w: Wallet, ship: ShipDef, moduleId: string, free = false): Quote {
   const price = MODULE_PRICES[moduleId];
   const item = EQUIPMENT_BY_ID.get(moduleId);
   if (!price || !item) return { ok: false, lines: [], reason: 'Not sold here.' };
   if (!moduleFits(ship, moduleId)) return { ok: false, lines: [], reason: `${ship.name} cannot fit it.` };
-  if (price.marks > w.marks) return { ok: false, lines: [marksLine(w.marks, w.marks - price.marks)], reason: `Needs ${price.marks} marks; you have ${w.marks}.` };
+  const cost = free ? 0 : price.marks;
+  if (cost > w.marks) return { ok: false, lines: [marksLine(w.marks, w.marks)], reason: insufficientText(cost, w.marks) };
   const hold = price.materials.length ? removeLoot(w.hold, price.materials) : w.hold;
   if (!hold) {
     const miss = price.materials.filter((m) => (w.hold[m.resource] ?? 0) < m.amount).map((m) => `${m.amount - (w.hold[m.resource] ?? 0)} ${resourceName(m.resource)}`);
@@ -151,8 +160,8 @@ export function quoteBuyModule(w: Wallet, ship: ShipDef, moduleId: string): Quot
   }
   const modules = storeModule(w.modules, moduleId);
   if (!modules) return { ok: false, lines: [], reason: storedTotal(w.modules) >= MAX_STORED_MODULES ? 'Module storage is full.' : `Storage holds no more ${item.name}.` };
-  const lines = [marksLine(w.marks, w.marks - price.marks), ...price.materials.map((m) => ({ label: resourceName(m.resource), before: String(w.hold[m.resource] ?? 0), after: String((w.hold[m.resource] ?? 0) - m.amount) })), { label: 'Stored modules', before: String(storedTotal(w.modules)), after: String(storedTotal(modules)) }];
-  return { ok: true, lines, result: { ...w, marks: w.marks - price.marks, hold, modules }, summary: `Buy ${item.name}: it goes to station storage; fit it at the fabricator.` };
+  const lines = [marksLine(w.marks, w.marks - cost, free), ...price.materials.map((m) => ({ label: resourceName(m.resource), before: String(w.hold[m.resource] ?? 0), after: String((w.hold[m.resource] ?? 0) - m.amount) })), { label: 'Stored modules', before: String(storedTotal(w.modules)), after: String(storedTotal(modules)) }];
+  return { ok: true, lines, result: { ...w, marks: w.marks - cost, hold, modules }, summary: `Buy ${item.name} for ${free ? 'nothing (admin access)' : formatMarks(cost)}: it goes to station storage; fit it at the fabricator.` };
 }
 
 /** Commit a quote (callers re-quote right before committing; this only returns the quoted wallet). */

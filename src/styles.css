@@ -3239,140 +3239,537 @@ html.game-mode body {
   color: var(--accent);
 }
 
-/* hangar */
-.fr-panel-hangar {
-  width: min(100%, 780px);
+/* hangar (P03A production layout, FR-TD-87): header, catalogue, bay preview, info, action bar.
+   Mobile first: one column that scrolls, with the action bar stuck to the bottom of the panel.
+   Wide screens: three columns inside a fixed-height panel; the catalogue and info columns scroll. */
+.fr-panel.fr-panel-hangar {
+  --hp-y: 14px;
+  --hp-x: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: min(100%, 1100px);
   max-height: min(100%, 100dvh);
-}
-
-.fr-hangar {
-  display: grid;
-  grid-template-columns: 190px 1fr;
-  gap: 14px;
-  width: 100%;
+  padding: var(--hp-y) var(--hp-x);
   text-align: left;
 }
 
-.fr-hangar-list {
-  display: grid;
-  align-content: start;
-  gap: 6px;
+/* the flex layout above must not resurrect a hidden panel (same specificity as .fr-panel[hidden]) */
+.fr-panel.fr-panel-hangar[hidden] {
+  display: none;
 }
 
-.fr-hangar-ship {
+.fr-hangar-head {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1px 8px;
-  min-height: 44px;
-  padding: 6px 10px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.fr-hangar-back {
+  align-self: start;
+  white-space: nowrap;
+  min-height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--panel-edge);
   background: rgba(12, 15, 30, 0.8);
   color: var(--text);
   font: inherit;
-  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.1em;
   cursor: pointer;
 }
 
-.fr-hangar-ship:focus-visible,
-.fr-hangar-ship.is-inspected {
-  outline: none;
-  border-color: var(--highlight);
+.fr-hangar-back[hidden] {
+  display: none;
 }
 
-.fr-hangar-ship-name {
-  font-size: 13px;
-  letter-spacing: 0.08em;
-}
-
-.fr-hangar-ship-role {
-  grid-column: 1;
-  color: var(--text-dim);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-}
-
-.fr-hangar-ship-state {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-}
-
-.fr-hangar-ship[data-status='active'] .fr-hangar-ship-state,
-.fr-hangar-state[data-status='active'] {
-  color: var(--highlight);
-}
-
-.fr-hangar-ship[data-status='owned'] .fr-hangar-ship-state,
-.fr-hangar-state[data-status='owned'],
-.fr-hangar-ship[data-status='available'] .fr-hangar-ship-state,
-.fr-hangar-state[data-status='available'] {
-  color: #8fe388;
-}
-
-.fr-hangar-ship[data-status='locked'] .fr-hangar-ship-state,
-.fr-hangar-state[data-status='locked'] {
-  color: var(--accent);
-}
-
-.fr-hangar-detail {
+.fr-hangar-titles {
   display: grid;
-  align-content: start;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 
-.fr-hangar-views {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+.fr-hangar-titles .fr-kicker {
+  font-size: 10px;
+}
+
+.fr-hangar-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Economy pass: record panel marks history (newest first) */
+.fr-ledger {
+  gap: 2px;
+}
+
+.fr-ledger-row {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border-left: 2px solid rgba(255, 214, 102, 0.4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-ledger-row.is-loss {
+  border-left-color: rgba(255, 138, 128, 0.5);
+}
+
+.fr-ledger-delta {
+  font-weight: 700;
+  color: #ffd666;
+}
+
+.fr-ledger-row.is-loss .fr-ledger-delta {
+  color: #ff9e8f;
+}
+
+.fr-ledger-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fr-ledger-bal {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* Economy pass: hangar / armory header side column (fleet or ship line + the marks balance) */
+.fr-head-side {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+  min-width: 0;
+}
+
+.fr-wallet {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 214, 102, 0.35);
+  background: rgba(40, 32, 8, 0.45);
+  color: #ffd666;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-wallet[hidden] {
+  display: none;
+}
+
+.fr-hangar-term-note {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.fr-hangar-fleet {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+.fr-hangar {
+  display: grid;
+  grid-template-areas: 'bay' 'cat' 'detail';
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* bay */
+.fr-hangar-bay {
+  grid-area: bay;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fr-hangar-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 46vh;
+  border: 1px solid var(--panel-edge);
+  background: var(--space-void);
+  overflow: hidden;
 }
 
 .fr-hangar-preview {
-  width: 168px;
-  height: 132px;
-  border: 1px solid var(--panel-edge);
-  background: var(--space-void);
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.fr-hangar-strip {
-  width: 320px;
-  max-width: 100%;
-  height: 78px;
-  object-fit: contain;
-  object-position: left center;
+.fr-hangar-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  background: rgba(6, 7, 15, 0.82);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-hangar-ident {
+  display: grid;
+  gap: 2px;
 }
 
 .fr-hangar-name {
   margin: 0;
-  font-size: 18px;
-  letter-spacing: 0.12em;
+  font-size: 22px;
+  letter-spacing: 0.16em;
 }
 
 .fr-hangar-role,
 .fr-hangar-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--text-dim);
 }
 
+.fr-hangar-strip {
+  width: 320px;
+  max-width: 100%;
+  height: auto;
+  align-self: center;
+}
+
+/* status colours always come with a glyph and a word */
+.fr-hangar-ico {
+  flex: none;
+  width: 10px;
+  height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: center;
+}
+
+[data-status='active'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='active'],
+.fr-hangar-badge[data-status='active'] {
+  color: var(--highlight);
+}
+
+[data-status='owned'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='owned'],
+.fr-hangar-badge[data-status='owned'],
+[data-status='available'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='available'],
+.fr-hangar-badge[data-status='available'] {
+  color: var(--fr-good, #8fe388);
+}
+
+[data-status='unaffordable'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='unaffordable'],
+.fr-hangar-badge[data-status='unaffordable'] {
+  color: var(--fr-warn, #ffd25a);
+}
+
+[data-status='locked'] .fr-hangar-ship-state,
+.fr-hangar-state[data-status='locked'],
+.fr-hangar-badge[data-status='locked'] {
+  color: var(--accent);
+}
+
+/* catalogue */
+.fr-hangar-catalog {
+  grid-area: cat;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fr-hangar-tools {
+  display: grid;
+  gap: 6px;
+}
+
+.fr-hangar-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.fr-hangar-filter,
+.fr-hangar-sort,
+.fr-hangar-vs {
+  min-height: 40px;
+  padding: 2px 4px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.8);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fr-hangar-filter {
+  display: grid;
+  place-content: center;
+  gap: 1px;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.fr-hangar-filter-count {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-hangar-filter[aria-pressed='true'] {
+  border-color: var(--highlight);
+  color: var(--highlight);
+  box-shadow: inset 0 -2px 0 var(--highlight);
+}
+
+.fr-hangar-sort {
+  text-align: left;
+  padding: 2px 10px;
+}
+
+.fr-hangar-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 6px;
+}
+
+.fr-hangar-ship {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: 3px 10px 3px 2px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.8);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--fast) ease-out, background-color var(--fast) ease-out;
+}
+
+.fr-hangar-ship[hidden] {
+  display: none;
+}
+
+.fr-hangar-thumb {
+  display: block;
+  width: 60px;
+  height: 60px;
+}
+
+.fr-hangar-ship-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.fr-hangar-ship-name {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.fr-hangar-ship-role,
+.fr-hangar-ship-chip {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.fr-hangar-ship-chip {
+  color: #b9c2dd;
+}
+
+.fr-hangar-ship-state {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+
+/* the inspected card: a solid edge and a marker bar (not colour alone) */
+.fr-hangar-ship.is-inspected {
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.07);
+  box-shadow: inset 3px 0 0 var(--highlight);
+}
+
+.fr-hangar-ship:focus-visible,
+.fr-hangar-filter:focus-visible,
+.fr-hangar-sort:focus-visible,
+.fr-hangar-vs:focus-visible,
+.fr-hangar-back:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.fr-hangar-ship:focus,
+.fr-hangar-filter:focus,
+.fr-hangar-sort:focus,
+.fr-hangar-vs:focus,
+.fr-hangar-back:focus {
+  border-color: var(--highlight);
+  color: var(--text);
+}
+
+/* locked: dashed edge and a dimmed thumbnail, plus the padlock glyph and LOCKED */
+.fr-hangar-ship[data-status='locked'] {
+  border-style: dashed;
+}
+
+.fr-hangar-ship[data-status='locked'] .fr-hangar-thumb {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+@media (hover: hover) {
+  .fr-hangar-ship:hover,
+  .fr-hangar-filter:hover,
+  .fr-hangar-sort:hover,
+  .fr-hangar-vs:hover,
+  .fr-hangar-back:hover {
+    border-color: rgba(92, 239, 255, 0.5);
+  }
+}
+
+.fr-hangar-empty {
+  margin: 0;
+  padding: 10px;
+  border: 1px dashed var(--panel-edge);
+}
+
+.fr-hangar-empty[hidden] {
+  display: none;
+}
+
+/* info */
+.fr-hangar-detail {
+  grid-area: detail;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 .fr-hangar-desc {
   margin: 0;
   text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+}
+
+.fr-hangar-highs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-hangar-highs[hidden] {
+  display: none;
+}
+
+.fr-hangar-high {
+  padding: 3px 7px;
+  border: 1px solid rgba(92, 239, 255, 0.35);
+  color: var(--highlight);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.fr-hangar-sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.fr-hangar-sec {
+  margin: 6px 0 0;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--panel-edge);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+}
+
+.fr-hangar-sec[hidden] {
+  display: none;
+}
+
+.fr-hangar-sec-head .fr-hangar-sec {
+  flex: 1;
+  margin: 0;
+}
+
+.fr-hangar-vs {
+  padding: 2px 10px;
+  color: var(--text);
+}
+
+.fr-hangar-vs[hidden] {
+  display: none;
+}
+
+.fr-hangar-legend {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .fr-hangar-stats {
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 
 .fr-hangar-stat {
   display: grid;
-  grid-template-columns: 112px 1fr 72px 14px;
+  grid-template-columns: 108px minmax(0, 1fr) 54px 12px;
   align-items: center;
   gap: 8px;
   font-size: 11px;
@@ -3380,10 +3777,11 @@ html.game-mode body {
 
 .fr-hangar-label {
   color: var(--text-dim);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
 .fr-hangar-bar {
+  position: relative;
   height: 6px;
   border: 1px solid var(--panel-edge);
 }
@@ -3394,23 +3792,67 @@ html.game-mode body {
   background: var(--highlight);
 }
 
+.fr-hangar-mark {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
 .fr-hangar-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
+.fr-hangar-delta {
+  font-size: 10px;
+}
+
 .fr-hangar-delta.is-better {
-  color: #8fe388;
+  color: var(--fr-good, #8fe388);
 }
 
 .fr-hangar-delta.is-worse {
   color: var(--accent);
 }
 
+.fr-hangar-kvs {
+  display: grid;
+  gap: 4px;
+}
+
+.fr-hangar-kv {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 0 8px;
+  font-size: 11px;
+}
+
+.fr-hangar-k,
+.fr-hangar-slot-type {
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.fr-hangar-v {
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-hangar-note {
+  grid-column: 2;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .fr-hangar-slots,
 .fr-hangar-terms {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3423,65 +3865,221 @@ html.game-mode body {
 
 .fr-hangar-slot {
   display: grid;
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 8px;
 }
 
-.fr-hangar-slot-type {
-  color: var(--text-dim);
-  letter-spacing: 0.08em;
-}
-
 .fr-hangar-term {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 4px;
   color: var(--accent);
 }
 
 .fr-hangar-term.is-met {
-  color: #8fe388;
+  color: var(--fr-good, #8fe388);
+}
+
+.fr-hangar-term-text {
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* action bar: stays reachable at the bottom of the scrolling panel */
+.fr-hangar-foot {
+  position: sticky;
+  bottom: calc(-1 * var(--hp-y));
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0 calc(-1 * var(--hp-x)) calc(-1 * var(--hp-y));
+  padding: 8px var(--hp-x) calc(var(--hp-y) + var(--safe-bottom));
+  border-top: 1px solid var(--panel-edge);
+  background: var(--space-void);
 }
 
 .fr-hangar-msg {
   min-height: 1.2em;
   margin: 0;
+  font-size: 12px;
 }
 
-.fr-hangar-actions {
+.fr-panel-hangar .fr-hangar-actions {
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 6px;
   width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.fr-hangar-actions .fr-btn {
+  padding: 4px 22px;
+  border-color: var(--panel-edge);
+  font-size: 12px;
+}
+
+.fr-hangar-action {
+  border-color: rgba(92, 239, 255, 0.5) !important;
+  color: var(--highlight);
+}
+
+.fr-hangar-action.is-armed {
+  background: rgba(92, 239, 255, 0.12);
 }
 
 .fr-hangar-action:disabled {
-  opacity: 0.55;
+  border-style: dashed;
+  border-color: var(--panel-edge) !important;
+  color: var(--text-dim);
+  opacity: 0.8;
   cursor: not-allowed;
 }
 
-@media (max-width: 640px) {
-  .fr-hangar {
-    grid-template-columns: 1fr;
-  }
+.freeroam-app[data-input='touch'] .fr-hangar-filter,
+.freeroam-app[data-input='touch'] .fr-hangar-sort,
+.freeroam-app[data-input='touch'] .fr-hangar-vs,
+.freeroam-app[data-input='touch'] .fr-hangar-back {
+  min-height: 44px;
+}
 
+.freeroam-app[data-motion='reduced'] .fr-hangar-ship {
+  transition: none;
+}
+
+/* two cards per row on wider phones */
+@media (min-width: 480px) and (max-width: 719px) {
   .fr-hangar-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .fr-hangar-ship {
-    grid-template-columns: 1fr;
-    padding: 5px 6px;
-  }
-
-  .fr-hangar-ship-state {
-    grid-column: 1;
-    grid-row: auto;
-  }
-
-  .fr-hangar-stat {
-    grid-template-columns: 96px 1fr 64px 12px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+@media (max-width: 479px) {
+  .fr-panel.fr-panel-hangar {
+    --hp-x: 12px;
+  }
+
+  .fr-hangar-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fr-hangar-titles .fr-kicker {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+  }
+
+  .fr-hangar-msg {
+    font-size: 11px;
+  }
+
+  .fr-hangar-actions .fr-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .fr-hangar-titles {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .fr-hangar-sub,
+  .fr-hangar-strip {
+    display: none;
+  }
+
+  .fr-hangar-stat {
+    grid-template-columns: 96px minmax(0, 1fr) 50px 10px;
+    gap: 6px;
+  }
+}
+
+/* tablets and short desktops: catalogue beside the bay, info below; the panel scrolls */
+@media (min-width: 720px) {
+  .fr-hangar {
+    grid-template-areas: 'cat bay' 'cat detail';
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
+  .fr-hangar-foot {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .fr-panel-hangar .fr-hangar-actions {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(120px, auto);
+  }
+}
+
+/* wide screens: three columns in a fixed-height panel; catalogue and info scroll inside */
+@media (min-width: 1000px) and (min-height: 600px) {
+  .fr-panel.fr-panel-hangar {
+    height: min(100%, 800px);
+    overflow: hidden;
+  }
+
+  .fr-hangar {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-areas: 'cat bay detail';
+    grid-template-columns: 250px minmax(0, 1fr) minmax(300px, 340px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .fr-hangar-catalog,
+  .fr-hangar-detail {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding-right: 4px;
+  }
+
+  .fr-hangar-catalog {
+    padding: 2px 4px 2px 2px;
+  }
+
+  .fr-hangar-stage {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+    max-height: none;
+    min-height: 200px;
+  }
+
+  .fr-hangar-foot {
+    position: static;
+    margin: 0;
+    padding: 8px 0 0;
+  }
+}
+
+/* wide but not tall (e.g. 1280 x 720): compact tools so the whole yard fits the catalogue column */
+@media (min-width: 1000px) and (min-height: 600px) and (max-height: 780px) {
+  .fr-hangar-sub {
+    display: none;
+  }
+
+  .freeroam-app:not([data-input='touch']) .fr-hangar-filter,
+  .freeroam-app:not([data-input='touch']) .fr-hangar-sort {
+    min-height: 34px;
+  }
+}
+
+/* short landscape phones: a smaller bay so the catalogue starts on the first screen */
 @media (max-height: 420px) {
-  .fr-hangar-preview {
-    width: 120px;
-    height: 94px;
+  .fr-panel.fr-panel-hangar {
+    --hp-y: 10px;
+  }
+
+  .fr-hangar-stage {
+    max-height: 58vh;
+  }
+
+  .fr-hangar-strip {
+    display: none;
   }
 }
 
@@ -4155,11 +4753,6 @@ html.game-mode body {
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* the hangar's button row grows with the station services */
-.fr-hangar-actions {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-}
-
 .fr-station-head {
   margin: 2px 0;
 }
@@ -4335,12 +4928,6 @@ html.game-mode body {
 }
 
 @media (max-height: 420px) {
-  /* the station services wrap into rows instead of one squeezed column flow */
-  .fr-hangar-actions {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  }
-
   .fr-station-preview {
     padding: 4px 8px;
   }
@@ -4406,6 +4993,57 @@ html.game-mode body {
   font-weight: 700;
   letter-spacing: 0.14em;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Economy pass: the Guild marks balance in the ship card. Wide screens: its own line under the head;
+   phones (weapon text hidden): beside the ship name, so the card keeps its height. */
+.fr-shipcard-head {
+  flex-wrap: wrap;
+}
+
+.fr-marks {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  color: #ffd666;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-marks[hidden],
+.fr-marks-delta[hidden] {
+  display: none;
+}
+
+.fr-marks-label {
+  margin-right: auto;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+}
+
+.fr-marks-unit {
+  color: var(--text-dim);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+
+.fr-marks-delta {
+  font-size: 10px;
+  color: #ffd666;
+}
+
+.fr-marks[data-sign='loss'] .fr-marks-delta {
+  color: #ff9e8f;
 }
 
 .fr-weapon {
@@ -4777,6 +5415,43 @@ html.game-mode body {
 
 .fr-flight[data-hint='off'] .fr-hint {
   opacity: 0;
+}
+
+/* Economy pass: phones hide the weapon text in the card head; the marks balance takes its place
+   (glyph + amount; the card's accessible name carries the full words) and the card keeps its height */
+@media (max-width: 720px) and (min-height: 421px), (max-height: 420px) {
+  .fr-shipcard-head {
+    flex-wrap: nowrap;
+  }
+
+  .fr-marks {
+    flex: 0 0 auto;
+    gap: 4px;
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+
+  .fr-marks-label,
+  .fr-marks-unit {
+    display: none;
+  }
+}
+
+/* the narrowest phones (card ~124 px): the transient +N tag would squeeze the ship name; the gain is
+   still shown by the highlight on the balance and the feed line ("+60 MARKS · …") */
+@media (max-width: 340px) {
+  .fr-marks-delta {
+    display: none;
+  }
+
+  .fr-ship-name {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+
+  .fr-marks {
+    gap: 3px;
+  }
 }
 
 /* ---- phones, portrait / narrow: ship card | buttons, then location, then the notice ---- */
@@ -6116,7 +6791,7 @@ html.game-mode body {
 /* MSL: touch only, one press per touch (holding never repeats); clear of FIRE,
    BOOST, the INTERACT prompt band and the stick side of the screen. A dark
    fill drains as the cooldown runs; the label says LOCK or the seconds left. */
-.fr-missile {
+.fr-wpn {
   --cool: 0%;
   position: absolute;
   /* 40 px from the edge: clear of the canvas edge markers (threats inset 18 px, objective 28 px, up to 9 px each) */
@@ -6133,15 +6808,25 @@ html.game-mode body {
   background: rgba(6, 7, 15, 0.55);
   color: #fbf8ee;
   font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  /* P03C: the selected weapon on the first line, its ammunition or readiness on the second */
+  white-space: pre-line;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-.fr-missile::after {
+.fr-wpn[data-state='empty'] {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+.fr-wpn::after {
   content: '';
   position: absolute;
   left: 0;
@@ -6153,45 +6838,2446 @@ html.game-mode body {
   pointer-events: none;
 }
 
-.fr-missile.is-active,
-.fr-missile[data-state='acquiring'] {
+.fr-wpn.is-active,
+.fr-wpn[data-state='acquiring'] {
   background: rgba(92, 239, 255, 0.2);
   border-color: var(--highlight);
   color: var(--highlight);
 }
 
-.fr-missile[data-state='cooldown'],
-.fr-missile[data-state='launching'] {
+.fr-wpn[data-state='cooldown'],
+.fr-wpn[data-state='launching'] {
   color: var(--text-dim);
   border-color: rgba(251, 248, 238, 0.3);
 }
 
-.fr-missile[data-state='refused'] {
+.fr-wpn[data-state='refused'] {
   border-color: #ffd23f;
   color: #ffd23f;
 }
 
 @media (pointer: coarse) {
-  .fr-missile {
+  .fr-wpn {
     display: grid;
   }
 }
 
-.freeroam-app[data-input='touch'] .fr-missile {
+.freeroam-app[data-input='touch'] .fr-wpn {
   display: grid;
 }
 
-.freeroam-app:not([data-panel='none']) .fr-missile {
+.freeroam-app:not([data-panel='none']) .fr-wpn {
   display: none;
 }
 
-.fr-missile[hidden] {
+.fr-wpn[hidden] {
   display: none;
 }
 
-/* short landscape: the nearby chip moves bottom left, so MSL sits just above BOOST (top edge ~152 px up) */
+/* short landscape: the nearby chip moves bottom left, so WPN sits just above BOOST (top edge ~152 px up) */
 @media (max-height: 420px) {
-  .fr-missile {
+  .fr-wpn {
     bottom: calc(max(14px, var(--safe-bottom)) + 150px);
+  }
+}
+
+/* armory (Combat P03B, FR-TD-88): header, loadout + weapon catalogue, bay plot, details, action bar.
+   Same frame as the hangar: one scrolling column on phones with the action bar stuck to the bottom;
+   catalogue beside the bay from 720 px; three columns in a fixed-height panel on wide screens.
+   Weapons differ by silhouette (icon), name and state text; the category tint is only an extra cue. */
+.fr-panel.fr-panel-armory {
+  --ap-y: 14px;
+  --ap-x: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: min(100%, 1100px);
+  max-height: min(100%, 100dvh);
+  padding: var(--ap-y) var(--ap-x);
+  text-align: left;
+}
+
+/* the flex layout above must not resurrect a hidden panel */
+.fr-panel.fr-panel-armory[hidden] {
+  display: none;
+}
+
+.fr-armory-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.fr-armory-back {
+  align-self: start;
+  white-space: nowrap;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.8);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.fr-armory-titles {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fr-armory-titles .fr-kicker {
+  font-size: 10px;
+}
+
+.fr-armory-sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.fr-armory-shipline {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+.fr-armory {
+  display: grid;
+  grid-template-areas: 'side' 'bay' 'detail';
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* loadout and catalogue */
+.fr-armory-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fr-armory-loadout {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 6px 4px;
+  border: 1px solid var(--panel-edge);
+  background: linear-gradient(90deg, rgba(92, 239, 255, 0.06), rgba(12, 15, 30, 0.8) 60%);
+}
+
+.fr-armory-thumb {
+  display: block;
+  width: 52px;
+  height: 52px;
+}
+
+.fr-armory-lo-text {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.fr-armory-lo-name {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+
+.fr-armory-cycle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-armory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--panel-edge);
+  color: #b9c2dd;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.fr-armory-chip .fr-armory-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.fr-armory-chip.is-start {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.fr-armory-cycle-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fr-armory-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 6px;
+}
+
+.fr-armory-weapon {
+  --tint: var(--highlight);
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 58px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.8);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--fast) ease-out, background-color var(--fast) ease-out;
+}
+
+.fr-armory-weapon[data-category='missile'] {
+  --tint: #ffc45c;
+}
+
+.fr-armory-weapon[data-category='nuke'] {
+  --tint: #b4a0ff;
+}
+
+.fr-armory-icon {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
+.fr-armory-weapon .fr-armory-icon {
+  color: var(--tint);
+}
+
+.fr-armory-weapon-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.fr-armory-weapon-name {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+}
+
+.fr-armory-weapon-kind,
+.fr-armory-weapon-state {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.fr-armory-weapon[data-state='start'] .fr-armory-weapon-state,
+.fr-armory-weapon[data-state='rotation'] .fr-armory-weapon-state {
+  color: #b9c2dd;
+}
+
+.fr-armory-ammo {
+  min-width: 40px;
+  padding: 2px 6px;
+  border: 1px solid var(--panel-edge);
+  color: var(--text);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* not fitted to this ship: dashed edge and a dimmed icon, plus the ✕ NOT FITTED text */
+.fr-armory-weapon[data-state='unavailable'] {
+  border-style: dashed;
+}
+
+.fr-armory-weapon[data-state='unavailable'] .fr-armory-icon,
+.fr-armory-weapon[data-state='unavailable'] .fr-armory-ammo {
+  opacity: 0.45;
+}
+
+/* the inspected card: a solid edge and a marker bar (not colour alone) */
+.fr-armory-weapon.is-inspected {
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.07);
+  box-shadow: inset 3px 0 0 var(--highlight);
+}
+
+.fr-armory-weapon:focus-visible,
+.fr-armory-back:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.fr-armory-weapon:focus,
+.fr-armory-back:focus {
+  border-color: var(--highlight);
+  color: var(--text);
+}
+
+@media (hover: hover) {
+  .fr-armory-weapon:hover,
+  .fr-armory-back:hover {
+    border-color: rgba(92, 239, 255, 0.5);
+  }
+}
+
+/* bay */
+.fr-armory-bay {
+  grid-area: bay;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fr-armory-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 44vh;
+  border: 1px solid var(--panel-edge);
+  background: var(--space-void);
+  overflow: hidden;
+}
+
+.fr-armory-plot {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fr-armory-caption {
+  margin: -2px 0 0;
+  color: #b9c2dd;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fr-armory-ident {
+  display: grid;
+  gap: 3px;
+}
+
+.fr-armory-name {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.12em;
+}
+
+.fr-armory-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.fr-armory-kind .fr-armory-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--highlight);
+}
+
+.fr-armory-runtime {
+  justify-self: start;
+  margin: 2px 0 0;
+  padding: 2px 7px;
+  border: 1px solid rgba(92, 239, 255, 0.5);
+  color: var(--highlight);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.fr-armory-runtime[data-runtime='pending'] {
+  border-style: dashed;
+  border-color: rgba(255, 196, 92, 0.6);
+  color: #ffc45c;
+}
+
+.fr-armory-runtime-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* details */
+.fr-armory-detail {
+  grid-area: detail;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fr-armory-role {
+  margin: 0;
+  color: var(--highlight);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.fr-armory-desc {
+  margin: 0;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+}
+
+.fr-armory-tactics {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0 0 0 14px;
+  color: #b9c2dd;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.fr-armory-sec {
+  margin: 6px 0 0;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--panel-edge);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+}
+
+.fr-armory-kvs {
+  display: grid;
+  gap: 4px;
+}
+
+.fr-armory-kv {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 0 8px;
+  font-size: 11px;
+}
+
+.fr-armory-k {
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.fr-armory-v {
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-armory-note {
+  grid-column: 2;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.fr-armory-ammo-text,
+.fr-armory-avail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.fr-armory-avail[data-ok='false'] {
+  padding-left: 8px;
+  border-left: 2px dashed #ffc45c;
+  color: #ffd892;
+}
+
+.fr-armory-compat {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fr-armory-fit {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border: 1px dashed var(--panel-edge);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.fr-armory-fit.is-fit {
+  border-style: solid;
+  color: var(--text);
+}
+
+.fr-armory-fit.is-flown {
+  border-color: var(--highlight);
+}
+
+.fr-armory-fit-mark {
+  width: 10px;
+  text-align: center;
+}
+
+.fr-armory-compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fr-armory-cmp-cap {
+  caption-side: bottom;
+  padding-top: 4px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.fr-armory-compare th,
+.fr-armory-compare td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--panel-edge);
+  text-align: left;
+  font-weight: 400;
+}
+
+.fr-armory-compare th[scope='row'] {
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.fr-armory-compare thead th {
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+}
+
+.fr-armory-compare .is-inspected {
+  background: rgba(92, 239, 255, 0.07);
+  color: var(--text);
+}
+
+.fr-armory-compare thead th.is-inspected {
+  color: var(--highlight);
+  box-shadow: inset 0 -2px 0 var(--highlight);
+}
+
+.fr-armory-cmp-blast {
+  display: grid;
+  gap: 2px;
+}
+
+.fr-armory-cmp-bar {
+  display: block;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.fr-armory-cmp-fill {
+  display: block;
+  height: 100%;
+  background: #ffc45c;
+}
+
+/* action bar: stays reachable at the bottom of the scrolling panel */
+.fr-armory-foot {
+  position: sticky;
+  bottom: calc(-1 * var(--ap-y));
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0 calc(-1 * var(--ap-x)) calc(-1 * var(--ap-y));
+  padding: 8px var(--ap-x) calc(var(--ap-y) + var(--safe-bottom));
+  border-top: 1px solid var(--panel-edge);
+  background: var(--space-void);
+}
+
+.fr-armory-msg {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 12px;
+}
+
+.fr-panel-armory .fr-armory-actions {
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.fr-armory-actions .fr-btn {
+  padding: 4px 18px;
+  border-color: var(--panel-edge);
+  font-size: 12px;
+}
+
+.fr-armory-start {
+  border-color: rgba(92, 239, 255, 0.5) !important;
+  color: var(--highlight);
+}
+
+.fr-armory-actions .fr-btn:disabled {
+  border-style: dashed;
+  border-color: var(--panel-edge) !important;
+  color: var(--text-dim);
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.fr-hangar-armory {
+  border-color: rgba(255, 196, 92, 0.55) !important;
+  color: #ffc45c;
+}
+
+.freeroam-app[data-input='touch'] .fr-armory-back {
+  min-height: 44px;
+}
+
+.freeroam-app[data-motion='reduced'] .fr-armory-weapon {
+  transition: none;
+}
+
+@media (min-width: 480px) and (max-width: 719px) {
+  .fr-armory-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 479px) {
+  .fr-panel.fr-panel-armory {
+    --ap-x: 12px;
+  }
+
+  .fr-armory-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fr-armory-titles {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .fr-armory-sub {
+    display: none;
+  }
+
+  .fr-armory-msg {
+    font-size: 11px;
+  }
+
+  .fr-armory-actions .fr-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .fr-armory-compat {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fr-armory-kv {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 720px) {
+  .fr-armory {
+    grid-template-areas: 'side bay' 'side detail';
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .fr-armory-foot {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .fr-panel-armory .fr-armory-actions {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(150px, auto);
+  }
+}
+
+@media (min-width: 1000px) and (min-height: 600px) {
+  .fr-panel.fr-panel-armory {
+    height: min(100%, 800px);
+    overflow: hidden;
+  }
+
+  .fr-armory {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-areas: 'side bay detail';
+    grid-template-columns: 260px minmax(0, 1fr) minmax(300px, 350px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .fr-armory-side,
+  .fr-armory-detail {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    padding-right: 4px;
+  }
+
+  .fr-armory-side {
+    padding: 2px 4px 2px 2px;
+  }
+
+  .fr-armory-stage {
+    flex: 1 1 auto;
+    aspect-ratio: auto;
+    max-height: none;
+    min-height: 200px;
+  }
+
+  .fr-armory-foot {
+    position: static;
+    margin: 0;
+    padding: 8px 0 0;
+  }
+}
+
+@media (min-width: 1000px) and (min-height: 600px) and (max-height: 780px) {
+  .fr-armory-sub {
+    display: none;
+  }
+}
+
+@media (max-height: 420px) {
+  .fr-panel.fr-panel-armory {
+    --ap-y: 10px;
+  }
+
+  .fr-armory-stage {
+    max-height: 58vh;
+  }
+}
+
+/* ===========================================================================
+ * Combat P03C: Classic weapon button (above FIRE) and HUD weapon readout.
+ * Both exist only with a post-Wave-20 roster ship; hidden, the legacy layout
+ * is unchanged (FIRE fills its column exactly as before).
+ * ======================================================================== */
+.touch-fire-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.touch-fire-col > .touch-fire {
+  flex: 1 1 auto;
+}
+
+.touch-wpn {
+  position: relative;
+  display: flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid rgba(99, 234, 255, 0.55);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: 700 13px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.touch-wpn[hidden] {
+  display: none;
+}
+
+.touch-wpn::before {
+  content: '⇄';
+  color: var(--highlight);
+  font-size: 12px;
+}
+
+.touch-wpn-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.touch-wpn-state {
+  flex: 0 0 auto;
+  color: var(--highlight);
+  font-variant-numeric: tabular-nums;
+}
+
+.touch-wpn.is-unready .touch-wpn-state {
+  color: var(--text-dim);
+}
+
+.touch-wpn.is-pressed {
+  background: var(--panel-edge);
+  border-color: rgba(92, 239, 255, 0.85);
+}
+
+/* landscape: FIRE keeps its height; the weapon button stacks above it */
+.game-app[data-layout='touch-landscape'] .touch-fire-col > .touch-fire {
+  flex: 0 0 auto;
+}
+
+/* HUD weapon readout: replaces the heat meter while a missile weapon is selected */
+.hud-wpn {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: baseline;
+  gap: max(4px, calc(var(--u) * 2));
+  min-width: 0;
+  margin: 0 calc(var(--u) * 2);
+  overflow: hidden; /* never runs under the reserves or STAGE in a narrow arena */
+  font-size: max(10px, calc(var(--ut, var(--u)) * 5));
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.hud-wpn[hidden] {
+  display: none;
+}
+
+.hud-wpn-name {
+  color: var(--text);
+}
+
+.hud-wpn-state {
+  color: var(--highlight);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-wpn.is-unready .hud-wpn-state {
+  color: var(--text-dim);
+}
+
+.hud-wpn-notice {
+  color: #ffb347;
+}
+
+.hud-wpn-notice:empty {
+  display: none;
+}
+
+/* P03C title SHIP selector (only after Classic Wave 20 is completed) */
+.screen-ship {
+  display: grid;
+  gap: calc(var(--u) * 1);
+  justify-items: center;
+}
+
+.screen-ship[hidden] {
+  display: none;
+}
+
+.screen-ship-line {
+  display: flex;
+  gap: calc(var(--u) * 2.5);
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.screen-ship-label,
+.screen-ship-arrow {
+  color: var(--text-dim);
+}
+
+.screen-ship-name {
+  color: var(--highlight);
+}
+
+.screen-ship-weapons {
+  font-size: max(10px, calc(var(--u) * 4.5));
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* portrait: the FIRE column is narrow, so the weapon name sits over its state (two short lines, same 44 px) */
+.game-app[data-layout='touch-portrait'] .touch-wpn {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.game-app[data-layout='touch-portrait'] .touch-wpn::before {
+  display: none; /* no room beside two lines on a 320 px phone; the aria-label names the action */
+}
+
+.game-app[data-layout='touch-portrait'] .touch-wpn-name {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.game-app[data-layout='touch-portrait'] .touch-wpn-state {
+  font-size: 11px;
+}
+
+/* P04: Admin Access. The title logo takes a long press without the browser's callout / selection
+   (the hidden activation gesture); everything below exists in the page only during an admin session. */
+.title-logo {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.fr-admin {
+  position: absolute;
+  inset: 0;
+  z-index: 31;
+  display: grid;
+  place-items: center;
+  padding: max(10px, var(--safe-top)) max(10px, var(--safe-right)) max(10px, var(--safe-bottom)) max(10px, var(--safe-left));
+  background: rgba(3, 4, 9, 0.86);
+}
+
+.fr-admin[hidden] {
+  display: none;
+}
+
+.fr-admin .fr-admin-box {
+  width: min(100%, 640px);
+  justify-items: stretch;
+  gap: 6px;
+  padding: 12px 14px;
+  border-color: var(--fr-warn);
+  background: rgba(6, 7, 15, 0.97);
+  text-align: left;
+}
+
+.fr-admin .fr-kicker,
+.fr-admin .fr-title {
+  text-align: center;
+}
+
+.fr-admin .fr-kicker {
+  color: var(--fr-warn);
+}
+
+.fr-admin .fr-title {
+  font-size: clamp(15px, 5.2vw, 22px);
+}
+
+.fr-admin-status {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px dashed var(--fr-warn);
+  font-size: 12px;
+}
+
+.fr-admin-status .fr-text,
+.fr-admin .fr-text {
+  margin: 0;
+  font-size: 12px;
+  text-align: left;
+}
+
+.fr-admin-msg {
+  min-height: 1.4em;
+  color: var(--highlight);
+}
+
+.fr-admin-msg[hidden] {
+  display: none;
+}
+
+.fr-admin-warn {
+  color: var(--fr-warn);
+}
+
+.fr-admin-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.fr-admin .fr-btn {
+  min-height: 44px;
+  padding: 4px 12px;
+  font-size: 12px;
+}
+
+.fr-admin .fr-btn::before {
+  display: none;
+}
+
+.fr-admin .fr-btn:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: -2px;
+}
+
+.fr-admin-tab {
+  flex: 1 1 0;
+  border-color: var(--panel-edge);
+}
+
+.fr-admin .is-on {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.fr-admin-body {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fr-admin-search {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.9);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* 16 px: no zoom-on-focus on phones */
+}
+
+.fr-admin-galaxies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fr-admin-gal {
+  flex: 1 1 auto;
+  border-color: var(--panel-edge);
+}
+
+.fr-admin-gal[data-locked='true'] {
+  border-style: dashed;
+}
+
+.fr-admin-listhead {
+  margin: 4px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+}
+
+.fr-admin-systems,
+.fr-admin-ships {
+  display: grid;
+  gap: 4px;
+}
+
+.fr-admin-sys {
+  display: grid;
+  gap: 1px;
+  justify-items: start;
+  border-color: var(--panel-edge);
+  text-align: left;
+  letter-spacing: 0.04em;
+}
+
+.fr-admin-sys-name {
+  font-size: 13px;
+}
+
+.fr-admin-sys-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.fr-admin-detail {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--highlight);
+  background: rgba(12, 15, 30, 0.75);
+}
+
+.fr-admin-det-title,
+.fr-admin-ship-name {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.fr-admin-det-actions,
+.fr-admin-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fr-admin-det-actions .fr-btn,
+.fr-admin-foot .fr-btn {
+  flex: 1 1 auto;
+  border-color: var(--panel-edge);
+}
+
+.fr-admin-foot > .fr-text {
+  flex: 1 1 100%;
+}
+
+.fr-admin .fr-btn-danger {
+  color: var(--fr-danger);
+}
+
+.fr-admin-ship {
+  display: grid;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(12, 15, 30, 0.75);
+}
+
+.fr-admin-ship-access {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--highlight);
+}
+
+.fr-admin-ship-admin .fr-admin-ship-access {
+  color: var(--fr-warn);
+}
+
+.fr-admin-ship .fr-btn {
+  justify-self: start;
+  border-color: var(--panel-edge);
+}
+
+/* the ADMIN chip (map headers and the flight HUD row) */
+.fr-admin-chip {
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 1px dashed var(--fr-warn);
+  background: rgba(6, 7, 15, 0.7);
+  color: var(--fr-warn);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.fr-hud-buttons .fr-admin-chip {
+  height: 44px;
+}
+
+.fr-map-head.has-admin .fr-map-titles > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 379px) {
+  .fr-map-head .fr-admin-chip {
+    padding: 0 4px;
+    font-size: 10px;
+  }
+}
+
+/* the hangar card of a ship usable only through admin access */
+.fr-panel-hangar [data-admin='true'] {
+  border-style: dashed;
+}
+
+/* ---------------------------------------------------------------------------
+   P04 refinement: the hidden admin login (admin/loginScreen.ts). Exists in the
+   page only after the hidden activation; opaque so the arrival underneath is
+   unseen until the final fade. No strobing: the flicker is a rare, shallow
+   dip; reduced motion turns every animation off (the reveal then fades and
+   resolves glyphs only). */
+.adm-login {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: var(--text);
+  background: radial-gradient(ellipse at 50% 42%, #0b1024 0%, #05060d 72%);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.adm-fx,
+.adm-fx > * {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.adm-scan {
+  background: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 3px);
+}
+
+.adm-band {
+  inset: -22% 0 auto;
+  height: 18%;
+  background: linear-gradient(transparent, rgba(92, 239, 255, 0.05), transparent);
+  animation: adm-band 9s linear infinite;
+}
+
+.adm-vignette {
+  background: radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 0, 0.68));
+}
+
+.adm-stage {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: max(14px, var(--safe-top)) max(14px, var(--safe-right)) max(14px, var(--safe-bottom)) max(14px, var(--safe-left));
+}
+
+.adm-card {
+  box-sizing: border-box;
+  width: min(100%, 440px);
+  display: grid;
+  gap: 14px;
+  padding: 26px 26px 18px;
+  background: rgba(9, 11, 23, 0.84);
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(92, 239, 255, 0.05), 0 28px 80px rgba(0, 0, 0, 0.62);
+  animation: adm-flicker 7s linear infinite;
+}
+
+.adm-login[data-phase='reveal'] .adm-card,
+.adm-login[data-phase='done'] .adm-card,
+.adm-login[data-phase='reveal'] .adm-user-text {
+  animation: none;
+  pointer-events: none;
+}
+
+.adm-card.is-denied {
+  border-color: rgba(255, 59, 78, 0.75);
+  animation: adm-shake 420ms var(--ease-out) 1;
+}
+
+.adm-kicker,
+.adm-label,
+.adm-hint {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--text-dim);
+}
+
+.adm-title {
+  margin: 0 0 4px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text);
+}
+
+.adm-field {
+  display: grid;
+  gap: 6px;
+}
+
+.adm-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  color: var(--highlight);
+  white-space: pre;
+  text-align: center;
+}
+
+.adm-user {
+  --gi: 0.3;
+  box-sizing: border-box;
+  justify-self: start;
+  width: calc(11ch + 30px);
+  max-width: 100%;
+  height: 1.9em;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(17px, 5.2vw, 25px);
+  background: rgba(92, 239, 255, 0.04);
+  border: 1px solid rgba(92, 239, 255, 0.22);
+  border-radius: 4px;
+}
+
+.adm-user-text {
+  display: block;
+  width: 11ch;
+  line-height: 1.9em;
+  overflow: hidden;
+  text-shadow: calc(var(--gi) * 2.4px) 0 rgba(255, 59, 78, 0.55), calc(var(--gi) * -2.4px) 0 rgba(92, 239, 255, 0.5), 0 0 12px rgba(92, 239, 255, 0.28);
+}
+
+.adm-user[data-mode='noise'] .adm-user-text {
+  animation: adm-tear 280ms steps(2, end) infinite;
+}
+
+.adm-pass {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  font: 600 16px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.3em;
+  color: var(--text);
+  background: #04050b;
+  border: 1px solid #2b3150;
+  border-radius: 4px;
+  outline: none;
+}
+
+.adm-pass:focus-visible,
+.adm-pass:focus {
+  border-color: rgba(92, 239, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(92, 239, 255, 0.16);
+}
+
+.adm-card.is-denied .adm-pass {
+  border-color: rgba(255, 59, 78, 0.85);
+  box-shadow: 0 0 0 3px rgba(255, 59, 78, 0.16);
+}
+
+.adm-msg {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+}
+
+.adm-login[data-phase='reveal'] .adm-msg {
+  color: var(--highlight);
+}
+
+.adm-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.adm-abort {
+  min-height: 44px;
+  padding: 0 14px;
+  font: 600 11px/1 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.adm-abort:hover,
+.adm-abort:focus-visible {
+  color: var(--text);
+  border-color: #3a4166;
+}
+
+/* the reveal: welcome line directly above the resolved identity, centred */
+.adm-reveal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(6px, 1.6vh, 14px);
+  padding: 0 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.adm-reveal[hidden] {
+  display: none;
+}
+
+.adm-reveal::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(86vw, 640px);
+  height: min(42vh, 300px);
+  transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(92, 239, 255, 0.13), transparent);
+  opacity: var(--rv, 0);
+}
+
+.adm-welcome {
+  position: relative;
+  margin: 0;
+  font-size: clamp(11px, 2.6vw, 16px);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  color: var(--highlight);
+  text-shadow: 0 0 14px rgba(92, 239, 255, 0.45);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.adm-name {
+  position: relative;
+  margin: 0;
+  max-width: 100%;
+  font-size: clamp(24px, min(8.4vw, 14vh), 72px);
+  font-weight: 650;
+  line-height: 1.15;
+  color: var(--text);
+  white-space: pre;
+  text-shadow: 0 0 22px rgba(92, 239, 255, 0.32);
+  opacity: 0;
+}
+
+.adm-name[data-resolved='true'] {
+  text-shadow: 0 0 22px rgba(92, 239, 255, 0.4), 0 0 2px rgba(243, 239, 228, 0.6);
+}
+
+.adm-flyer {
+  position: absolute;
+  margin: 0;
+  overflow: visible;
+  transform-origin: 50% 50%;
+  text-shadow: 2px 0 rgba(255, 59, 78, 0.55), -2px 0 rgba(92, 239, 255, 0.5), 0 0 12px rgba(92, 239, 255, 0.3);
+  pointer-events: none;
+}
+
+.adm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-height: 420px) {
+  .adm-card {
+    gap: 8px;
+    padding: 14px 18px 10px;
+  }
+
+  .adm-kicker {
+    display: none;
+  }
+
+  .adm-title {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .adm-pass {
+    min-height: 44px;
+  }
+}
+
+[data-motion='reduced'] .adm-login *,
+.adm-login.is-reduced * {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-login * {
+    animation: none !important;
+  }
+}
+
+@keyframes adm-band {
+  to {
+    transform: translateY(760%);
+  }
+}
+
+@keyframes adm-flicker {
+  0%,
+  95.5%,
+  97%,
+  100% {
+    opacity: 1;
+  }
+
+  96% {
+    opacity: 0.93;
+  }
+
+  98.5% {
+    opacity: 0.97;
+  }
+}
+
+@keyframes adm-tear {
+  0% {
+    transform: translateX(1.2px) skewX(-4deg);
+  }
+
+  100% {
+    transform: translateX(-1px);
+  }
+}
+
+@keyframes adm-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20% {
+    transform: translateX(-7px);
+  }
+
+  40% {
+    transform: translateX(6px);
+  }
+
+  60% {
+    transform: translateX(-4px);
+  }
+
+  80% {
+    transform: translateX(2px);
+  }
+}
+
+/* P04.1 LOCK: touch only, on the LEFT (the right side holds FIRE, BOOST and WPN). One toggle per press, its
+   own pointer role, so it never takes or drags the floating stick. Portrait and tall screens: the left edge
+   at WPN's height, well above where the stick thumb lands and below the top-left log. Short landscape:
+   beside the ship card, bottom-aligned with it (measured, ui/hudStack.ts), so it stays above the log (which
+   hangs under the card) and below the location line. 40 px from the edge: clear of the canvas edge markers. */
+.fr-lock {
+  position: absolute;
+  /* left edge, above the stick's landing zone: a thumb dropping onto the lower left must reach the
+     stick, never this button (browsers snap a touch near a button onto it). Below the log column
+     (two lines at most on phones) and never higher than 40 % of the view. P04.1 */
+  left: calc(max(14px, var(--safe-left)) + 12px);
+  top: max(calc(var(--fr-feed-top, 160px) + 112px), 40%);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 2px solid rgba(46, 196, 230, 0.55);
+  border-radius: 50%;
+  background: rgba(6, 7, 15, 0.55);
+  color: #fbf8ee;
+  font: inherit;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-lock-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.fr-lock[data-state='on'] {
+  background: rgba(46, 196, 230, 0.22);
+  border-color: #2ec4e6;
+  color: var(--highlight);
+}
+
+.fr-lock[data-state='refused'] {
+  border-color: #ffd23f;
+  color: #ffd23f;
+}
+
+.fr-lock.is-active {
+  background: rgba(46, 196, 230, 0.3);
+}
+
+@media (pointer: coarse) {
+  .fr-lock {
+    display: flex;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-lock {
+  display: flex;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-lock {
+  display: none;
+}
+
+.fr-lock[hidden] {
+  display: none;
+}
+
+/* short portrait phones (P04.1 polish): under the notice band, at a fixed height. Below the log the
+   button reached the thumbs' landing band on a 568 px screen and moved with every notice; the log
+   column moves right of LOCK and NEXT TARGET instead (below). */
+@media (max-aspect-ratio: 1/1) and (max-height: 760px) {
+  .fr-lock {
+    top: max(40%, calc(var(--fr-top) + 210px));
+  }
+}
+
+/* phone landscape (the same height break as the log moving under the gauges): under the ship card, in
+   the card's own column, which the centred notices keep clear of; the log moves down below it */
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .fr-lock {
+    top: calc(var(--fr-card-bottom, 118px) + 6px);
+    bottom: auto;
+  }
+}
+
+/* ---- P04.1 polish: NEXT TARGET, a compact chevron button just inboard of LOCK (touch only, shown while locked) ---- */
+.fr-target {
+  position: absolute;
+  /* LOCK is 56 px at left (max(14px, safe) + 12px); this sits 10 px to its right, centred on it */
+  left: calc(max(14px, var(--safe-left)) + 12px + 56px + 10px);
+  top: calc(max(calc(var(--fr-feed-top, 160px) + 112px), 40%) + 6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid rgba(46, 196, 230, 0.45);
+  border-radius: 50%;
+  background: rgba(6, 7, 15, 0.55);
+  color: var(--highlight);
+  font: inherit;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-target-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.fr-target[data-state='refused'] {
+  border-color: #ffd23f;
+  color: #ffd23f;
+}
+
+.fr-target.is-active {
+  background: rgba(46, 196, 230, 0.3);
+}
+
+@media (pointer: coarse) {
+  .fr-target {
+    display: flex;
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-target {
+  display: flex;
+}
+
+.freeroam-app:not([data-panel='none']) .fr-target {
+  display: none;
+}
+
+.fr-target[hidden] {
+  display: none;
+}
+
+/* NEXT TARGET follows LOCK on the same row in every layout */
+@media (max-aspect-ratio: 1/1) and (max-height: 760px) {
+  .fr-target {
+    top: calc(max(40%, calc(var(--fr-top) + 210px)) + 6px);
+  }
+}
+
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .fr-target {
+    top: calc(var(--fr-card-bottom, 118px) + 12px);
+  }
+}
+
+/* while the LOCK button is on screen the log keeps out of the LOCK / NEXT TARGET row: right of it on
+   short portrait phones, below it on landscape phones (the log's top stays measured, FR-TD-80) */
+@media (pointer: coarse) and (max-aspect-ratio: 1/1) and (max-height: 760px) and (max-width: 620px) {
+  .freeroam-app:has(.fr-lock:not([hidden])) .fr-feed {
+    left: calc(max(14px, var(--safe-left)) + 132px);
+    max-width: calc(100% - max(14px, var(--safe-left)) - 132px - 12px);
+  }
+}
+
+@media (max-aspect-ratio: 1/1) and (max-height: 760px) and (max-width: 620px) {
+  .freeroam-app[data-input='touch']:has(.fr-lock:not([hidden])) .fr-feed {
+    left: calc(max(14px, var(--safe-left)) + 132px);
+    max-width: calc(100% - max(14px, var(--safe-left)) - 132px - 12px);
+  }
+}
+
+@media (pointer: coarse) and (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .freeroam-app:has(.fr-lock:not([hidden])) .fr-feed {
+    top: max(var(--fr-feed-top, 160px), calc(var(--fr-card-bottom, 118px) + 68px));
+  }
+}
+
+@media (max-height: 500px) and (min-aspect-ratio: 1/1) {
+  .freeroam-app[data-input='touch']:has(.fr-lock:not([hidden])) .fr-feed {
+    top: max(var(--fr-feed-top, 160px), calc(var(--fr-card-bottom, 118px) + 68px));
+  }
+}
+
+/* ------------------------------------------------------------------ guide */
+/* P04.2 guide: first-run tutorial and HOW TO PLAY guide (modes/guide/guideDialog.ts).
+   One modal over the title screen or Free Roam's pause menu; same panel colours,
+   letter-spaced capitals and cyan / red accents as the game's menus. */
+.guide {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(12px, var(--safe-bottom)) max(12px, var(--safe-left));
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.guide[hidden] {
+  display: none;
+}
+
+.guide-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 9, 0.8);
+}
+
+.guide.is-spotlit .guide-scrim {
+  background: transparent;
+}
+
+/* the highlight: placed from the live element's measured bounds; the huge shadow dims everything else */
+.guide-ring {
+  position: fixed;
+  border: 2px solid var(--highlight);
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 9999px rgba(3, 4, 9, 0.74),
+    0 0 16px rgba(92, 239, 255, 0.45);
+  pointer-events: none;
+}
+
+.guide-ring[hidden] {
+  display: none;
+}
+
+.guide-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: min(660px, 100%);
+  max-height: calc(100dvh - max(12px, var(--safe-top)) - max(12px, var(--safe-bottom)));
+  border: 1px solid var(--panel-edge);
+  border-top: 3px solid var(--highlight);
+  background: rgba(8, 10, 22, 0.97);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  animation: guide-open 180ms var(--ease-out);
+}
+
+.guide-card.is-anchored {
+  position: fixed;
+  top: var(--guide-top, 12px);
+  left: 50%;
+  width: min(660px, calc(100vw - 24px));
+  max-height: none;
+  transform: translateX(-50%);
+}
+
+@keyframes guide-open {
+  from {
+    opacity: 0;
+  }
+}
+
+.guide-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 4px 16px;
+}
+
+.guide-context,
+.guide-count {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+}
+
+.guide-context {
+  color: var(--highlight);
+}
+
+.guide-count {
+  margin-left: auto;
+  white-space: nowrap;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.guide-progress {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0 16px;
+  list-style: none;
+}
+
+.guide-dot {
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guide-dot-mark {
+  width: 100%;
+  height: 3px;
+  background: var(--panel-edge);
+  transition: background var(--fast) var(--ease-out);
+}
+
+.guide-dot.is-done .guide-dot-mark {
+  background: rgba(92, 239, 255, 0.45);
+}
+
+.guide-dot[aria-current='step'] {
+  color: var(--text);
+}
+
+.guide-dot[aria-current='step'] .guide-dot-mark {
+  background: var(--highlight);
+}
+
+.guide-dot-label {
+  overflow: hidden;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+
+.guide-switches {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 16px 0;
+}
+
+.guide-switches[hidden],
+.guide-seg[hidden] {
+  display: none;
+}
+
+.guide-seg {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--panel-edge);
+}
+
+.guide-seg-label {
+  align-self: center;
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.guide-seg-opt {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--panel-edge);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+
+.guide-seg-opt[aria-checked='true'] {
+  background: rgba(92, 239, 255, 0.14);
+  color: var(--highlight);
+}
+
+.guide-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 16px 12px;
+}
+
+.guide-content.is-entering {
+  animation: guide-step 160ms var(--ease-out);
+}
+
+@keyframes guide-step {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.guide-kicker {
+  margin: 6px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: var(--accent);
+}
+
+.guide-title {
+  margin: 2px 0 8px;
+  font-size: 22px;
+  letter-spacing: 0.14em;
+}
+
+.guide-lead {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.guide-points {
+  display: grid;
+  gap: 9px;
+  margin: 0 0 12px;
+}
+
+.guide-point {
+  display: grid;
+  grid-template-columns: 10em minmax(0, 1fr);
+  gap: 12px;
+}
+
+.guide-point dt {
+  padding-top: 2px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--highlight);
+}
+
+.guide-point dd,
+.guide-action-text {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  color: #d9dbe7;
+}
+
+.guide-keys {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.guide-keyrow {
+  display: grid;
+  grid-template-columns: minmax(8.5em, 11em) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.guide-keycaps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.guide-keygroup {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.guide-or {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.guide-kbd {
+  display: inline-block;
+  min-width: 2em;
+  padding: 3px 6px 2px;
+  border: 1px solid #3a4266;
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  background: #0f1328;
+  color: var(--text);
+  font: 700 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.guide-keyrow dd {
+  margin: 0;
+}
+
+.guide-action {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--highlight);
+}
+
+.guide-note {
+  margin: 0 0 12px;
+  padding: 7px 10px;
+  border-left: 2px solid var(--highlight);
+  background: rgba(92, 239, 255, 0.06);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  color: #c9cde0;
+}
+
+.guide-sample {
+  margin: 0 0 12px;
+}
+
+.guide-sample-lines {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.9);
+}
+
+.guide-samp {
+  font: 700 13px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: var(--fr-warn, #ffd25a);
+  overflow-wrap: anywhere;
+}
+
+.guide-sample-cap,
+.guide-diagram-cap {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.guide-diagram {
+  display: grid;
+  justify-items: center;
+  margin: 0 0 12px;
+}
+
+.guide-phone {
+  position: relative;
+  width: min(210px, 58vw);
+  aspect-ratio: 390 / 844;
+  overflow: hidden;
+  border: 2px solid #2b3766;
+  border-radius: 14px;
+  background: radial-gradient(ellipse at 50% 35%, #101631 0%, #06070f 70%);
+}
+
+.guide-part {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(243, 239, 228, 0.45);
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  text-align: center;
+  white-space: normal;
+}
+
+.guide-part.is-round {
+  border-radius: 50%;
+}
+
+.guide-part.is-conditional {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.guide-part-card,
+.guide-part-hud,
+.guide-part-pause,
+.guide-part-info {
+  background: rgba(12, 15, 30, 0.9);
+  border-color: var(--panel-edge);
+}
+
+.guide-part-card {
+  color: var(--fr-warn, #ffd25a);
+}
+
+.guide-part-fire,
+.guide-part-lock,
+.guide-part-next {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.guide-diagram-classic .guide-part-fire {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.guide-part-boost {
+  border-color: #c9a227;
+  color: #ffd25a;
+}
+
+.guide-part-stick {
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+.guide-part-field {
+  border: 0;
+  border-bottom: 1px solid var(--panel-edge);
+  border-radius: 0;
+  color: var(--text-dim);
+}
+
+.guide-part-pad {
+  border-color: var(--panel-edge);
+  color: var(--text-dim);
+}
+
+.guide-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--panel-edge);
+}
+
+.guide-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--panel-edge);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease-out),
+    background var(--fast) var(--ease-out);
+}
+
+.guide-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.guide-btn.is-primary {
+  border-color: var(--highlight);
+  background: var(--highlight);
+  color: #04121a;
+}
+
+.guide-play-classic.is-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.guide-back {
+  margin-right: auto;
+}
+
+.guide-close {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+@media (hover: hover) {
+  .guide-btn:not(:disabled):hover,
+  .guide-seg-opt:hover,
+  .guide-dot:hover {
+    border-color: var(--highlight);
+    color: var(--text);
+  }
+
+  .guide-btn.is-primary:hover {
+    color: #04121a;
+  }
+
+  .guide-play-classic.is-primary:hover {
+    color: #fff;
+  }
+}
+
+.guide-btn:focus-visible,
+.guide-seg-opt:focus-visible,
+.guide-dot:focus-visible,
+.guide-body:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+.guide-btn.is-primary:focus-visible {
+  outline-color: var(--text);
+}
+
+/* touch: comfortable targets */
+@media (pointer: coarse) {
+  .guide-seg-opt,
+  .guide-close,
+  .guide-dot {
+    min-height: 44px;
+  }
+}
+
+/* phones in portrait: the card fills the width, one column per row */
+@media (max-width: 560px) {
+  .guide {
+    padding: max(6px, var(--safe-top)) max(6px, var(--safe-right)) max(6px, var(--safe-bottom)) max(6px, var(--safe-left));
+  }
+
+  .guide-card {
+    max-height: calc(100dvh - max(6px, var(--safe-top)) - max(6px, var(--safe-bottom)));
+  }
+
+  .guide-head,
+  .guide-progress,
+  .guide-switches,
+  .guide-body,
+  .guide-actions {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .guide-head {
+    padding-right: 6px;
+  }
+
+  .guide-context {
+    letter-spacing: 0.14em;
+  }
+
+  .guide-context-pre {
+    display: none;
+  }
+
+  .guide-count {
+    letter-spacing: 0.1em;
+  }
+
+  .guide-switches {
+    display: grid;
+    gap: 6px;
+  }
+
+  .guide-seg {
+    display: flex;
+    min-width: 0;
+  }
+
+  .guide-seg-label {
+    flex: 0 0 auto;
+    padding: 0 6px;
+    letter-spacing: 0.1em;
+  }
+
+  .guide-seg-opt {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0 4px;
+    letter-spacing: 0.06em;
+  }
+
+  .guide-phone {
+    width: min(190px, 52vw);
+  }
+
+  .guide-dot-label {
+    display: none;
+  }
+
+  .guide-dot[aria-current='step'] .guide-dot-label {
+    display: block;
+    overflow: visible;
+  }
+
+  .guide-title {
+    font-size: 18px;
+    letter-spacing: 0.1em;
+  }
+
+  .guide-point,
+  .guide-keyrow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+
+  .guide-actions {
+    gap: 6px;
+  }
+
+  .guide-btn {
+    padding: 0 12px;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+
+  .guide-play {
+    flex: 1 1 100%;
+    order: -1;
+  }
+}
+
+/* short landscape screens: compact header */
+@media (max-height: 480px) {
+  .guide-dot-label {
+    display: none;
+  }
+
+  .guide-dot {
+    min-height: 24px;
+  }
+
+  .guide-title {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+
+  .guide-actions {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+}
+
+.guide[data-motion='reduced'] .guide-card,
+.guide[data-motion='reduced'] .guide-content,
+.guide[data-motion='reduced'] .guide-dot-mark,
+.guide[data-motion='reduced'] .guide-btn {
+  animation: none;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-card,
+  .guide-content,
+  .guide-dot-mark,
+  .guide-btn {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* title screen: HOW TO PLAY (opens the guide; never resets the tutorial) */
+.title-guide {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid var(--panel-edge);
+  background: rgba(6, 7, 15, 0.88);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+}
+
+.title-guide:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .title-guide:hover {
+    border-color: var(--highlight);
   }
 }

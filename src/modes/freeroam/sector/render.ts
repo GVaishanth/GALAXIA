@@ -40,7 +40,7 @@ import type { Viewport } from '../../../render/viewport.ts';
 import type { CameraView } from '../camera.ts';
 import { noseOf } from '../sim.ts';
 import type { Landmark, Poi, Rock, SectorLayout } from './model.ts';
-import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, drawThreatMarkers, type CombatView } from './combatRender.ts';
+import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, drawShipLock, drawShipLockMarker, drawThreatMarkers, type CombatView } from './combatRender.ts';
 import { drawLootMap, drawLootWorld } from './lootRender.ts';
 import { drawFieldRings, drawPullArrow } from './gravityRender.ts';
 import { isDone, objectiveOf, RUN, type SectorRun } from './run.ts';
@@ -69,6 +69,8 @@ export interface RenderOptions {
   readonly aim?: { readonly x: number; readonly y: number } | null | undefined;
   /** Short destruction bursts (presentation only, owned and capped by the shell). */
   readonly bursts?: readonly Burst[] | undefined;
+  /** Combat P03C: detonation shockwaves (presentation only, owned and capped by the shell). */
+  readonly waves?: readonly Shockwave[] | undefined;
   /** Destroyed-ship breakups (Prompt 8; owned and capped by the shell). */
   readonly wrecks?: readonly Wreck[] | undefined;
   /** Prompt 12: arrival in a sector (frame-clock ms), drawn as a widening ring around the ship. */
@@ -100,6 +102,20 @@ export interface Burst {
 }
 /** Burst lifetime (ms). */
 export const BURST_MS = 420;
+
+/**
+ * A detonation shockwave (Combat P03C): a ring expanding to the blast radius
+ * over `ms` (the catalogue's `effect.ringTicks`); the nuke adds a second,
+ * trailing ring. Never a full-screen flash.
+ */
+export interface Shockwave {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+  readonly startMs: number;
+  readonly ms: number;
+  readonly double: boolean;
+}
 /** Overheat rattle (FR-TD-79): peak jitter in CSS px, fading to nothing over `ms`. Never with reduced motion. */
 export const SHAKE = Object.freeze({ px: 5, ms: 900 });
 
@@ -389,7 +405,26 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
     ctx.lineCap = 'butt';
   }
   drawPlayerMissiles(ctx, run, V); // under ships and enemy fire (Combat P03)
+  drawShipLock(ctx, run, V); // P04.1 target brackets, under ships and every shot
   drawCombatShips(ctx, sprites, run, V);
+  for (const w of o.waves ?? []) {
+    const age = (o.timeMs - w.startMs) / w.ms;
+    if (age < 0 || age >= 1 || !visible(w.x, w.y, w.r)) continue;
+    const grow = o.reducedMotion ? 1 : 1 - (1 - age) * (1 - age); // ease-out; reduced motion: the full ring, fading
+    for (let ring = 0; ring < (w.double ? 2 : 1); ring++) {
+      const g = ring === 0 ? grow : Math.max(0, grow - 0.25) / 0.75;
+      if (g <= 0) continue;
+      ctx.globalAlpha = (1 - age) * (ring === 0 ? 0.9 : 0.55);
+      ctx.strokeStyle = ring === 0 ? COLORS['fx.orange'] : COLORS['fx.yellow'];
+      ctx.lineWidth = px(ring === 0 ? 3 : 2);
+      ctx.beginPath();
+      ctx.arc(toX(w.x), toY(w.y), Math.max(2, w.r * g * zoom), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 0.18 * (1 - age);
+    disc(ctx, toX(w.x), toY(w.y), w.r * grow * zoom, COLORS['fx.orange']);
+    ctx.globalAlpha = 1;
+  }
   for (const b of o.bursts ?? []) {
     const age = (o.timeMs - b.startMs) / BURST_MS;
     if (age < 0 || age >= 1 || !visible(b.x, b.y, 60)) continue;
@@ -517,6 +552,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   }
 
   drawThreatMarkers(ctx, run, V);
+  drawShipLockMarker(ctx, run, V); // P04.1: the locked ship, when off screen
 
   if (o.aim) {
     // mouse-aim reticle (device px sized)

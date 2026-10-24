@@ -35,4 +35,11 @@ export type GameEvent =
   /** Held fire overheated the weapon (TD-74): it is locked until it cools. */
   | { readonly type: 'weaponOverheated' }
   /** The overheated weapon cooled enough to fire again. */
-  | { readonly type: 'weaponCooled' };
+  | { readonly type: 'weaponCooled' }
+  // Combat P03C: post-Wave-20 ship weapons (core/systems/ordnance.ts); presentation only
+  | { readonly type: 'weaponSwitched'; readonly weapon: string }
+  | { readonly type: 'ordnanceLaunched'; readonly weapon: string; readonly x: number; readonly y: number }
+  | { readonly type: 'ordnanceRefused'; readonly weapon: string; readonly reason: 'noTarget' | 'empty' | 'cooling' | 'busy' | 'unavailable' }
+  | { readonly type: 'lockStarted'; readonly target: string }
+  | { readonly type: 'lockLost' }
+  | { readonly type: 'detonation'; readonly weapon: string; readonly x: number; readonly y: number; readonly r: number; readonly hits: number };

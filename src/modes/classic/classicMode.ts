@@ -7,11 +7,15 @@
  *  - passes the page-wide services (sound, sprites, shared prefs, storage);
  *  - maps lifecycle calls (Classic starts its loop on mount, so init() mounts
  *    and activate() has nothing left to do);
- *  - exposes the status object for automated checks while Classic is active.
+ *  - exposes the status object for automated checks while Classic is active;
+ *  - Combat P03C: hands Classic the cross-mode ship registry as plain data
+ *    (modes/crossMode.ts): before Wave 20 is completed it reports the gate
+ *    closed and Classic stays exactly as it was.
  */
 import { mountGame, type GameStatus } from '../../game/app.ts';
 import { PAUSABLE } from '../../core/game/stateMachine.ts';
 import type { GameMode, ModeContext, ModeDebug, ModeLifecycle } from '../types.ts';
+import { CLASSIC_GATE_STAGE, classicFleet, markClassicComplete, setClassicShip } from '../crossMode.ts';
 
 declare global {
   interface Window {
@@ -35,6 +39,12 @@ export function createClassicMode(ctx: ModeContext): GameMode {
         prefs: services.prefs,
         store: services.store,
         onExit: ctx.requestExit,
+        fleet: {
+          read: () => classicFleet(services.store),
+          select: (id) => void setClassicShip(services.store, id),
+          complete: () => void markClassicComplete(services.store),
+          gateStage: CLASSIC_GATE_STAGE,
+        },
         onHalt: () => ctx.fail('The game stopped after an unexpected error.'),
       });
       if (__GALAXIA_TEST_HOOKS__) window.__galaxiaGame = status;

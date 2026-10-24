@@ -66,6 +66,48 @@ export function stepZoom(z: number, dir: number): number {
   return Math.abs(next - 1) < 0.02 ? 1 : clampZoom(next);
 }
 
+/**
+ * P04.1 wheel zoom: forward (deltaY < 0) zooms in, backward zooms out. One
+ * mouse notch (100 px) changes the zoom by one key step (x1.15); a trackpad's
+ * many small deltas move it in proportion, so the gesture is continuous. A
+ * pinch (sent by browsers as Ctrl + wheel, with small deltas) uses a finer
+ * gain per px. One event is capped (a fling cannot jump the whole range), and
+ * the result stays inside the same bounds as the keys.
+ */
+export const WHEEL_ZOOM = Object.freeze({
+  /** Natural-log zoom change per wheel px (ln 1.15 / 100: one notch = one key step). */
+  perPx: Math.log(CAMERA.zoomStep) / 100,
+  /** Pinch: per px of Ctrl + wheel delta. */
+  perPinchPx: 0.01,
+  /** Largest |delta| one event may apply, px. */
+  maxEventPx: 240,
+  /** Display catch-up time constant, seconds (95 % in ~0.18 s; instant with reduced motion). */
+  easeSeconds: 0.06,
+});
+
+/** Pixels of one wheel event (line and page modes converted, non-finite -> 0, capped). */
+export function wheelPixels(deltaY: number, deltaMode: number): number {
+  const px = deltaMode === 1 ? deltaY * 40 : deltaMode === 2 ? deltaY * 400 : deltaY;
+  if (!Number.isFinite(px)) return 0;
+  return Math.max(-WHEEL_ZOOM.maxEventPx, Math.min(WHEEL_ZOOM.maxEventPx, px));
+}
+
+/** The player zoom after one wheel event (bounded). */
+export function wheelZoom(z: number, deltaY: number, deltaMode: number, pinch: boolean): number {
+  const px = wheelPixels(deltaY, deltaMode);
+  return clampZoom(clampZoom(z) * Math.exp(-px * (pinch ? WHEEL_ZOOM.perPinchPx : WHEEL_ZOOM.perPx)));
+}
+
+/** The displayed zoom one frame later, easing toward the target (frame-rate independent; snaps when close). */
+export function easeZoom(shown: number, target: number, dt: number, reduced: boolean): number {
+  const t = clampZoom(target);
+  if (reduced || !Number.isFinite(shown)) return t;
+  if (!(dt > 0)) return clampZoom(shown); // no time passed (first frame): stay
+  const k = 1 - Math.exp(-dt / WHEEL_ZOOM.easeSeconds);
+  const next = shown + (t - shown) * k;
+  return Math.abs(next - t) < 0.002 ? t : next;
+}
+
 /** Device px per world (art) px for a canvas of w x h device px, times the bounded player zoom. */
 export function cameraZoom(w: number, h: number, playerZoom = 1): number {
   const W = Math.max(1, w);

@@ -8,6 +8,7 @@
  * the visit. A shot only touches sides its faction is hostile to, so allies
  * never hit each other and a wary faction's fire never hits the pilot.
  */
+import { shotScale } from './dilation.ts';
 import type { SectorEvent, SectorRun } from '../sector/run.ts';
 import { dist, segmentDistance } from '../sector/grid.ts';
 import { COMBAT } from './difficulty.ts';
@@ -55,6 +56,8 @@ export function stepEnemyShots(run: SectorRun, events: SectorEvent[]): void {
     const s = run.enemyShots[i]!;
     s.px = s.x;
     s.py = s.y;
+    // Combat P03C: shots of factions hostile to the pilot move, turn and age at the dilation scale inside a nuke's zone
+    const k = shotScale(run, s.faction, s.x, s.y);
     if (s.kind === 'missile') {
       const t = targetPos(run, s.target);
       if (t && !(s.target === 'player' && inSanctuary(L, run.ship))) {
@@ -62,16 +65,16 @@ export function stepEnemyShots(run: SectorRun, events: SectorEvent[]): void {
         const cur = Math.atan2(s.vy, s.vx);
         let d = want - cur;
         d = Math.atan2(Math.sin(d), Math.cos(d));
-        const turn = WEAPONS[s.weapon].turn * TICK;
+        const turn = WEAPONS[s.weapon].turn * TICK * k;
         const na = cur + Math.max(-turn, Math.min(turn, d));
         const sp = WEAPONS[s.weapon].speed;
         s.vx = Math.cos(na) * sp;
         s.vy = Math.sin(na) * sp;
       }
     }
-    s.x += s.vx * TICK;
-    s.y += s.vy * TICK;
-    s.life -= 1;
+    s.x += s.vx * TICK * k;
+    s.y += s.vy * TICK * k;
+    s.life -= k;
     let dead = s.life <= 0 || (s.kind === 'missile' && s.hp <= 0) || s.x < 0 || s.y < 0 || s.x > L.width || s.y > L.height || inSanctuary(L, s) || shotBlocked(L, s.px, s.py, s.x, s.y, s.radius);
     if (!dead && hostileTo(run, s.faction, 'player') && !run.docked && sweptHit(s.px, s.py, s.x, s.y, run.ship.x, run.ship.y, run.tune.radius + s.radius)) {
       // one impact: the shot is spent even when invulnerability absorbs it

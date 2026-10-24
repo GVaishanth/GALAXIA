@@ -63,6 +63,12 @@ export class Hud {
   private readonly heatLabel: HTMLElement;
   private readonly heatFill: HTMLElement;
   private heatKey = '';
+  /** Combat P03C: selected weapon readout (post-Wave-20 roster ships only). */
+  private readonly wpn: HTMLElement;
+  private readonly wpnName: HTMLElement;
+  private readonly wpnState: HTMLElement;
+  private readonly wpnNotice: HTMLElement;
+  private wpnKey = '';
 
   constructor(container: HTMLElement, options: HudOptions = {}) {
     this.options = options;
@@ -101,7 +107,13 @@ export class Hud {
     this.heatFill = el('span', 'hud-heat-fill');
     heatTrack.append(this.heatFill);
     this.heat.append(this.heatLabel, heatTrack);
-    bottom.append(this.reserves, this.heat, stage);
+    this.wpn = el('div', 'hud-wpn');
+    this.wpn.hidden = true;
+    this.wpnName = el('span', 'hud-wpn-name');
+    this.wpnState = el('span', 'hud-wpn-state');
+    this.wpnNotice = el('span', 'hud-wpn-notice');
+    this.wpn.append(this.wpnName, this.wpnState, this.wpnNotice);
+    bottom.append(this.reserves, this.heat, this.wpn, stage);
 
     this.center = el('div', 'hud-center');
     this.popups = el('div', 'hud-popups');
@@ -151,6 +163,25 @@ export class Hud {
     s.setProperty('--u', `${u}px`);
     // text unit with a floor: HUD text stays readable on small playfields
     s.setProperty('--ut', `${Math.max(u, UI_SCALE.hudTextMinUnit)}px`);
+  }
+
+  /**
+   * P03C weapon readout: the selected weapon, its ammo / cooldown / lock and a
+   * short notice. Shown while a missile weapon is selected (the gun keeps the
+   * heat meter, and a brief notice if a press was refused). DOM only on change.
+   */
+  setWeapon(view: { readonly name: string; readonly state: string; readonly ready: boolean; readonly gun: boolean; readonly notice: string } | null, visible: boolean): void {
+    const show = visible && view !== null && (!view.gun || view.notice !== '');
+    const key = show && view ? `${view.name}|${view.state}|${view.ready}|${view.notice}|${view.gun}` : 'off';
+    if (key === this.wpnKey) return;
+    this.wpnKey = key;
+    this.wpn.hidden = !show;
+    if (!show || !view) return;
+    this.wpnName.textContent = view.name;
+    // a refusal notice (1 s) takes the state's place, so the readout stays short on a 320 px phone
+    this.wpnState.textContent = view.gun || view.notice ? '' : view.state;
+    this.wpnNotice.textContent = view.notice;
+    this.wpn.classList.toggle('is-unready', !view.ready);
   }
 
   update(model: HudModel): void {

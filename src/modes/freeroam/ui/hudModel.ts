@@ -156,7 +156,8 @@ export function nearestPoi(ship: { readonly x: number; readonly y: number }, can
 
 /* ------------------------------------------------------------ ship card */
 
-export type WeaponState = 'ready' | 'firing' | 'safe' | 'overheated';
+/** `cooling`: an ordnance weapon that cannot fire yet (cooldown, in flight, empty); plasma never uses it. */
+export type WeaponState = 'ready' | 'firing' | 'safe' | 'overheated' | 'cooling';
 
 export interface ShipCardInput {
   readonly ship: string;
@@ -173,23 +174,37 @@ export interface ShipCardInput {
   /** Weapon heat 0..1 and the overheat lock (FR-TD-79). Absent = cold. */
   readonly heat?: number;
   readonly overheated?: boolean;
-  /** Missile skill (Combat P03). Absent = no missile row content (READY). */
+  /** The selected weapon (Combat P03C; the row under HEAT). Absent = plasma with no ordnance state. */
   readonly missile?: MissileCardInput;
 }
 
-/** The missile skill as the card needs it (plain numbers; combat/playerMissile.ts owns the state). */
+/**
+ * The selected weapon as the card needs it (plain numbers; the arsenal in
+ * core/weapons/arsenal.ts and combat/playerMissile.ts own the state).
+ */
 export interface MissileCardInput {
+  /** Row label: the catalogue's short name (PLASMA, HEAVY, LOCK-ON, NUKE). */
+  readonly label: string;
+  /** How it is fed: the gun (unlimited), a saved stock, or energy per launch. */
+  readonly feed: 'gun' | 'stock' | 'energy';
+  readonly stock: number;
+  readonly capacity: number;
+  /** 'cooldown' while this weapon's own cooldown runs. */
   readonly state: 'ready' | 'acquiring' | 'cooldown';
   readonly lock: number;
   readonly lockTicks: number;
   readonly cooldown: number;
   readonly cooldownTicks: number;
-  /** A missile is in flight. */
+  /** One of this weapon's missiles is in flight. */
   readonly inFlight: boolean;
-  readonly notice: 'noTarget' | 'lowEnergy' | 'cooling' | 'lockLost' | 'launched' | 'hit' | 'kill' | 'miss' | null;
+  /** Could fire now (`unavailable` = not fitted to this ship; never shown for a weapon in the rotation). */
+  readonly gate: 'ok' | 'unavailable' | 'cooling' | 'empty' | 'lowEnergy' | 'busy';
+  readonly notice: 'noTarget' | 'lowEnergy' | 'cooling' | 'empty' | 'unavailable' | 'busy' | 'lockLost' | 'launched' | 'hit' | 'kill' | 'miss' | 'blast' | null;
+  /** P04 Admin Access sandbox: launches spend nothing (the gauge reads ∞ instead of a count). */
+  readonly unlimited?: boolean | undefined;
 }
 
-export type MissileState = 'ready' | 'acquiring' | 'launching' | 'cooldown' | 'refused' | 'safe';
+export type MissileState = 'ready' | 'acquiring' | 'launching' | 'cooldown' | 'refused' | 'safe' | 'empty';
 
 export interface Gauge {
   /** 0..100, rounded. */
@@ -209,8 +224,10 @@ export interface ShipCard {
   readonly energy: Gauge;
   /** Weapon heat: `low` means hot (70% and up) or locked; the text says OVERHEAT while locked. */
   readonly heat: Gauge;
-  /** Missile skill: fill = lock progress or cooldown recovered; text says the state (never colour alone). */
+  /** Selected weapon row: fill = lock progress, cooldown recovered or magazine; text says the state (never colour alone). */
   readonly missile: Gauge;
+  /** The row's label: the selected weapon's short name. */
+  readonly missileLabel: string;
   readonly missileState: MissileState;
   /** A press during the cooldown (refused): the seconds stay, styled as a refusal. */
   readonly missileNudge: boolean;
@@ -229,7 +246,7 @@ function gauge(v: number, max: number, lowAt: number): Gauge {
   return { pct, text: low ? `LOW ${pct}%` : `${pct}%`, low };
 }
 
-const WEAPON_TEXT: Readonly<Record<WeaponState, string>> = { ready: 'READY', firing: 'FIRING', safe: 'SAFE', overheated: 'OVERHEAT' };
+const WEAPON_TEXT: Readonly<Record<WeaponState, string>> = { ready: 'READY', firing: 'FIRING', safe: 'SAFE', overheated: 'OVERHEAT', cooling: 'COOLING' };
 
 /** Heat at or above which the gauge reads HOT (FR-TD-79). */
 export const HEAT_HOT_AT = 0.7;
@@ -242,32 +259,42 @@ function heatGauge(level: number, overheated: boolean): Gauge {
 }
 
 /** Refusals: shown for the notice moment across the whole row (the longest is about 104 px at the card's 10 px). */
-const MISSILE_REFUSAL = { noTarget: 'NO TARGET', lowEnergy: 'LOW ENERGY', lockLost: 'LOCK LOST' } as const;
+const MISSILE_REFUSAL = { noTarget: 'NO TARGET', lowEnergy: 'LOW ENERGY', lockLost: 'LOCK LOST', empty: 'EMPTY', unavailable: 'NOT FITTED', busy: 'IN FLIGHT' } as const;
 /** Results: short enough for the value column (5 characters at most; 54 px on phones). */
-const MISSILE_RESULT = { hit: 'HIT', kill: 'KILL', miss: 'MISS' } as const;
+const MISSILE_RESULT = { hit: 'HIT', kill: 'KILL', miss: 'MISS', blast: 'BLAST' } as const;
 
 /**
- * The missile row (Combat P03). Steady states fit the value column (5
- * characters at most): READY / LOCK (fill = lock) / AWAY (in flight) /
- * seconds left (fill = cooldown recovered) / SAFE; results HIT / KILL / MISS.
- * A refusal (NO TARGET, LOW ENERGY, LOCK LOST) is state `refused`: for that
- * moment the text takes the whole row (CSS). A press during the cooldown keeps
- * the seconds and sets `nudge` (styled as a refusal). `low` marks "cannot
- * launch now" for styling only; the text always says why (not colour alone).
+ * The selected-weapon row (Combat P03 missile row, generalised in P03C).
+ * Steady states fit the value column (5 characters at most): plasma reads
+ * the infinity sign; a stocked weapon its count (3/4, fill = magazine) or
+ * EMPTY; READY / LOCK (fill = lock) / AWAY (in flight) / seconds left (fill
+ * = cooldown recovered) / SAFE; results HIT / KILL / MISS / BLAST. A refusal
+ * (NO TARGET, LOW ENERGY, LOCK LOST, EMPTY, NOT FITTED, IN FLIGHT) is state
+ * `refused`: for that moment the text takes the whole row (CSS). A press
+ * during the cooldown keeps the seconds and sets `nudge`. `low` marks
+ * "cannot fire now" for styling only; the text always says why.
  */
 export function missileGauge(m: MissileCardInput | undefined, docked: boolean): { gauge: Gauge; state: MissileState; nudge: boolean } {
-  if (!m) return { gauge: { pct: 100, text: 'READY', low: false }, state: 'ready', nudge: false };
-  if (docked) return { gauge: { pct: m.state === 'cooldown' ? pctOf(m.cooldownTicks - m.cooldown, m.cooldownTicks) : 100, text: 'SAFE', low: true }, state: 'safe', nudge: false };
+  if (!m || m.feed === 'gun') return { gauge: { pct: 100, text: docked ? 'SAFE' : '\u221e', low: docked }, state: docked ? 'safe' : 'ready', nudge: false };
+  const recovered = pctOf(m.cooldownTicks - m.cooldown, m.cooldownTicks);
+  if (docked) return { gauge: { pct: m.state === 'cooldown' ? recovered : 100, text: 'SAFE', low: true }, state: 'safe', nudge: false };
   if (m.state === 'acquiring') return { gauge: { pct: pctOf(m.lock, m.lockTicks), text: 'LOCK', low: false }, state: 'acquiring', nudge: false };
   if (m.state === 'cooldown') {
-    const pct = pctOf(m.cooldownTicks - m.cooldown, m.cooldownTicks);
-    if (m.inFlight) return { gauge: { pct, text: 'AWAY', low: true }, state: 'launching', nudge: false };
-    const result = m.notice === 'hit' || m.notice === 'kill' || m.notice === 'miss' ? MISSILE_RESULT[m.notice] : null;
-    return { gauge: { pct, text: result ?? `${Math.ceil(m.cooldown / 60)}s`, low: true }, state: 'cooldown', nudge: m.notice === 'cooling' };
+    if (m.inFlight) return { gauge: { pct: recovered, text: 'AWAY', low: true }, state: 'launching', nudge: false };
+    const result = m.notice === 'hit' || m.notice === 'kill' || m.notice === 'miss' || m.notice === 'blast' ? MISSILE_RESULT[m.notice] : null;
+    return { gauge: { pct: recovered, text: result ?? `${Math.ceil(m.cooldown / 60)}s`, low: true }, state: 'cooldown', nudge: m.notice === 'cooling' };
   }
-  if (m.notice === 'noTarget' || m.notice === 'lowEnergy' || m.notice === 'lockLost') return { gauge: { pct: 100, text: MISSILE_REFUSAL[m.notice], low: true }, state: 'refused', nudge: false };
-  return { gauge: { pct: 100, text: 'READY', low: false }, state: 'ready', nudge: false };
+  if (m.notice === 'noTarget' || m.notice === 'lowEnergy' || m.notice === 'lockLost' || m.notice === 'unavailable' || m.notice === 'busy') return { gauge: { pct: 100, text: MISSILE_REFUSAL[m.notice], low: true }, state: 'refused', nudge: false };
+  if (m.unlimited === true) return { gauge: { pct: 100, text: '\u221e', low: false }, state: 'ready', nudge: false };
+  if (m.feed === 'stock') {
+    if (m.stock <= 0) return { gauge: { pct: 0, text: 'EMPTY', low: true }, state: m.notice === 'empty' ? 'refused' : 'empty', nudge: false };
+    return { gauge: { pct: pctOf(m.stock, m.capacity), text: `${m.stock}/${m.capacity}`, low: false }, state: 'ready', nudge: false };
+  }
+  return { gauge: { pct: 100, text: 'READY', low: m.gate === 'lowEnergy' }, state: 'ready', nudge: false };
 }
+
+/** The header state text for the selected weapon (plasma keeps READY / FIRING / OVERHEAT). */
+const ORDNANCE_TEXT: Readonly<Record<MissileState, string>> = { ready: 'READY', acquiring: 'LOCKING', launching: 'AWAY', cooldown: 'COOLING', refused: 'READY', safe: 'SAFE', empty: 'EMPTY' };
 
 export function shipCard(i: ShipCardInput): ShipCard {
   const overheated = i.overheated === true && !i.docked;
@@ -277,22 +304,27 @@ export function shipCard(i: ShipCardInput): ShipCard {
   const hull = gauge(i.hull, i.hullMax, HUD_LIMITS.hullCritical);
   const energy = gauge(i.energy, i.energyMax, 0.2);
   const missile = missileGauge(i.missile, i.docked);
-  const label = `${i.ship}, ${i.weapon} ${WEAPON_TEXT[weaponState].toLowerCase()}: shield ${shield.pct}%, hull ${hull.pct}%, energy ${energy.pct}%, weapon heat ${heat.text.toLowerCase()}, missile ${missile.gauge.text.toLowerCase()}${i.boosting ? ', boosting' : ''}`;
+  const gun = !i.missile || i.missile.feed === 'gun';
+  const weaponText = gun || i.docked ? WEAPON_TEXT[weaponState] : missile.state === 'refused' && i.missile?.stock === 0 && i.missile.feed === 'stock' ? 'EMPTY' : ORDNANCE_TEXT[missile.state];
+  const missileLabel = i.missile?.label ?? 'PLASMA';
+  const ammo = gun || i.missile?.unlimited === true ? 'unlimited' : i.missile?.feed === 'stock' ? `${i.missile.stock} of ${i.missile.capacity} left` : 'energy';
+  const label = `${i.ship}, ${i.weapon} ${weaponText.toLowerCase()}: shield ${shield.pct}%, hull ${hull.pct}%, energy ${energy.pct}%, weapon heat ${heat.text.toLowerCase()}, ${missileLabel.toLowerCase()} ${missile.gauge.text === '\u221e' ? 'unlimited' : missile.gauge.text.toLowerCase()}, ammunition ${ammo}${i.boosting ? ', boosting' : ''}`;
   return {
     ship: i.ship.toUpperCase(),
     weapon: i.weapon.toUpperCase(),
-    weaponState,
-    weaponText: WEAPON_TEXT[weaponState],
+    weaponState: gun ? weaponState : i.docked ? 'safe' : missile.state === 'ready' || missile.state === 'acquiring' ? 'ready' : 'cooling',
+    weaponText,
     shield,
     hull,
     energy,
     heat,
     missile: missile.gauge,
+    missileLabel,
     missileState: missile.state,
     missileNudge: missile.nudge,
     boosting: i.boosting,
     label,
-    key: `${i.ship}|${i.weapon}|${weaponState}|${shield.text}|${hull.text}|${energy.text}|${heat.text}|${missile.gauge.text}|${missile.gauge.pct}|${missile.state}|${missile.nudge}|${i.boosting}`,
+    key: `${i.ship}|${i.weapon}|${weaponState}|${shield.text}|${hull.text}|${energy.text}|${heat.text}|${missileLabel}|${missile.gauge.text}|${missile.gauge.pct}|${missile.state}|${missile.nudge}|${i.boosting}`,
   };
 }
 

@@ -5,6 +5,7 @@
  */
 import type { Shot, World } from '../game/types.ts';
 import type { SimContext } from './context.ts';
+import { zoneScale } from './timeZones.ts';
 
 function makeShot(world: World, x: number, y: number, vx: number, vy: number): Shot {
   world.nextId += 1;
@@ -57,8 +58,10 @@ export function updateProjectiles(ctx: SimContext, dtMs: number): void {
   for (const s of world.enemyShots) {
     s.prevX = s.x;
     s.prevY = s.y;
-    s.x += s.vx * k;
-    s.y += s.vy * k;
+    // Combat P03C: enemy shots inside a nuke's time zone move at its scale (no zone = 1; player shots never slow)
+    const z = zoneScale(world, s.x, s.y);
+    s.x += s.vx * k * z;
+    s.y += s.vy * k * z;
   }
   world.playerShots = world.playerShots.filter(keep);
   world.enemyShots = world.enemyShots.filter(keep);

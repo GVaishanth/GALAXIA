@@ -34,6 +34,20 @@ export interface HudFrame {
   readonly objectiveHere: boolean;
   readonly cargo: string;
   readonly notice: Notice | null;
+  /** Economy pass: the Guild marks readout (formatted by the shell from the wallet; transient animation state is never saved). */
+  readonly marks?: MarksReadout | undefined;
+}
+
+export interface MarksReadout {
+  /** Shown balance, e.g. "◈ 1,240" (counts towards the real balance after a small change). */
+  readonly value: string;
+  /** Gain / loss indicator ("+15", "−120"); empty when none is showing. */
+  readonly tag: string;
+  readonly sign: 'gain' | 'loss' | '';
+  /** Increments on every balance change (plays one brief highlight). */
+  readonly serial: number;
+  /** Screen-reader words for the real balance ("1,240 Guild marks"). */
+  readonly spoken: string;
 }
 
 export interface FlightHud {
@@ -47,7 +61,7 @@ export interface FlightHud {
   readonly notice: HTMLElement;
   render(f: HudFrame): void;
   /** What is visible now (diagnostics and tests). */
-  status(): { readonly cargo: string; readonly objective: string; readonly nearby: string | null; readonly notice: string | null; readonly location: string; readonly critical: boolean; readonly weapon: string; readonly missile: string; readonly missileState: string };
+  status(): { readonly cargo: string; readonly marks: string; readonly objective: string; readonly nearby: string | null; readonly notice: string | null; readonly location: string; readonly critical: boolean; readonly weapon: string; readonly missile: string; readonly missileLabel: string; readonly missileState: string };
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ''): HTMLElementTagNameMap[K] => {
@@ -67,23 +81,32 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
   const head = el('div', 'fr-shipcard-head');
   const shipName = el('span', 'fr-gauge-ship fr-ship-name');
   const weapon = el('span', 'fr-weapon');
-  head.append(shipName, weapon);
+  // Economy pass: the Guild marks balance (in the head on phones, its own line on wider screens)
+  const marks = el('span', 'fr-marks');
+  const marksLabel = el('span', 'fr-marks-label', 'GUILD MARKS');
+  const marksTag = el('span', 'fr-marks-delta');
+  const marksValue = el('span', 'fr-marks-value');
+  const marksUnit = el('span', 'fr-marks-unit', 'MARKS');
+  marks.append(marksLabel, marksTag, marksValue, marksUnit);
+  marks.hidden = true;
+  head.append(shipName, weapon, marks);
   card.append(head);
-  const bar = (name: string, cls: string): { row: HTMLElement; fill: HTMLElement; value: HTMLElement } => {
+  const bar = (name: string, cls: string): { row: HTMLElement; fill: HTMLElement; value: HTMLElement; label: HTMLElement } => {
     const row = el('div', `fr-meter ${cls}`);
     const track = el('span', 'fr-meter-track');
     const fill = el('span', 'fr-meter-fill');
     track.append(fill);
     const value = el('span', 'fr-meter-value');
-    row.append(el('span', 'fr-meter-label', name), track, value);
+    const label = el('span', 'fr-meter-label', name);
+    row.append(label, track, value);
     card.append(row);
-    return { row, fill, value };
+    return { row, fill, value, label };
   };
   const shield = bar('SHIELD', 'fr-meter-shield');
   const hull = bar('HULL', 'fr-meter-hull fr-gauge-hull');
   const energy = bar('ENERGY', 'fr-meter-energy fr-gauge-energy');
   const heat = bar('HEAT', 'fr-meter-heat'); // weapon heat (FR-TD-79)
-  const missile = bar('MISSILE', 'fr-meter-missile'); // missile skill (Combat P03)
+  const missile = bar('PLASMA', 'fr-meter-missile'); // the selected weapon (Combat P03 missile row, P03C: every weapon)
 
   // location + objective
   const location = el('div', 'fr-loc');
@@ -119,6 +142,14 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
   let nearKey = '';
   let noticeId = 0;
   let rootKey = '';
+  let marksKey = '';
+  let marksSerial = -1;
+  let cardLabel = '';
+  let marksSpoken = '';
+  const setCardLabel = (): void => {
+    const t = marksSpoken ? `${cardLabel}, ${marksSpoken}` : cardLabel;
+    if (card.getAttribute('aria-label') !== t) card.setAttribute('aria-label', t);
+  };
   const paint = (b: { row: HTMLElement; fill: HTMLElement; value: HTMLElement }, g: { pct: number; text: string; low: boolean }): void => {
     b.fill.style.width = `${g.pct}%`;
     setText(b.value, g.text);
@@ -145,11 +176,33 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
         paint(heat, c.heat);
         heat.row.classList.toggle('is-overheated', c.weaponState === 'overheated');
         paint(missile, c.missile);
+        setText(missile.label, c.missileLabel);
         missile.row.dataset['state'] = c.missileState;
         missile.row.classList.toggle('is-nudge', c.missileNudge);
         card.classList.toggle('is-boosting', c.boosting);
         card.classList.toggle('is-damaged', c.hull.low);
-        card.setAttribute('aria-label', c.label);
+        cardLabel = c.label;
+        setCardLabel();
+      }
+      const m = f.marks;
+      const mk = m ? `${m.value}|${m.tag}|${m.sign}|${m.spoken}` : '';
+      if (mk !== marksKey) {
+        marksKey = mk;
+        marks.hidden = !m;
+        if (m) {
+          setText(marksValue, m.value);
+          setText(marksTag, m.tag);
+          marksTag.hidden = !m.tag;
+          marks.dataset['sign'] = m.sign;
+          if (marksSpoken !== m.spoken) {
+            marksSpoken = m.spoken;
+            setCardLabel();
+          }
+        }
+      }
+      if (m && m.serial !== marksSerial) {
+        if (marksSerial >= 0 && m.serial > marksSerial) motion.play(marks, 'flash', { channel: 'marks' });
+        marksSerial = m.serial;
       }
       const v = f.view;
       const rk = `${v.critical}|${v.location}|${v.hint}`;
@@ -221,6 +274,7 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
     status() {
       return {
         cargo: cargo.hidden ? '' : cargo.textContent ?? '',
+        marks: marks.hidden ? '' : `${marksValue.textContent ?? ''}${marksTag.hidden ? '' : ` ${marksTag.textContent ?? ''}`}`,
         objective: mission.hidden ? '' : `${mission.dataset['mode'] ?? ''}:${mission.textContent ?? ''}`,
         nearby: nearby.hidden ? null : nearby.textContent,
         notice: notice.hidden ? null : notice.textContent,
@@ -228,6 +282,7 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
         critical: host.dataset['danger'] === 'critical',
         weapon: weapon.textContent ?? '',
         missile: missile.value.textContent ?? '',
+        missileLabel: missile.label.textContent ?? '',
         missileState: missile.row.dataset['state'] ?? '',
       };
     },

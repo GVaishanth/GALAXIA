@@ -15,6 +15,14 @@
  *  - `galaxia:freeroam:slots`  Which Free Roam slot is in use (slot meta).
  *  - `galaxia:freeroam:prefs`  Free Roam settings shared by every slot (flight
  *                        controls); seeded once from slot 1's legacy `controls`.
+ *  - `galaxia:fleet`     Cross-mode ship registry (Combat P03C, modes/crossMode.ts):
+ *                        whether Classic Wave 20 was completed, and once it was,
+ *                        the one authoritative set of unlocked roster ships that
+ *                        every Free Roam slot and Classic's ship selector share.
+ *                        Nothing is written before the milestone.
+ *  - `galaxia:guide`     First-run guide (P04.2 guide, modes/guide/guideState.ts): which
+ *                        guide version was finished or skipped. Per browser, like
+ *                        the shared prefs; never touches progression.
  *  - `<key>:backup`      Raw copy of the most recent damaged or repaired version of
  *                        a record, written before the record is reset / rewritten.
  *  - `<key>:v<N>`        Raw copy of a record as it was at version N, written once
@@ -29,6 +37,8 @@ export const STORAGE_KEYS = Object.freeze({
   freeroam: 'galaxia:freeroam',
   freeroamSlots: 'galaxia:freeroam:slots',
   freeroamPrefs: 'galaxia:freeroam:prefs',
+  fleet: 'galaxia:fleet',
+  guide: 'galaxia:guide',
   probe: 'galaxia:probe',
 });
 

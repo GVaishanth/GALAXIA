@@ -6,6 +6,7 @@ import type { Player } from '../game/types.ts';
 import type { EngineConfig } from '../../config/engine.ts';
 import type { SimContext } from './context.ts';
 import { clamp } from './paths.ts';
+import { gunSelected } from './ordnance.ts';
 import { firePlayer } from './projectiles.ts';
 
 export function newPlayer(cfg: EngineConfig): Player {
@@ -76,8 +77,10 @@ export function playerBounds(cfg: EngineConfig, dual: boolean): [number, number]
 export function updatePlayer(ctx: SimContext, input: InputFrame, controllable: boolean, dtMs: number): void {
   const { world, cfg } = ctx;
   const p = world.player;
+  // Combat P03C: with a missile weapon selected, FIRE belongs to it (ordnance.ts) and the gun rests
+  const gun = gunSelected(world);
   // heat first: it cools whenever the fighter cannot fire (tractored, exploding, between stages)
-  stepHeat(ctx, controllable && p.state === 'alive' && input.fireHeld === true, dtMs);
+  stepHeat(ctx, controllable && p.state === 'alive' && input.fireHeld === true && gun, dtMs);
   if (p.state === 'tractored') return; // driven by capture.ts
   p.prevX = p.x;
   p.prevY = p.y;
@@ -96,7 +99,7 @@ export function updatePlayer(ctx: SimContext, input: InputFrame, controllable: b
   const [lo, hi] = playerBounds(cfg, p.dual);
   p.x = clamp(p.x + p.vx * k, lo, hi);
   if ((p.x === lo && p.vx < 0) || (p.x === hi && p.vx > 0)) p.vx = 0;
-  if (!controllable || world.heat.overheated) return;
+  if (!controllable || world.heat.overheated || !gun) return;
   const h = world.heat;
   if (input.fire) {
     // a press fires at once (the original behaviour); a hold continues after autoIntervalMs

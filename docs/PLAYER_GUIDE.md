@@ -1,0 +1,208 @@
+# GALAXIA Player Guide
+
+This guide covers how to play GALAXIA: both modes, every control, the Hangar, the Armory and Guild marks. The same information is in the game: open **HOW TO PLAY** on the title screen, or from the pause menu during a flight. The in-game version shows your own key bindings.
+
+> **Open testing.** GALAXIA is being prepared for open testing. Automated checks pass, but nobody has playtested this build yet, and it has not been tried on real phones, tablets or game controllers. Please report anything that feels wrong (see [Reporting a problem](#reporting-a-problem)).
+
+**Contents:** [First launch](#first-launch) · [Classic Mode](#classic-mode) · [Free Roam](#free-roam) · [Hangar](#hangar-ships) · [Armory](#armory-weapons) · [Guild marks](#guild-marks-credits) · [Settings](#settings-and-accessibility) · [Saves](#saves) · [Reporting a problem](#reporting-a-problem)
+
+---
+
+## First launch
+
+The title screen offers two modes, **CLASSIC** and **FREE ROAM**. Choose with the arrow keys and press Enter, click a card, or tap one.
+
+### First-run tutorial
+
+The first time you open GALAXIA, a short tutorial appears over the title screen. It has six steps, with a step counter and progress bar:
+
+1. **Welcome:** how Classic and Free Roam differ.
+2. **Ships:** owned, available and locked ships.
+3. **Weapons:** the Armory, weapon fit and the weapon cycle.
+4. **Controls:** for the mode and input you pick (keyboard, touch or controller).
+5. **Guild marks:** Free Roam's currency.
+6. **Start:** play Classic, play Free Roam, or finish.
+
+- **NEXT** and **BACK** move between steps (also ← → or Page Up / Page Down).
+- **SKIP TUTORIAL** (or Esc) closes it. **FINISH**, **PLAY CLASSIC** or **PLAY FREE ROAM** completes it.
+- GALAXIA remembers that you finished or skipped it on this device, so it does not come back on every visit. If a future update changes the core controls, it shows once more.
+- The tutorial never changes your progress, ships, weapons, Guild marks or unlocks. While it is open, nothing you press reaches the game.
+- Opening a mode directly with a `?mode=classic` or `?mode=freeroam` link skips the automatic tutorial.
+
+### HOW TO PLAY (reopen at any time)
+
+Reopening the guide never resets anything.
+
+| Where | How |
+|---|---|
+| Title screen | **HOW TO PLAY** button, H, or Y on a controller |
+| Free Roam flight | Pause → **HOW TO PLAY**. Opens on the controls for your input, with your current keys. The game stays paused until you close it. |
+| Classic | **HOW TO PLAY** on the Classic title or the pause menu. This is Classic's own card: controls and scoring. |
+
+---
+
+## Classic Mode
+
+A fixed-screen arcade shooter. Your fighter slides left and right along the bottom of the screen while alien formations fly in, settle and dive at you. The screen never scrolls.
+
+- **Goal:** clear each wave and chase a high score. The game ends when your last fighter is lost; stages keep counting with no final stage.
+- **Capture and rescue:** a commander can capture your fighter with a tractor beam. Shoot that commander while it dives to free the captive and fly a twin fighter (two ships, two shots). Destroy the commander while it sits in formation and the captive turns hostile.
+- **Challenging Stages:** stage 3 and every fourth stage after it (7, 11, …). Enemies there do not shoot; hitting them all earns a perfect bonus.
+- **Scoring:** enemies are worth more while diving than in formation. Extra fighters come at 20,000 and 70,000 points, then every 70,000.
+- **Heat:** holding fire keeps shooting. A long hold fills the **HEAT** bar until the gun overheats and pauses briefly. Taps and short bursts never overheat it.
+
+### Classic controls
+
+Classic keys are fixed (they cannot be rebound).
+
+| Action | Keyboard | Touch | Controller |
+|---|---|---|---|
+| Move left / right | ← → or A D | Slide along the ◀ ▶ pad below the playfield | Left stick or D-pad |
+| Fire (hold to keep firing) | Space, Z or X | **FIRE** | A or X |
+| Next weapon (only after Wave 20, see below) | Q | Weapon button above **FIRE** | Y |
+| Pause / resume | P or Esc | **II** | Start |
+| Controls and scoring card | — | **i** | — |
+| Mute | M | In SETTINGS | — |
+| Menus | ↑ ↓ and Enter | Tap | D-pad and A; B goes back |
+| Back to the mode select | Esc on the Classic title, or **◀ MENU** | **◀ MENU** | B on the Classic title |
+
+Classic has no boost, zoom or target lock. In Classic, X fires.
+
+### After Wave 20
+
+Completing Wave 20 in Classic (clearing it, not just reaching it) opens two things there, permanently:
+
+- **SHIP** on the Classic title. It lists the roster ships you have unlocked in Free Roam (see [Hangar](#hangar-ships)). The original GALAXIA fighter stays the default.
+- **Weapon switching**, when you fly a roster ship. It brings the starting weapon and cycle set in Free Roam's Armory. Its ammunition refills at the start of every stage.
+
+Before Wave 20, Classic flies the GALAXIA fighter with its single gun, and the next-weapon control does nothing.
+
+---
+
+## Free Roam
+
+An exploration game. You fly in any direction through generated star-system sectors, chart them, salvage, fight, trade and dock at stations. A map links 10 galaxies and 170 systems (real galaxies, stylised and not to scale).
+
+**To start:** Free Roam opens on the map. Choose **ENTER SECTOR**, read the briefing, then **START FLIGHT**. Fly close to a station and dock to repair, trade and visit the Hangar and Armory.
+
+### Flight controls
+
+Keyboard keys are the defaults; you can rebind them under pause → **CONTROLS** (Esc always pauses and cannot be rebound).
+
+| Action | Keyboard and mouse | Touch | Controller |
+|---|---|---|---|
+| Fly in any direction | W A S D or arrow keys | Floating stick: put a finger on open space and drag | Left stick or D-pad |
+| Aim (optional) | Mouse, when CONTROLS → MOUSE AIM is on (off by default) | — | Right stick |
+| Fire (hold; heats the weapon) | Space or J (left mouse button with mouse aim) | **FIRE** | RT, RB or X |
+| Boost (hold; uses energy) | Left or right Shift | **BOOST** | LB or LT |
+| Next weapon | Q or K | Weapon button above **FIRE** | Press the right stick (R3) |
+| Target lock on / off | X | **LOCK**, on the left | — |
+| Next target (only while locked) | C | **»** beside LOCK (shown while locked) | — |
+| Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → CONTROLS → ZOOM | — |
+| Interact (dock, open, inspect, use a gate) | E or Enter | The button that appears in range | A |
+| Sector map | M | **MAP** | Select / View |
+| Cargo hold | I | **CARGO** | Y |
+| Pause | Esc or P | **II** | Start |
+
+- **Next weapon** steps through the cycle you set in the Armory. It never fires.
+- **The mouse wheel only zooms** the camera, smoothly and centred on your ship. It never changes weapons.
+- **Target lock** picks the hostile nearest your nose that is in range and in sight, and marks it with brackets (an arrow at the screen edge if it goes off screen). While locked, your ship's **nose turns to face it. That is all it does:** it never thrusts, chases, dodges or fires. You still steer, boost and shoot yourself.
+- **Next target** moves the lock to the next hostile in range, clockwise around your ship, wrapping round. It never fires or uses ammunition.
+- **The lock ends** when you press X or LOCK again, or when the target is destroyed, leaves range or the sector, or when you dock, leave the sector or are recalled. It never jumps to a new target by itself.
+- On a controller, target lock and next target are not available; use the keyboard or touch.
+
+### Maps, panels and stations
+
+| Action | Keyboard | Mouse or touch | Controller |
+|---|---|---|---|
+| Move between galaxies, systems or menu items | Arrow keys or W A S D | Click or tap | D-pad |
+| Confirm (travel, enter sector, ENGAGE) | Enter or Space | The button | A |
+| Back or cancel | Esc | CANCEL, ◀ MENU or ◀ GALAXIES | B |
+| Switch station tabs | `[` and `]`, or Page Up / Page Down | Tap a tab | X |
+
+The pause menu has RESUME, RESTART FLIGHT, MISSIONS, RECORD, SAVES, CONTROLS, HOW TO PLAY, SOUND, GALAXY MAP and MAIN MENU.
+
+### Travel and staying safe
+
+- Selecting a destination never travels by itself; every jump is confirmed.
+- Jumps burn **reactor cells** (a new pilot starts with 12). If you run short, docking tops up what you need for the next hop, and the maps offer a free emergency jump or a free return home when no route is affordable.
+- Planets and stars pull your ship (only your ship). The pull is always weaker than your engine, so full thrust gets you out.
+- If your ship is destroyed, you are recalled; half your cargo stays in a wreck you can fly back to.
+
+---
+
+## Hangar (ships)
+
+Dock at a station and open the **HANGAR** tab.
+
+- **Inspect:** select a ship card to see its speed, handling, hull, shield, hold and weapons. Inspecting never changes your ship.
+- **Owned ships:** **SELECT SHIP**, then **CONFIRM**. You switch ships while docked.
+- **Available ships:** **ACQUIRE** pays cargo materials from your hold, not Guild marks. **NEED CARGO** means your hold is short.
+- **Locked ships** show the licence they need and your progress.
+
+You start in the **Petrel**. The other ships, with their licence and cost as of this build (the Hangar always shows the current values):
+
+| Ship | Role | Licence | Cost (cargo) |
+|---|---|---|---|
+| Petrel | Explorer | Starting ship | — |
+| Swift | Scout | 1 survey run | 10 hull scrap, 4 reactor cells |
+| Magpie | Salvager | 1 survey run | 12 hull scrap, 10 ice cores |
+| Shrike | Interceptor | 2 survey runs | 10 refined alloy, 14 hull scrap |
+| Condor | Defender | Lantern Gate milestone (explore 15% of the Milky Way) | 18 refined alloy, 20 hull scrap |
+| Albatross | Long-range vessel | Visit the Large Magellanic Cloud | 10 reactor cells, 6 lumen crystals |
+
+Ships you acquire in any Free Roam save slot are also offered in Classic after Wave 20.
+
+## Armory (weapons)
+
+Open the **ARMORY** tab of a docked station, or **ARMORY ▸** in the Hangar. The Armory sells nothing; it sets up the ship you are flying.
+
+- Each weapon card shows the weapon's role, its ammunition and which ships can mount it. Weapons your ship cannot mount stay visible with the reason.
+- **SET AS START:** the weapon selected when you launch.
+- **ADD / REMOVE FROM CYCLE:** what Next weapon steps through. The Plasma Cannon is always in the cycle.
+
+| Weapon | Role | Ammunition | Fits |
+|---|---|---|---|
+| Plasma Cannon | Reliable primary weapon | Unlimited (overheats if held too long) | All ships |
+| Lock-On Missile | Guided attack against one chosen enemy | Uses 30 boost energy, then a cooldown | All ships |
+| Heavy AoE Missile | Direct-fire missile with a large explosion | 4 rounds, refilled free when you dock | Petrel, Shrike, Condor, Albatross |
+| Nuke | Rare, high-impact area weapon that slows time around it | 1 round, refilled free when you dock | Condor, Albatross |
+
+The Lock-On Missile makes its own short lock when fired, separate from the X / LOCK target lock; it aims at your locked target when that target qualifies.
+
+## Guild marks (credits)
+
+Free Roam has one currency, **Guild marks**. Your balance appears on the ship card in flight and on every station screen, like this: `◈ 1,240 MARKS`. A new pilot starts with 0. Classic has no currency, only score.
+
+- **Earn:** mission and contract rewards, selling cargo at a station **EXCHANGE**, clearing an encounter (once each), first discoveries, and small bounties for hostiles you destroy (a limited pool per system).
+- **Spend:** reactor cells, equipment modules and ship upgrades, at stations.
+- **Not paid in marks:** ships (cargo and a licence), travel (reactor cells), and repairs and restocking (free when you dock).
+- **Buying safely:** the first press shows the price, your balance and your balance afterwards. **CONFIRM** pays; **BACK** cancels.
+- **Not enough?** The button stays visible but disabled and shows what is missing, for example `INSUFFICIENT MARKS · Required ◈ 40 MARKS · Available ◈ 3 MARKS · Shortfall ◈ 37 MARKS`.
+- Recent changes to your balance are listed under pause → **RECORD**.
+
+---
+
+## Settings and accessibility
+
+- **Classic SETTINGS:** sound, volume, effects and jingle levels, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
+- **Free Roam:** pause → **CONTROLS** (key bindings, mouse aim, zoom) and pause → **SOUND** (including fullscreen).
+- **Reduced motion** follows your system setting by default and can be changed in SETTINGS.
+- Menus work fully from the keyboard with visible focus; nothing depends on hover.
+- Sound starts only after your first click, tap or key press. The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.
+
+## Saves
+
+- Everything is saved in this browser on this device only: the Classic high score, settings, the three Free Roam save slots (pause → **SAVES**) and whether you have seen the tutorial.
+- Free Roam saves at milestones and every minute of flight, and resumes where you were after a reload.
+- There are no accounts, cloud saves or online leaderboards. Clearing the site's data or using a private window removes your saves.
+- If the browser blocks storage, the game still plays but keeps progress only until the tab closes, and says so on screen.
+
+## Reporting a problem
+
+When you report a bug or a confusing moment, please include:
+
+- the mode (Classic or Free Roam) and, for Classic, the display style;
+- your browser, operating system and device, and whether you used keyboard, mouse, touch or a controller;
+- what you did, what you expected and what happened;
+- any errors from the browser console, and a screenshot for layout problems.

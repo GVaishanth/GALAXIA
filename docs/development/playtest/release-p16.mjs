@@ -112,11 +112,18 @@ const shot = async (p, name) => {
   await p.screenshot({ path: join(SHOTS, `p16-${name}.png`) });
 };
 
+// P04.2 guide: start as a returning player (only the first-run guide record is seeded, and only when absent)
+const SEED_GUIDE = () => {
+  try {
+    if (!localStorage.getItem('galaxia:guide')) localStorage.setItem('galaxia:guide', JSON.stringify({ version: 1, seen: 1, outcome: 'skipped' }));
+  } catch {}
+};
 async function launch(bname, { w = 1366, h = 768, touch = false, dpr = 1 } = {}) {
   const browser = await BT[bname].launch();
   const opts = { viewport: { width: w, height: h }, hasTouch: touch, deviceScaleFactor: dpr };
   if (touch && bname !== 'firefox') opts.isMobile = true;
   const ctx = await browser.newContext(opts);
+  await ctx.addInitScript(SEED_GUIDE);
   await ctx.addInitScript(seedOnce, { 'galaxia:save': CLASSIC });
   const p = await ctx.newPage();
   const errs = [];

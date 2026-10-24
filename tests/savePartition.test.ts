@@ -165,7 +165,7 @@ describe('Free Roam profile (galaxia:freeroam)', () => {
     saveProfile(store, faster.profile);
     const back = loadProfile(store);
     expect(back.status).toBe('ok');
-    expect(back.data).toEqual({ createdAt: 1000, sessions: 1, flightSeconds: 12, beaconsCharted: 2, surveysCompleted: 3, bestSurveyTicks: 3000, currentGalaxy: 'milky-way', visitedGalaxies: ['milky-way'], chartedSystems: [], galaxySurveys: {}, currentSystem: '', visitedSystems: [], sectors: {}, cargo: {}, fleet: STARTER_SAVED_FLEET, lostCargo: null, modules: {}, milestones: [], progression: EMPTY_PROGRESSION, savedAt: 0, resume: null });
+    expect(back.data).toEqual({ createdAt: 1000, sessions: 1, flightSeconds: 12, beaconsCharted: 2, surveysCompleted: 3, bestSurveyTicks: 3000, currentGalaxy: 'milky-way', visitedGalaxies: ['milky-way'], chartedSystems: [], galaxySurveys: {}, currentSystem: '', visitedSystems: [], sectors: {}, cargo: {}, fleet: STARTER_SAVED_FLEET, lostCargo: null, modules: {}, milestones: [], progression: EMPTY_PROGRESSION, savedAt: 0, resume: null, ordnance: { 'heavy-missile': 4, nuke: 1 } });
     expect(startSession(back.data, 5000).createdAt).toBe(1000); // creation time is kept
     expect(profileSummary(back.data)).toBe('SURVEYS 3 · BEST 0:50.0');
   });
@@ -209,7 +209,7 @@ describe('Free Roam profile (galaxia:freeroam)', () => {
     const r = loadProfile(store);
     expect(r.status).toBe('migrated');
     expect(r.writable).toBe(true);
-    expect(r.data).toEqual({ ...v1, version: undefined, currentGalaxy: 'milky-way', visitedGalaxies: ['milky-way'], chartedSystems: [], galaxySurveys: {}, currentSystem: '', visitedSystems: [], sectors: {}, cargo: {}, fleet: STARTER_SAVED_FLEET, lostCargo: null, modules: {}, milestones: [], progression: EMPTY_PROGRESSION, savedAt: 0, resume: null });
+    expect(r.data).toEqual({ ...v1, version: undefined, currentGalaxy: 'milky-way', visitedGalaxies: ['milky-way'], chartedSystems: [], galaxySurveys: {}, currentSystem: '', visitedSystems: [], sectors: {}, cargo: {}, fleet: STARTER_SAVED_FLEET, lostCargo: null, modules: {}, milestones: [], progression: EMPTY_PROGRESSION, savedAt: 0, resume: null, ordnance: { 'heavy-missile': 4, nuke: 1 } });
     saveProfile(store, r.data);
     expect(JSON.parse(store.data.get('galaxia:freeroam')!)).toMatchObject({ version: 10, sessions: 5, currentGalaxy: 'milky-way' });
     expect(loadProfile(store).status).toBe('ok');

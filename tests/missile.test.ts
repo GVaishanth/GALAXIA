@@ -1,7 +1,12 @@
 /**
- * Combat P03: the pilot missile skill (combat/playerMissile.ts), the light-ship
+ * Combat P03: the lock-on missile (combat/playerMissile.ts), the light-ship
  * recovery tuning (combat/families.ts RECOVERY), and their controls / HUD /
  * audio plumbing. Fixed-step simulation only; no DOM, no storage writes.
+ *
+ * Combat P03C: the lock-on is one weapon of the rotation; FIRE fires the
+ * selected weapon, so these runs start with the lock-on selected and PRESS is
+ * FIRE (still one launch per press edge). Its cooldown lives in the arsenal.
+ * The other weapons, switching and dilation are tested in weaponRuntime.test.ts.
  */
 import { describe, expect, it } from 'vitest';
 import { spawnAgent } from '../src/modes/freeroam/combat/ai.ts';
@@ -10,7 +15,7 @@ import { MISSILE, pickTarget } from '../src/modes/freeroam/combat/playerMissile.
 import type { Agent } from '../src/modes/freeroam/combat/state.ts';
 import { damageAgent } from '../src/modes/freeroam/combat/world.ts';
 import { DEFAULT_BINDINGS, rebind, sanitizeBindings } from '../src/modes/freeroam/bindings.ts';
-import { keyboardMissile, padMissile } from '../src/modes/freeroam/input.ts';
+import { keyboardWeapon, padWeapon } from '../src/modes/freeroam/input.ts';
 import { FlightPointers } from '../src/modes/freeroam/pointers.ts';
 import { sectorCue } from '../src/modes/freeroam/audio/frCues.ts';
 import { FR_SOUNDS } from '../src/modes/freeroam/audio/frSounds.ts';
@@ -20,12 +25,16 @@ import { createSectorRun, disposeSectorRun, pauseSector, restartSector, resumeSe
 import { arena } from './helpers/combatProbe.ts';
 
 const NONE: SectorInput = { moveX: 0, moveY: 0 };
-const PRESS: SectorInput = { moveX: 0, moveY: 0, missile: true };
+const PRESS: SectorInput = { moveX: 0, moveY: 0, fire: true };
+/** Plasma + lock-on fitted, the lock-on selected at launch. */
+const LOCK_FIRST = { compatible: ['plasma', 'lock-missile'], rotation: ['plasma', 'lock-missile'], start: 'lock-missile' } as const;
+/** Ticks left on the lock-on's own cooldown. */
+const cd = (r: SectorRun): number => r.arsenal.cooldown['lock-missile'];
 
 /** A calm run at difficulty 1 with the ship still in the middle, nose up (heading 0). */
 function setup(seed = 1): SectorRun {
   const L = arena(1);
-  const r = createSectorRun(L, { ...EMPTY_SECTOR_SAVE, surveyed: true }, { seed });
+  const r = createSectorRun(L, { ...EMPTY_SECTOR_SAVE, surveyed: true }, { seed, loadout: LOCK_FIRST });
   r.grace = 100_000; // no enemy fire: these tests are about the missile
   const cx = L.width / 2;
   const cy = L.height / 2;
@@ -73,7 +82,8 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     ev = run(r, 1, NONE, [a]);
     expect(count(ev, 'missileLaunched')).toBe(1);
     expect(r.missiles).toHaveLength(1);
-    expect(r.missile.state).toBe('cooldown');
+    expect(r.missile.state).toBe('ready'); // the acquisition is over; the cooldown runs in the arsenal
+    expect(cd(r)).toBe(MISSILE.cooldownTicks);
     expect(r.energy).toBeLessThanOrEqual(e0 - MISSILE.energy + 1e-6);
     // it travels visibly (several ticks), never teleports
     const m = r.missiles[0]!;
@@ -90,11 +100,11 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     expect(before - ehp(a)).toBeCloseTo(MISSILE.damage, 5); // one impact, one damage
     expect(r.missiles).toHaveLength(0);
     // cooldown runs from launch; ready exactly once afterwards
-    const left = r.missile.cooldown;
+    const left = cd(r);
     expect(left).toBeGreaterThan(0);
     ev = run(r, left, NONE, [a]);
     expect(count(ev, 'missileReady')).toBe(1);
-    expect(r.missile.state).toBe('ready');
+    expect(cd(r)).toBe(0);
   });
 
   it('no valid target: refused with feedback, nothing consumed (behind, outside the cone, out of range, none)', () => {
@@ -107,7 +117,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
       expect(ev.find((e) => e.type === 'missileRefused')).toMatchObject({ reason: 'noTarget' });
       expect(r.missile.state).toBe('ready');
       expect(r.missile.notice).toBe('noTarget');
-      expect(r.missile.cooldown).toBe(0);
+      expect(cd(r)).toBe(0);
       expect(r.energy).toBeCloseTo(e0, 5);
       expect(r.missiles).toHaveLength(0);
     }
@@ -136,7 +146,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     ev = run(r, MISSILE.lockTicks, NONE, [a]);
     expect(ev.find((e) => e.type === 'missileRefused')).toMatchObject({ reason: 'lowEnergy' });
     expect(r.missiles).toHaveLength(0);
-    expect(r.missile.cooldown).toBe(0);
+    expect(cd(r)).toBe(0);
   });
 
   it('the lock is lost (nothing consumed) when the target dies, leaves the keep range or the keep cone', () => {
@@ -174,7 +184,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     expect(a.hull).toBe(hull);
   });
 
-  it('two ships overlapping on its path: exactly one impact, on the nearest, damage once', () => {
+  it('two ships overlapping on its path: exactly one impact, on the nearest, damage once; the small blast reaches the other once', () => {
     const r = setup();
     const near = foe(r, 'heavy', 0, -300);
     const far = foe(r, 'heavy', 0, -312); // radii overlap along the path
@@ -182,8 +192,11 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     const f0 = ehp(far);
     const ev = run(r, MISSILE.lockTicks + 90, PRESS, [near, far]);
     expect(count(ev, 'missileHit')).toBe(1);
-    expect(n0 - ehp(near) + (f0 - ehp(far))).toBeCloseTo(MISSILE.damage, 5);
-    expect(n0 - ehp(near)).toBeCloseTo(MISSILE.damage, 5);
+    expect(count(ev, 'detonation')).toBe(1);
+    expect(n0 - ehp(near)).toBeCloseTo(MISSILE.damage, 5); // the struck ship takes the impact only, never the blast too
+    const blast = f0 - ehp(far);
+    expect(blast).toBeGreaterThan(0);
+    expect(blast).toBeLessThanOrEqual(9 + 1e-6); // catalogue lock-on blast damage (centre)
   });
 
   it('wary ships are never picked, and the missile passes through a wary ship it was not aimed at', () => {
@@ -223,7 +236,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     expect(ehp(a)).toBe(h0);
     // the sector edge
     const r2 = setup();
-    r2.missiles.push({ id: 1, x: 3, y: r2.ship.y, px: 4, py: r2.ship.y, vx: -400, vy: 0, speed: 400, life: 100, target: null });
+    r2.missiles.push({ id: 1, weapon: 'lock-missile', x: 3, y: r2.ship.y, px: 4, py: r2.ship.y, vx: -400, vy: 0, speed: 400, life: 100, target: null });
     ev = run(r2, 1);
     expect(r2.missiles).toHaveLength(0);
     expect(count(ev, 'missileExpired')).toBe(1);
@@ -268,21 +281,22 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     run(r, MISSILE.lockTicks + 1, PRESS, [a]);
     run(r, 5, NONE, [a]);
     const m = { ...r.missiles[0]! };
-    const cd = r.missile.cooldown;
+    const c0 = cd(r);
     pauseSector(r);
     for (let i = 0; i < 100; i++) expect(stepSector(r, PRESS)).toEqual([]);
     expect(r.missiles[0]).toMatchObject({ x: m.x, y: m.y, life: m.life });
-    expect(r.missile.cooldown).toBe(cd);
+    expect(cd(r)).toBe(c0);
     resumeSector(r);
     run(r, 1, NONE, [a]);
-    expect(r.missile.cooldown).toBe(cd - 1);
+    expect(cd(r)).toBe(c0 - 1);
     restartSector(r);
     expect(r.missiles).toHaveLength(0);
     expect(r.missile.state).toBe('ready');
-    expect(r.missile.cooldown).toBe(0);
+    expect(cd(r)).toBe(c0 - 1); // P03C: a restart never refunds a cooldown (no reset exploit)
     r.ship.heading = 0; // the restart faces the arrival heading; point the nose up again
     const b = foe(r, 'heavy', 0, -400);
     r.grace = 100_000;
+    run(r, cd(r), NONE, [b]);
     run(r, MISSILE.lockTicks + 1, PRESS, [b]);
     expect(r.missiles).toHaveLength(1);
     disposeSectorRun(r);
@@ -294,7 +308,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
     const r = setup();
     const e = foe(r, 'elite', 0, -300);
     Object.assign(e, { state: 'attack', evadeCooldown: 0, target: 'player' });
-    r.missiles.push({ id: 99, x: e.x, y: e.y + 120, px: e.x, py: e.y + 125, vx: 0, vy: -400, speed: 400, life: 60, target: e.id });
+    r.missiles.push({ id: 99, weapon: 'lock-missile', x: e.x, y: e.y + 120, px: e.x, py: e.y + 125, vx: 0, vy: -400, speed: 400, life: 60, target: e.id });
     run(r, 1);
     expect(e.state).toBe('evade');
     const r2 = setup();
@@ -321,10 +335,16 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
 
 describe('light-ship recovery tuning (RECOVERY, FR-TD-85)', () => {
   const BASE: Record<FamilyId, number> = { raider: 120, picket: 150, lancer: 150, heavy: 180, recon: 120, hauler: 180, elite: 150, capital: 240 };
-  it('only light families (threat <= 2) wait longer to recharge; heavy, elite and capital are unchanged', () => {
+  // base table values (combat/families.ts) before the light-tier rule
+  const REGEN: Record<FamilyId, number> = { raider: 0, picket: 3, lancer: 4, heavy: 5, recon: 4, hauler: 3, elite: 8, capital: 6 };
+  const EVADE: Record<FamilyId, number> = { raider: 0.25, picket: 0.15, lancer: 0, heavy: 0, recon: 0.4, hauler: 0, elite: 0.2, capital: 0 };
+  it('only light families (threat <= 2) recover less (delay x3, rate x0.5, evade x0.6, P03C); heavy, elite and capital are unchanged', () => {
+    expect(RECOVERY).toMatchObject({ lightThreat: 2, lightRegenDelayMul: 3, lightRegenMul: 0.5, lightEvadeMul: 0.6 });
     for (const f of Object.keys(BASE) as FamilyId[]) {
       const light = FAMILIES[f].threat <= RECOVERY.lightThreat;
       expect(FAMILIES[f].regenDelay, f).toBe(light ? BASE[f] * RECOVERY.lightRegenDelayMul : BASE[f]);
+      expect(FAMILIES[f].shieldRegen, f).toBeCloseTo(light ? REGEN[f] * RECOVERY.lightRegenMul : REGEN[f], 9);
+      expect(FAMILIES[f].evadeChance, f).toBeCloseTo(light ? EVADE[f] * RECOVERY.lightEvadeMul : EVADE[f], 9);
     }
     expect(['heavy', 'elite', 'capital'].every((f) => FAMILIES[f as FamilyId].threat > RECOVERY.lightThreat)).toBe(true);
   });
@@ -338,26 +358,28 @@ describe('light-ship recovery tuning (RECOVERY, FR-TD-85)', () => {
     expect(p.shield).toBe(0);
     run(r, 6 + 300, NONE, [p]);
     expect(p.shield).toBeGreaterThan(0);
+    run(r, 60 * 60, NONE, [p]);
+    expect(p.shield).toBe(p.maxShield); // slower, never capped below full
     expect(p.hull).toBe(hull);
   });
 });
 
 describe('missile controls, HUD and audio', () => {
-  it('Missile is a rebindable flight action (Q / K by default) and the pad uses R3', () => {
+  it('NEXT WEAPON (binding id `missile`, kept for saved bindings) is rebindable (Q / K by default) and the pad uses R3', () => {
     expect(DEFAULT_BINDINGS.missile).toEqual(['KeyQ', 'KeyK']);
-    expect(keyboardMissile(new Set(['KeyQ']))).toBe(true);
-    expect(keyboardMissile(new Set(['KeyF']))).toBe(false);
+    expect(keyboardWeapon(new Set(['KeyQ']))).toBe(true);
+    expect(keyboardWeapon(new Set(['KeyF']))).toBe(false);
     const r = rebind(DEFAULT_BINDINGS, 'missile', 0, 'KeyF');
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(keyboardMissile(new Set(['KeyF']), r.bindings)).toBe(true);
-      expect(keyboardMissile(new Set(['KeyQ']), r.bindings)).toBe(false);
+      expect(keyboardWeapon(new Set(['KeyF']), r.bindings)).toBe(true);
+      expect(keyboardWeapon(new Set(['KeyQ']), r.bindings)).toBe(false);
     }
     const pressed: boolean[] = [];
-    expect(padMissile({ axes: [], pressed })).toBe(false);
+    expect(padWeapon({ axes: [], pressed })).toBe(false);
     pressed[11] = true;
-    expect(padMissile({ axes: [], pressed })).toBe(true);
-    expect(padMissile(null)).toBe(false);
+    expect(padWeapon({ axes: [], pressed })).toBe(true);
+    expect(padWeapon(null)).toBe(false);
   });
 
   it('older saves gain the missile action without a repair and without losing any key', () => {
@@ -378,24 +400,24 @@ describe('missile controls, HUD and audio', () => {
     expect(s2.bindings.missile).toEqual(['KeyF', null]);
   });
 
-  it('the MSL touch button presses once per touch; a second finger and holding never repeat; release clears', () => {
+  it('the WPN touch button presses once per touch; a second finger and holding never repeat; release clears', () => {
     const p = new FlightPointers();
-    p.missileDown(5);
-    expect(p.missileHeld).toBe(true);
-    expect(p.takeMissilePress()).toBe(true);
-    expect(p.takeMissilePress()).toBe(false);
-    p.missileDown(6);
-    expect(p.takeMissilePress()).toBe(false);
+    p.weaponDown(5);
+    expect(p.weaponHeld).toBe(true);
+    expect(p.takeWeaponPress()).toBe(true);
+    expect(p.takeWeaponPress()).toBe(false);
+    p.weaponDown(6);
+    expect(p.takeWeaponPress()).toBe(false);
     p.release(5);
     p.release(6);
-    expect(p.missileHeld).toBe(false);
+    expect(p.weaponHeld).toBe(false);
     p.stickDown(7, 0, 0);
-    p.missileDown(7); // the stick finger never becomes a missile press
-    expect(p.takeMissilePress()).toBe(false);
+    p.weaponDown(7); // the stick finger never becomes a weapon press
+    expect(p.takeWeaponPress()).toBe(false);
   });
 
-  it('the MISSILE row says the state in text: READY, LOCK, AWAY, seconds, results; refusals take the row; a cooldown press nudges', () => {
-    const base = { lock: 0, lockTicks: 30, cooldown: 0, cooldownTicks: 720, inFlight: false, notice: null } as const;
+  it('the lock-on row says the state in text: READY, LOCK, AWAY, seconds, results; refusals take the row; a cooldown press nudges', () => {
+    const base = { label: 'LOCK-ON', feed: 'energy', stock: 0, capacity: 0, gate: 'ok', lock: 0, lockTicks: 30, cooldown: 0, cooldownTicks: 720, inFlight: false, notice: null } as const;
     const steady = [
       missileGauge({ ...base, state: 'ready' }, false),
       missileGauge({ ...base, state: 'acquiring', lock: 15 }, false),
@@ -426,13 +448,16 @@ describe('missile controls, HUD and audio', () => {
     const ctx = { shieldBefore: 0, shieldAfter: 0 };
     const cues = [
       sectorCue({ type: 'missileLock', hostile: 1, x: 0, y: 0 }, ctx),
-      sectorCue({ type: 'missileLaunched', hostile: 1, x: 0, y: 0 }, ctx),
-      sectorCue({ type: 'missileHit', hostile: 1, x: 0, y: 0, damage: 18, killed: false }, ctx),
-      sectorCue({ type: 'missileRefused', reason: 'noTarget' }, ctx),
+      sectorCue({ type: 'missileLaunched', weapon: 'lock-missile', hostile: 1, x: 0, y: 0 }, ctx),
+      sectorCue({ type: 'missileHit', weapon: 'lock-missile', hostile: 1, x: 0, y: 0, damage: 18, killed: false }, ctx),
+      sectorCue({ type: 'missileRefused', weapon: 'lock-missile', reason: 'noTarget' }, ctx),
       sectorCue({ type: 'missileLockLost' }, ctx),
-      sectorCue({ type: 'missileReady' }, ctx),
+      sectorCue({ type: 'missileReady', weapon: 'lock-missile' }, ctx),
+      sectorCue({ type: 'weaponSwitched', weapon: 'heavy-missile' }, ctx),
+      sectorCue({ type: 'detonation', weapon: 'heavy-missile', x: 0, y: 0, r: 96, hits: 0, kills: 0 }, ctx),
+      sectorCue({ type: 'detonation', weapon: 'nuke', x: 0, y: 0, r: 300, hits: 0, kills: 0 }, ctx),
     ];
     for (const c of cues) expect(c && FR_SOUNDS[c]).toBeDefined();
-    expect(sectorCue({ type: 'missileHit', hostile: 1, x: 0, y: 0, damage: 18, killed: true }, ctx)).toBeNull();
+    expect(sectorCue({ type: 'missileHit', weapon: 'lock-missile', hostile: 1, x: 0, y: 0, damage: 18, killed: true }, ctx)).toBeNull();
   });
 });

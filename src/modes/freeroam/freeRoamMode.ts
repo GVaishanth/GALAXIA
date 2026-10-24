@@ -40,16 +40,16 @@ import { MenuList } from '../../shared/ui/menuList.ts';
 import type { GameMode, ModeContext, ModeDebug, ModeLifecycle, PauseReason } from '../types.ts';
 import type { GalaxyId } from './catalogue/types.ts';
 import { ACTION_LABEL, actionKeys, clearBinding, DEFAULT_BINDINGS, FLIGHT_ACTIONS, keyLabel, rebind, RESERVED_KEYS, trackedCodes, type Bindings, type FlightAction } from './bindings.ts';
-import { cameraView, cameraZoom, clampCamera, clientToDevice, screenToWorld, snapCamera, stepCamera, stepFraming, stepZoom, worldToScreen, type CameraState, type CameraView } from './camera.ts';
+import { cameraView, cameraZoom, clampCamera, clientToDevice, easeZoom, screenToWorld, snapCamera, stepCamera, stepFraming, stepZoom, wheelZoom, worldToScreen, type CameraState, type CameraView } from './camera.ts';
 import { SIMULATION_NOTE } from './catalogue/index.ts';
 import { createGalaxyMap, type GalaxyMapScreen, type MapStatus } from './galaxy/galaxyMapScreen.ts';
 import { buildNavGraph, type NavGraph } from './galaxy/graph.ts';
 import { applySurvey, applyTravel, deriveView, describeRequirement, progressDiff, progressFromSaved, type ExplorationProgress, type SurveyResult } from './galaxy/progress.ts';
 import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMapStatus } from './galaxy/systemMapScreen.ts';
-import { applySystemTravel, deriveSystemView, HAZARD_LABEL, type SystemTravelResult } from './galaxy/systems.ts';
-import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardMissile, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padMissile, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
+import { applySystemTravel, deriveSystemView, HAZARD_LABEL, systemGraph, type SystemTravelResult } from './galaxy/systems.ts';
+import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
-import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withFleet, withMilestone, withModules, withNavigation, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
+import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
 import { auditProfile, auditText } from './saveAudit.ts';
 import { createSavesPanel, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
@@ -64,18 +64,19 @@ import { createInventoryPanel, type InventoryPanel } from './inventory/ui/invent
 import { COMBAT } from './combat/difficulty.ts';
 import { FACTIONS } from './combat/factions.ts';
 import { combatHud, type CombatHudModel } from './combat/hudModel.ts';
-import { MISSILE } from './combat/playerMissile.ts';
+import { gateOf, MISSILE } from './combat/playerMissile.ts';
 import { spawnAgent } from './combat/ai.ts';
 import type { FamilyId } from './combat/families.ts';
 import { createCombatHud, type CombatHudView } from './combatHud.ts';
 import { sectorContext } from './sector/context.ts';
 import { generateSector } from './sector/generate.ts';
 import { stackFlightHud } from './ui/hudStack.ts';
+import { shipLockLine } from './combat/shipLock.ts';
 import { EMPTY_SECTOR_SAVE, POI_RULES, RARE_RESOURCES, type LootEntry, type SectorLayout } from './sector/model.ts';
-import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Wreck } from './sector/render.ts';
+import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Shockwave, type Wreck } from './sector/render.ts';
 import type { LabShell, LabStatus } from './gravity/labShell.ts';
-import { applyShip, canSwitchShip, createSectorRun, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
-import { upgradedShip, cleanLevels, type UpgradeLevels } from './ships/upgrades.ts';
+import { applyShip, canSwitchShip, createSectorRun, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
+import { upgradedShip, cleanLevels, LEVEL_NAME, UPGRADE_BY_TRACK, type UpgradeLevels, type UpgradeTrack } from './ships/upgrades.ts';
 import { createEventBus, type GameEvent } from './progression/events.ts';
 import { sectorGameEvents } from './progression/fromSector.ts';
 import { abandonMission, acceptMission, consumeEvent, galaxyOf, type MissionWorld, type PrereqContext } from './progression/missions.ts';
@@ -85,25 +86,34 @@ import { stationBoard } from './progression/contracts.ts';
 import { buildMissionWorld } from './progression/missionWorld.ts';
 import type { Wallet } from './progression/economy.ts';
 import { burnCells, cellsHeld, emergencyCells, emergencyJumpTarget, FUEL, galaxyJumpCells, homeJumpDue, hopCells, routeCells } from './progression/fuel.ts';
-import { discoveryEntries, explorationStats, recordEvent } from './progression/discovery.ts';
-import { progressionFromSaved, progressionToSaved, type ProgressionState } from './progression/persistence.ts';
+import { discoveryEntries, explorationStats, recordEvent, type ExplorationLog } from './progression/discovery.ts';
+import { ledgerOf, progressionFromSaved, progressionToSaved, withLedger, type ProgressionState } from './progression/persistence.ts';
+import { award, formatDelta, formatMarks, groupDigits, MARKS, record, spokenMarks, tickerValue, type EntryKind } from './progression/ledger.ts';
+import { bountyClaim, bountyLeft, bountyRefillIn, eventClaim, REWARDS, type MarksClaim } from './progression/marksRewards.ts';
 import { claimReward, deliver, grantCells, rewardChartTargets } from './progression/station.ts';
 import { missionsModel, missionTargets, trackedObjective } from './progression/view.ts';
 import { createMissionsPanel, type MissionsPanel } from './progression/ui/missionsPanel.ts';
 import { createExchangePanel, type ExchangePanel } from './progression/ui/exchangePanel.ts';
 import { createUpgradesPanel, type UpgradesPanel } from './progression/ui/upgradesPanel.ts';
 import { createRecordPanel, type RecordPanel } from './progression/ui/recordPanel.ts';
-import { cargoUsed, fleetFromSaved, fleetToSaved, loadoutOf, type FleetState } from './ships/hangar.ts';
+import { classicRecordShowsGate, FLEET_SPEC, mergeOwned, recordOwned } from '../crossMode.ts';
+import type { GuideInput } from '../guide/guideContent.ts';
+import { GuideDialog } from '../guide/guideDialog.ts';
+import { parseRecord } from '../../shared/persistence/record.ts';
+import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, type FleetState } from './ships/hangar.ts';
 import { createHangarPanel, type HangarPanel, type HangarStatus } from './ships/hangarPanel.ts';
-import { SHIP_BY_ID } from './ships/roster.ts';
+import { createArmoryPanel, type ArmoryPanel, type ArmoryStatus } from './ships/armoryPanel.ts';
+import { armedLoadout, compatibleWeapons, type ArmedLoadout } from './ships/armory.ts';
+import { restockOrdnance, WEAPON_BY_ID, type WeaponId as PilotWeaponId } from '../../config/weapons.ts';
+import { SHIP_BY_ID, SHIPS } from './ships/roster.ts';
 import type { DerivedShip, ShipId } from './ships/types.ts';
 import { freshShip, type FreeRoamPhase, type ShipState } from './sim.ts';
 import { EQUIPMENT_BY_ID } from './ships/equipment.ts';
 import { ENGINE_LOOP, FR_SOUNDS, type FrSoundId } from './audio/frSounds.ts';
 import { engineLevel, momentCue, sectorCue, type HitContext, type MomentCue } from './audio/frCues.ts';
 import type { VolumeBus } from './audio/audioSettings.ts';
-import { createFlightHud, type FlightHud } from './ui/flightHud.ts';
-import { cargoText, hudView, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type PoiCandidate } from './ui/hudModel.ts';
+import { createFlightHud, type FlightHud, type MarksReadout } from './ui/flightHud.ts';
+import { cargoText, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
 import { clearNotices, EMPTY_NOTICES, flushNotices, noticeLine, pushNotice, tickNotices, type Notice, type NoticeKind, type NoticeState } from './ui/notices.ts';
 import { browserAnimate, createMotion, type Motion } from './ui/motion.ts';
 import { createStationPanel, type StationPanel as StationHub } from './ui/stationPanel.ts';
@@ -112,8 +122,15 @@ import { createEquipmentPanel, type EquipmentPanel } from './ui/equipmentPanel.t
 import { createRecoveryPanel, type RecoveryPanel } from './ui/recoveryPanel.ts';
 import { armingDelayMs, InputArming } from './ui/panelArming.ts';
 import { createSoundPanel, type SoundPanel } from './ui/soundPanel.ts';
+import { isEditableTarget } from '../../input/keyboard.ts';
+import type { ResumeAt } from './sector/resume.ts';
+import { createSequenceDetector, takeAdminRequest } from './admin/activation.ts';
+import { createAdminPanel, type AdminPanel, type AdminPanelDeps } from './admin/adminPanel.ts';
+import { createAdminLogin, type AdminLogin, type AdminLoginStatus } from './admin/loginScreen.ts';
+import { navigatorGalaxies, navigatorSystems } from './admin/navigator.ts';
+import { ADMIN_HOME, adminArrive, adminFleet, adminOnlyShips, adminSelectShip, beginAdmin, DESTINATION_TEXT, isAdmin, mayPersist, resolveDestination, stationApproach, travelCost, unlimitedAmmo, type AdminSession, type DestinationRef } from './admin/session.ts';
 
-type Panel = 'briefing' | 'pause' | 'complete' | 'gate' | 'sectormap' | 'cargo' | 'controls' | 'hangar' | 'fabricator' | 'missions' | 'exchange' | 'upgrades' | 'record' | 'station' | 'equipment' | 'sound' | 'recovery' | null;
+type Panel = 'briefing' | 'pause' | 'complete' | 'gate' | 'sectormap' | 'cargo' | 'controls' | 'hangar' | 'armory' | 'fabricator' | 'missions' | 'exchange' | 'upgrades' | 'record' | 'station' | 'equipment' | 'sound' | 'recovery' | null;
 /** Prompt 11 panels opened from the hangar (docked) or the pause menu (log only). */
 type Screen = 'map' | 'systems' | 'flight';
 /** Where "back to the map" goes after a survey run: the map the run was started from. */
@@ -144,8 +161,22 @@ export interface SectorStatus {
   readonly vibrations: number;
   readonly shaking: boolean;
   readonly kills: number;
-  /** Combat P03: the missile skill (state, lock, cooldown ticks, notice, launches / hits this visit) and missiles in flight. */
+  /** Combat P03: the lock-on acquisition (state, lock, the lock-on cooldown ticks, notice, launches / hits this visit) and missiles in flight. */
+  /** P04.1 ship target lock: the locked hostile id, the last notice, locks this visit. */
+  readonly shipLock: { readonly target: number | null; readonly notice: string | null; readonly acquired: number; readonly switched: number };
   readonly missile: { readonly state: string; readonly target: number | null; readonly lock: number; readonly cooldown: number; readonly notice: string | null; readonly launches: number; readonly hits: number; readonly inFlight: number };
+  /** Combat P03C: the arsenal (selection, rotation, per-weapon cooldown ticks, stocked ammunition, fire check of the selection), dilation zones and slowed ships. */
+  readonly weapons: {
+    readonly selected: string;
+    readonly rotation: readonly string[];
+    readonly compatible: readonly string[];
+    readonly cooldowns: Readonly<Record<string, number>>;
+    readonly ammo: Readonly<Record<string, number>>;
+    readonly gate: string;
+    readonly inFlight: readonly string[];
+    readonly zones: number;
+    readonly slowed: number;
+  } | null;
   readonly hostileList: readonly {
     readonly id: number;
     readonly family: string;
@@ -199,12 +230,12 @@ export interface InputStatus {
   readonly aim: { readonly x: number; readonly y: number } | null;
   readonly fire: boolean;
   readonly boost: boolean;
-  /** Missile key / R3 / MSL held (Combat P03). */
-  readonly missile: boolean;
+  /** NEXT WEAPON key / R3 / WPN held (Combat P03C; the MISSILE key of P03). */
+  readonly weaponKey: boolean;
   readonly stickActive: boolean;
   readonly fireTouches: number;
   readonly boostTouches: number;
-  readonly missileTouches: number;
+  readonly weaponTouches: number;
   readonly mouseFire: boolean;
   readonly keys: readonly string[];
 }
@@ -245,6 +276,12 @@ export interface FreeRoamStatus {
   readonly fleet: () => FleetState;
   readonly craft: () => DerivedShip;
   readonly hangar: () => HangarStatus;
+  /* Combat P03B */
+  readonly armory: () => ArmoryStatus;
+  /** The flown ship's weapons as combat will read them (compatible, cycle, start). */
+  readonly loadout: () => ArmedLoadout;
+  /** Saved ammunition counts. */
+  readonly ordnance: () => Readonly<Record<string, number>>;
   /* Prompt 10 */
   readonly inventory: () => ReturnType<InventoryPanel['status']>;
   readonly fabricator: () => ReturnType<FabricatorPanel['status']>;
@@ -258,6 +295,10 @@ export interface FreeRoamStatus {
   /** Prompt 12: presentation state (HUD, notices, motion, station hub, sound). */
   readonly ui: () => Readonly<Record<string, unknown>>;
   readonly fuel: () => { readonly held: number; readonly emergency: number; readonly homeDue: boolean; readonly emergencyJump: string | null };
+  /** P04: the Admin Access session (read only; null when inactive). There is deliberately no way to start one from here. */
+  readonly admin: () => { readonly from: string; readonly owned: readonly string[]; readonly panel: ReturnType<AdminPanel['status']> | null } | null;
+  /** P04: the hidden login screen while it exists (null otherwise). */
+  readonly adminLogin: () => AdminLoginStatus | null;
   /** Orientation changes seen (each one pauses flight and releases every input). */
   orientationChanges: number;
   /** The shared viewport owner's state (TD-72 / FR-TD-73: same object type as Classic's `shell`). */
@@ -272,6 +313,14 @@ export interface FreeRoamStatus {
    * Part of the test hook object, so it exists only in builds with __GALAXIA_TEST_HOOKS__ (never in a release).
    */
   readonly qaSpawn: (family: FamilyId, dx: number, dy: number) => number | null;
+  /** Economy pass: the wallet as stored (read only): balance, recent history, duplicate-id count, bounty book, lane hops. */
+  readonly economy: () => { readonly marks: number; readonly history: readonly { readonly kind: string; readonly label: string; readonly delta: number; readonly balance: number; readonly refunded?: boolean }[]; readonly recent: number; readonly bounty: Readonly<Record<string, { readonly paid: number; readonly since: number }>>; readonly jumps: number; readonly fx: number };
+  /**
+   * Economy QA only: stage a balance (browser checks of affordable / insufficient states) or publish one gameplay
+   * event through the normal bus (reward hooks end to end). Test hook object only: absent from release builds.
+   */
+  readonly qaMarks: (n: number) => boolean;
+  readonly qaEvent: (e: GameEvent) => void;
   /** FR-TD-86: the planet / star pull on the ship this tick and the sector's wells (read only). */
   readonly gravity: () => {
     readonly x: number;
@@ -298,6 +347,11 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
   if (text !== undefined) n.textContent = text;
   return n;
 }
+
+/** P04: the ship rows of the admin panel. */
+type AdminShipRowList = ReturnType<AdminPanelDeps['ships']>;
+/** P04: short stat labels for the admin ship list (the hangar's numbers, formatted by formatStat). */
+const STAT_LABEL = Object.freeze({ hull: 'Hull', shield: 'Shield', maxSpeed: 'Top speed', cargo: 'Cargo', travel: 'Drive charge' });
 
 function randomSeed(): number {
   const a = new Uint32Array(1);
@@ -353,10 +407,24 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let pendingResume: ResumePoint | null = null;
   /** The active sector started at a saved resume point (the briefing says so). */
   let resumedAt = false;
+  /** P04: the active sector started beside its station (an admin station arrival). */
+  let besideStation = false;
   let saves: SavesPanel;
+  /** P04.2 guide: HOW TO PLAY from the pause menu (modal over it, like the save slots panel). */
+  let guide: GuideDialog | null = null;
   let savesBtn: HTMLButtonElement;
   let savesReturn: HTMLElement | null = null;
   let status: FreeRoamStatus;
+  /** P04: the Admin Access session (runtime only, never saved; null = ordinary play) and its panel,
+   *  built on the first activation only (ordinary players never have it in the page). */
+  let admin: AdminSession | null = null;
+  let adminPanel: AdminPanel | null = null;
+  let adminReturn: HTMLElement | null = null;
+  /** P04: the hidden login screen while it is up (everything else in the mode is inert underneath). */
+  let adminLogin: AdminLogin | null = null;
+  let loginInert: (readonly [HTMLElement, boolean])[] = [];
+  let loginReturn: HTMLElement | null = null;
+  const adminKeys = createSequenceDetector();
 
   /** Map / panel / flight keys; the flight part follows the player's bindings (setCodes on rebind). */
   /** Full-hold choice shortcuts (only while a choice is open, and only when the key is not bound to a flight action). */
@@ -372,8 +440,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let view: CameraView = { x: 0, y: 0, zoom: 1, width: 1, height: 1 };
   let viewRatio = 1;
   const bursts: Burst[] = [];
+  const waves: Shockwave[] = [];
   const wrecks: Wreck[] = [];
-  const NO_INPUT: InputStatus = { moveX: 0, moveY: 0, aim: null, fire: false, boost: false, missile: false, stickActive: false, fireTouches: 0, boostTouches: 0, missileTouches: 0, mouseFire: false, keys: [] };
+  const NO_INPUT: InputStatus = { moveX: 0, moveY: 0, aim: null, fire: false, boost: false, weaponKey: false, stickActive: false, fireTouches: 0, boostTouches: 0, weaponTouches: 0, mouseFire: false, keys: [] };
   /** Owned ships and loadouts (validated against the roster), and the derived ship flown. */
   let fleet: FleetState;
   let craft: DerivedShip;
@@ -381,7 +450,22 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** Overheat rattle start (performance.now ms), or null; phone vibrations requested (FR-TD-79). */
   let shakeStart: number | null = null;
   let vibrations = 0;
-  let wheelAcc = 0;
+  /* P04.1 wheel zoom: the wheel (and a trackpad pinch) moves controls.zoom continuously and the camera's
+     displayed zoom eases after it; the + / - keys and the CONTROLS buttons step it at once, as before.
+     The saved preference is written once the wheel has been still for ZOOM_SAVE_MS, never per event. */
+  let shownZoom = Number.NaN;
+  let zoomSaveAt: number | null = null;
+  const ZOOM_SAVE_MS = 400;
+  /**
+   * P04.1 polish: a transition (new sector, restart, recovery) shows the pilot's saved zoom at once: a
+   * wheel change still waiting is saved, its easing is finished and the combat framing of the last fight
+   * is dropped (the next fight eases out again). Called at those transitions only, never per frame.
+   */
+  const settleZoom = (): void => {
+    if (zoomSaveAt !== null) setControls({ zoom: controls.zoom });
+    shownZoom = controls.zoom;
+    framing = 1;
+  };
   /** Controls panel: the slot waiting for a key, and the panel to return to. */
   let capture: { action: FlightAction; slot: 0 | 1 } | null = null;
   let controlsReturn: Panel = 'pause';
@@ -457,21 +541,63 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (fireBtn.textContent !== label) fireBtn.textContent = label;
   };
   let boostBtn: HTMLButtonElement;
-  /* missile skill (Combat P03): the MSL touch button, and a press waiting for the next simulated tick */
+  /* weapons (Combat P03C): the WPN touch button above FIRE (tap = next weapon, never fires), and edge
+     commands waiting for the next simulated tick: one weapon step, and a FIRE press shorter than a frame */
   let missileBtn: HTMLButtonElement;
-  let missilePending = false;
-  let padMissileWas = false;
+  /* P04.1: the LOCK touch button (left side; tap = toggle the ship target lock) and its latched press */
+  let lockBtn: HTMLButtonElement;
+  let lockPending = false;
+  /** P04.1 polish: NEXT TARGET (C / the touch button beside LOCK), one step per press, only while locked. */
+  let targetBtn: HTMLButtonElement;
+  let targetPending = false;
+  let cyclePending: 1 | -1 | 0 = 0;
+  let firePending = false;
+  let padWeaponWas = false;
+  let padFireWas = false;
   const paintMissileBtn = (r: SectorRun, touches: number): void => {
-    const m = r.missile;
-    const state = m.state === 'acquiring' ? 'acquiring' : m.state === 'cooldown' ? (r.missiles.length > 0 ? 'launching' : m.notice === 'cooling' ? 'refused' : 'cooldown') : m.notice === 'noTarget' || m.notice === 'lowEnergy' || m.notice === 'lockLost' ? 'refused' : 'ready';
-    const label = state === 'acquiring' ? 'LOCK' : m.state === 'cooldown' && state !== 'launching' ? `${Math.ceil(m.cooldown / 60)}s` : 'MSL';
+    const c = weaponCard(r);
+    const g = missileGaugeOf(c, r.docked !== null);
+    const state = g.state;
+    const short = c.label === 'LOCK-ON' ? 'LOCK' : c.label;
+    // the weapon, and its ammunition or readiness, on two lines: never colour alone
+    const second = g.gauge.text; // the same words as the HUD weapon row
+    const label = `${short}\n${second}`;
     if (missileBtn.dataset['state'] !== state) missileBtn.dataset['state'] = state;
-    if (missileBtn.textContent !== label) missileBtn.textContent = label;
-    const pct = m.state === 'cooldown' ? Math.round((100 * m.cooldown) / MISSILE.cooldownTicks) : 0;
+    if (missileBtn.dataset['weapon'] !== r.arsenal.selected) missileBtn.dataset['weapon'] = r.arsenal.selected;
+    if (missileBtn.textContent !== label) {
+      missileBtn.textContent = label;
+      missileBtn.setAttribute('aria-label', `Next weapon. Selected: ${c.label.toLowerCase()}, ${second === '\u221e' ? 'unlimited' : second.toLowerCase()}`);
+    }
+    const pct = c.state === 'cooldown' ? Math.round((100 * c.cooldown) / Math.max(1, c.cooldownTicks)) : 0;
     missileBtn.style.setProperty('--cool', `${pct}%`);
     missileBtn.classList.toggle('is-active', touches > 0);
   };
+  /** The LOCK button mirrors the simulation's lock (on / off) and its last notice (NO TARGET...), never its own guess. */
+  const paintLockBtn = (r: SectorRun, touches: number): void => {
+    // the Gravity Flight test flies rotate-and-thrust (the nose steers there): no lock, so no button
+    const hide = r.flight !== null;
+    if (lockBtn.hidden !== hide) lockBtn.hidden = hide;
+    const on = r.shipLock.target !== null;
+    const n = r.shipLock.notice;
+    const state = on ? 'on' : n === 'noTarget' || n === 'unavailable' || n === 'range' ? 'refused' : 'off';
+    if (lockBtn.dataset['state'] !== state) lockBtn.dataset['state'] = state;
+    const pressed = on ? 'true' : 'false';
+    if (lockBtn.getAttribute('aria-pressed') !== pressed) lockBtn.setAttribute('aria-pressed', pressed);
+    const text = on ? 'LOCKED' : state === 'refused' ? (n === 'range' ? 'LOST' : 'NONE') : 'LOCK';
+    const label = lockBtn.querySelector<HTMLElement>('.fr-lock-text');
+    if (label && label.textContent !== text) label.textContent = text;
+    lockBtn.classList.toggle('is-active', touches > 0);
+  };
+  /** NEXT TARGET (touch): shown only while a lock holds (it does nothing without one); the brief ONLY state after a press with no other ship. */
+  const paintTargetBtn = (r: SectorRun, touches: number): void => {
+    const hide = r.flight !== null || r.shipLock.target === null;
+    if (targetBtn.hidden !== hide) targetBtn.hidden = hide;
+    const state = r.shipLock.notice === 'onlyTarget' ? 'refused' : 'off';
+    if (targetBtn.dataset['state'] !== state) targetBtn.dataset['state'] = state;
+    targetBtn.classList.toggle('is-active', touches > 0);
+  };
   let hangar: HangarPanel;
+  let armory: ArmoryPanel;
   let inventory: InventoryPanel;
   let fabricator: FabricatorPanel;
   let feed: LootFeed;
@@ -517,6 +643,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
    *  hidden tab / pagehide and leaving). A failed write keeps the game running; it is retried at
    *  the next save and reported once per failure streak. */
   const save = (): boolean => {
+    // P04: the admin sandbox is never written (the single save gateway; exiting reloads the untouched slot)
+    if (!mayPersist(admin)) return true;
     if (!writable) return false;
     const next = { ...profile, savedAt: Date.now() };
     const ok = saveSlot(services.store, saveSlotNo, next);
@@ -566,9 +694,17 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   const holdCap = (): number => craft.stats.cargo;
   const holdFree = (): number => Math.max(0, holdCap() - cargoUsed(profile.cargo));
   const setFleet = (f: FleetState): void => {
+    // the first call (slot load) has no previous fleet yet
+    const prev = fleet as FleetState | undefined;
+    const shipChanged = prev !== undefined && f.active !== prev.active;
+    // P03C: a new acquisition joins the cross-mode registry (after the Classic Wave 20 milestone only; merge, never remove)
+    // P04: never from an admin session (its fleet is a sandbox, not ownership)
+    if (mayPersist(admin) && prev && f.owned.length > prev.owned.length) recordOwned(services.store, f.owned);
     fleet = f;
     craft = upgradedShip(f.active, loadoutOf(f, f.active), levelsOf(f.active));
     profile = withFleet(profile, fleetToSaved(f));
+    // P03C: the flown run follows every hangar / armory change at once (an illegal weapon never stays selectable)
+    if (run) setRunLoadout(run, armedLoadout(f), shipChanged);
   };
   /* ------------------------------ progression ------------------------------ */
   /** Upgrade levels of a ship, cleaned against its caps (never invalid stats). */
@@ -578,13 +714,38 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   };
   const held = (): number => cellsHeld(profile.cargo);
   const wallet = (): Wallet => ({ marks: prog.marks, hold: profile.cargo, holdCap: holdCap(), modules: profile.modules });
-  /** Apply a confirmed transaction (marks, hold, stored modules) with one save. */
-  const commitWallet = (w: Wallet): void => {
-    prog = { ...prog, marks: w.marks };
+  /** Economy pass: transient HUD feedback for the last balance change (never saved). */
+  let marksFx = { serial: 0, delta: 0, at: -Infinity };
+  /** One history step through the ledger (the balance and its history change together). */
+  const applyMarks = (r: ReturnType<typeof record>): boolean => {
+    if (!r.ok) return false;
+    prog = withLedger(prog, r.ledger);
+    marksFx = { serial: marksFx.serial + 1, delta: r.entry.delta, at: lastFrameTs };
+    return true;
+  };
+  /**
+   * Apply a confirmed transaction (marks, hold, stored modules) with one save. The marks change is
+   * recorded once in the ledger (history label, optional claim id). Refused, with nothing changed,
+   * when the ledger refuses the step (a duplicate id) or when an Admin Access session would change
+   * the balance (the sandbox never does).
+   */
+  const commitWallet = (w: Wallet, label = 'Exchange trade', kind?: EntryKind, id: string | null = null): boolean => {
+    if (w.marks !== prog.marks) {
+      if (isAdmin(admin)) return false;
+      if (!applyMarks(record(ledgerOf(prog), w.marks, kind ?? (w.marks > prog.marks ? 'sale' : 'purchase'), label, id))) return false;
+    }
     profile = withModules(withCargo(profile, w.hold), w.modules);
     saveProg();
     if (run) run.cargoSpace = holdFree();
     save();
+    return true;
+  };
+  /** Pay a once-only reward claim (bounty, encounter, discovery). Never during Admin Access. */
+  const payClaim = (c: MarksClaim | null): boolean => {
+    if (!c || isAdmin(admin)) return false;
+    if (!applyMarks(award(ledgerOf(prog), c.amount, c.kind, c.label, c.id))) return false;
+    missionNote(`${formatDelta(prog.ledger.history[prog.ledger.history.length - 1]?.delta ?? c.amount)} MARKS · ${c.label.toUpperCase()}`, 'gain');
+    return true;
   };
   const galaxyName = (id: string): string => graph.node(id as GalaxyId)?.galaxy.shortName ?? id;
   const missionWorld = (): MissionWorld => {
@@ -604,11 +765,42 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const t = trackedObjective(prog.missions, here, { name: (id) => graph.system(id)?.name ?? id }, galaxyName);
     tracked = t ? { text: t.text, here: !!t.here } : null;
   };
+  /**
+   * Economy pass: the marks a gameplay event earns (marksRewards.ts), paid once through the ledger.
+   * Bounties come out of the system's pool (shown once when it runs dry); encounters and discoveries
+   * pay once by claim id. Nothing is paid during Admin Access.
+   */
+  let bountyDryNoted = '';
+  const earnMarks = (e: GameEvent, log: ExplorationLog): boolean => {
+    if (isAdmin(admin)) return false;
+    if (e.type === 'hostile-destroyed') {
+      const b = bountyClaim(prog.bounty, e, prog.missions.jumps, String(log.kills));
+      const bookChanged = b.book !== prog.bounty;
+      if (bookChanged) prog = { ...prog, bounty: b.book };
+      const ok = payClaim(b.claim);
+      if (b.limited && bountyDryNoted !== `${e.systemId}|${prog.bounty[e.systemId]?.since ?? 0}` && bountyLeft(prog.bounty, e.systemId, prog.missions.jumps) === 0) {
+        bountyDryNoted = `${e.systemId}|${prog.bounty[e.systemId]?.since ?? 0}`;
+        const hops = bountyRefillIn(prog.bounty, e.systemId, prog.missions.jumps);
+        missionNote(`BOUNTIES PAID OUT HERE · ${graph.system(e.systemId)?.name.toUpperCase() ?? 'THIS SYSTEM'} PAYS AGAIN IN ${hops} LANE HOP${hops === 1 ? '' : 'S'}`, 'info');
+      }
+      return ok || bookChanged;
+    }
+    return payClaim(eventClaim(e, { newEntry: log !== prog.log, systemName: (id) => graph.system(id)?.name ?? id, galaxyName }));
+  };
+  /** Bounty pool here, for the record panel. */
+  const bountyNote = (): string => {
+    const here = run ? run.layout.systemId : progress.system;
+    const left = bountyLeft(prog.bounty, here, prog.missions.jumps);
+    const name = graph.system(here)?.name ?? here;
+    const refill = bountyRefillIn(prog.bounty, here, prog.missions.jumps);
+    return `Bounties in ${name}: ${formatMarks(left)} of ${formatMarks(REWARDS.bountyPool)} left${left < REWARDS.bountyPool ? ` · the pool refills ${refill} lane hop${refill === 1 ? '' : 's'} after it opened` : ''}. Cleared encounters and first discoveries pay once.`;
+  };
   /** The mission manager and the exploration log consume every gameplay event. */
   const onGameEvent = (e: GameEvent): void => {
     const res = consumeEvent(prog.missions, e);
     const log = recordEvent(prog.log, e, graph);
-    if (res.state === prog.missions && log === prog.log) return;
+    const paid = earnMarks(e, log);
+    if (res.state === prog.missions && log === prog.log && !paid) return;
     prog = { ...prog, missions: res.state, log };
     saveProg();
     for (const u of res.updates) {
@@ -655,18 +847,22 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const before = progress;
     const r = applySystemTravel(graph, progress, to);
     if (!r.ok) return r;
-    const need = free ? 0 : routeCells(r.plan.lanes, craft.stats.travel);
+    const need = free ? 0 : travelCost(admin, routeCells(r.plan.lanes, craft.stats.travel)); // P04: bypassed (0) in an admin session
     if (!burn(need)) return { ok: false, reason: 'fuel', need, have: held() };
     commitProgress(r.progress);
     arrived(r.plan.path.slice(1), before, r.plan.jumps, routeEvents(r.newRoutes));
     persist();
     return r;
   };
+  /** Economy pass: travel costs reactor cells only; the confirmation says so with the marks balance (unchanged by travel). */
+  const travelFee = (): string => `TRAVEL FEE ${isAdmin(admin) ? 'ADMIN ACCESS — FREE' : 'FREE'} (0 MARKS) · BALANCE ${formatMarks(prog.marks)} · AFTER ${formatMarks(prog.marks)}`;
   const emergencyTarget = (): string | null => {
+    if (isAdmin(admin)) return null; // P04: travel is free in the sandbox, no emergency jump is needed
     const sv = deriveSystemView(deriveView(graph, progress), currentGalaxy().id);
     return emergencyJumpTarget(sv, held(), craft.stats.travel, isStation);
   };
   const homeDue = (): boolean => {
+    if (isAdmin(admin)) return false;
     const view = deriveView(graph, progress);
     return homeJumpDue(progress.current, graph.start, held(), graph.edgesOf(progress.current).filter((e) => view.routeOpen(e)), craft.stats.travel);
   };
@@ -686,7 +882,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   const dockedAt = (): string | null => (run?.docked && stationReturn === 'hangar' ? run.layout.systemId : null);
   /** R1: free emergency cells due at this station (0 = enough for a jump, or already given since the last arrival). */
   const emergencyDue = (): number => {
-    if (!run?.docked) return 0;
+    if (!run?.docked || isAdmin(admin)) return 0;
     const sys = run.layout.systemId;
     const sv = deriveSystemView(deriveView(graph, progress), galaxyOf(sys) as GalaxyId);
     return emergencyCells(held(), sv.graph, sys, craft.stats.travel, prog.fuel.aidAt === prog.fuel.arrivals);
@@ -742,9 +938,17 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     return `Abandoned: ${res.update.title}. ${id.startsWith('c:') ? 'The contract is closed.' : 'The Guild dispatch can offer it again.'}`;
   };
   const claimMission = (id: string): { readonly ok: boolean; readonly text: string } => {
+    // Economy pass: the sandbox pays no rewards (the balance never changes during Admin Access)
+    if (isAdmin(admin)) return { ok: false, text: 'Exit Admin Access to turn in missions: the sandbox pays no rewards.' };
     const res = claimReward(prog, id, wallet(), (galaxy, n) => rewardChartTargets(graph, progress, galaxy, n));
     if (!res.ok) return { ok: false, text: res.text };
-    prog = res.progression;
+    const before = prog;
+    // the reward's marks go through the ledger (recorded once by mission id) in commitWallet below
+    prog = { ...res.progression, marks: before.marks };
+    if (res.wallet.marks !== before.marks && !record(ledgerOf(prog), res.wallet.marks, 'mission', `Mission · ${res.title}`, `mission:${id}`).ok) {
+      prog = before;
+      return { ok: false, text: 'This reward was already paid.' };
+    }
     let news = '';
     const fresh = res.charted.filter((c) => !progress.charted.includes(c));
     if (fresh.length) {
@@ -759,7 +963,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       ].join(' ');
       publish(routeEvents(diff.newRoutes));
     }
-    commitWallet(res.wallet);
+    commitWallet(res.wallet, `Mission · ${res.title}`, 'mission', `mission:${id}`);
     setFleet(fleet); // licences change nothing fitted; re-derive anyway so stats are always current
     refreshMissionHud();
     return { ok: true, text: `Reward claimed: ${res.lines.join(' · ')}.${news ? ` ${news}` : ''}` };
@@ -826,7 +1030,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     return w && w.systemId === systemId ? { x: w.x, y: w.y, units: lostCargoUnits(profile), loot: Object.entries(w.cargo).map(([resource, amount]) => ({ resource, amount }) as LootEntry) } : null;
   };
   /** Generate and enter the sector of `systemId`. Any active sector is torn down first. */
-  const enterSector = (systemId: string, spawn: string | undefined, phase: FreeRoamPhase): void => {
+  const enterSector = (systemId: string, spawn: string | undefined, phase: FreeRoamPhase, place?: (L: SectorLayout) => ResumeAt | null): void => {
     leaveSector();
     const sys = graph.system(systemId);
     if (!sys) throw new Error(`unknown system ${systemId}`);
@@ -834,15 +1038,19 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     art = new SectorArt(layout);
     // Prompt 13: the first entry into the saved system resumes at the saved point (checked
     // against the layout; an unsafe point starts at the arrival); any other entry starts fresh
-    const at = pendingResume && pendingResume.systemId === systemId && spawn === undefined ? pendingResume : null;
+    // P04: an admin arrival may start beside the station (a point checked like a resume point)
+    const at = place ? place(layout) : pendingResume && pendingResume.systemId === systemId && spawn === undefined ? pendingResume : null;
     pendingResume = null;
-    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at });
-    resumedAt = at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
+    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin) });
+    resumedAt = !place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
+    besideStation = !!place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     if (!resumedAt) profile = withResume(profile, null);
     counters.generated += 1;
     resetRunCounters();
     snapCamera(cam, run.ship.x, run.ship.y); // a new sector: no glide from the old camera position
+    settleZoom(); // and no zoom carried over half-eased, or still framed for the last sector's fight
     bursts.length = 0;
+    waves.length = 0;
     wrecks.length = 0;
     lastKey = '';
     sectorEntries += 1;
@@ -865,6 +1073,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     counters.disposed += 1;
     gateTarget = null;
     bursts.length = 0;
+    waves.length = 0;
     wrecks.length = 0;
     pointers.reset();
     hudModel = null;
@@ -904,6 +1113,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         if (!run) return;
         snapCamera(cam, run.ship.x, run.ship.y);
         bursts.length = 0;
+    waves.length = 0;
         wrecks.length = 0;
         clock.resetTiming();
       },
@@ -917,7 +1127,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     counters.generated += 1;
     resetRunCounters();
     snapCamera(cam, run.ship.x, run.ship.y);
+    settleZoom();
     bursts.length = 0;
+    waves.length = 0;
     wrecks.length = 0;
     lastKey = '';
     arrivalMs = null;
@@ -959,7 +1171,21 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       vibrations,
       shaking: shakeStart !== null,
       kills: r ? r.kills : 0,
-      missile: r ? { state: r.missile.state, target: r.missile.target, lock: r.missile.lock, cooldown: r.missile.cooldown, notice: r.missile.notice, launches: r.missile.launches, hits: r.missile.hits, inFlight: r.missiles.length } : { state: 'ready', target: null, lock: 0, cooldown: 0, notice: null, launches: 0, hits: 0, inFlight: 0 },
+      weapons: r
+        ? {
+            selected: r.arsenal.selected,
+            rotation: [...r.arsenal.rotation],
+            compatible: [...r.arsenal.compatible],
+            cooldowns: { ...r.arsenal.cooldown },
+            ammo: { ...r.ammo },
+            gate: gateOf(r, r.arsenal.selected),
+            inFlight: r.missiles.map((m) => m.weapon),
+            zones: r.dilation.length,
+            slowed: r.hostiles.filter((h) => (h.tscale ?? 1) < 1).length,
+          }
+        : null,
+      shipLock: r ? { target: r.shipLock.target, notice: r.shipLock.notice, acquired: r.shipLock.acquired, switched: r.shipLock.switched } : { target: null, notice: null, acquired: 0, switched: 0 },
+      missile: r ? { state: r.missile.state, target: r.missile.target, lock: r.missile.lock, cooldown: r.arsenal.cooldown['lock-missile'], notice: r.missile.notice, launches: r.missile.launches, hits: r.missile.hits, inFlight: r.missiles.length } : { state: 'ready', target: null, lock: 0, cooldown: 0, notice: null, launches: 0, hits: 0, inFlight: 0 },
       hostileList: r ? r.hostiles.map((h) => ({ id: h.id, family: h.family, faction: h.faction, state: h.state, role: h.role, x: Math.round(h.x), y: Math.round(h.y), hull: Math.ceil(h.hull), shield: Math.ceil(h.shield), source: h.source })) : [],
       ship: r ? r.craft.ship : null,
       hull: r ? Math.round(r.hull) : 0,
@@ -1043,6 +1269,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     stationHub.mountTabs(panels[tab], tab);
     if (tab === 'station') stationHub.open();
     else if (tab === 'hangar') hangar.open(dockLabel);
+    else if (tab === 'armory') armory.open(dockLabel);
     else if (tab === 'equipment') equipment.open(dockLabel);
     else if (tab === 'fabricator') fabricator.open(dockLabel);
     else if (tab === 'missions') missionsPanel.open();
@@ -1073,8 +1300,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       }
     } else briefingTarget.textContent = '';
     const resumed = run && resumedAt ? 'RESUMED · you start where your last autosave left you in this sector.' : '';
-    briefingNote.textContent = [resumed, real ? SIMULATION_NOTE : ''].filter(Boolean).join(' ');
-    briefingNote.hidden = !real && !resumed;
+    // P04: only during an admin session (ordinary briefings never mention it)
+    const adminNote = isAdmin(admin) ? `ADMIN ACCESS · sandbox: nothing in this session is saved.${run && besideStation ? ' You start beside the station: INTERACT docks.' : ''}` : '';
+    briefingNote.textContent = [adminNote, resumed, real ? SIMULATION_NOTE : ''].filter(Boolean).join(' ');
+    briefingNote.hidden = !real && !resumed && !adminNote;
     const back = mapReturn === 'system' ? 'SYSTEM MAP' : 'GALAXY MAP';
     for (const b of returnButtons) b.textContent = back;
     briefingStats.textContent = `FLIGHTS ${profile.sessions} · SURVEYS ${profile.surveysCompleted} · ${best} · MARKS ${profile.beaconsCharted}`;
@@ -1094,7 +1323,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
       return;
     }
-    hintKeys.textContent = `${move}${alt.includes('—') ? '' : ` / ${alt}`} FLY · ${actionKeys(b, 'fire')} FIRE · ${keyLabel(b.boost[0])} BOOST${controls.mouseAim ? ' · MOUSE AIM' : ''} · ${actionKeys(b, 'interact')} INTERACT · ${keyLabel(b.map[0])} MAP · ${keyLabel(b.cargo[0])} CARGO · ESC PAUSE`;
+    hintKeys.textContent = `${move}${alt.includes('—') ? '' : ` / ${alt}`} FLY · ${actionKeys(b, 'fire')} FIRE · ${keyLabel(b.boost[0])} BOOST · ${keyLabel(b.missile[0])} WEAPON · ${keyLabel(b.lock[0])} LOCK · ${keyLabel(b.target[0])} NEXT TARGET${controls.mouseAim ? ' · MOUSE AIM' : ''} · ${actionKeys(b, 'interact')} INTERACT · ${keyLabel(b.map[0])} MAP · ${keyLabel(b.cargo[0])} CARGO · ESC PAUSE`;
     container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
   };
   const describeSurvey = (r: SurveyResult): void => {
@@ -1269,6 +1498,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         notify(`ORE FRAGMENT CHIPPED${e.remaining > 0 ? ` · ${e.remaining} LEFT IN THE VEIN` : ' · VEIN DEPLETED'}`, undefined, 'info');
       } else if (e.type === 'docked') {
         if (e.first) profile = withSectorProgress(profile, sys, [e.id]);
+        // P03B: docked and repaired includes the magazines (heavy missiles, nuke) back to capacity; saved below
+        const restocked = restockOrdnance(profile.ordnance);
+        const topped = Object.keys(restocked).some((k) => restocked[k] !== profile.ordnance[k]);
+        if (topped) profile = withOrdnance(profile, restocked);
+        setRunOrdnance(r, profile.ordnance); // the run fires from the same counts
         persist();
         cue(e);
         // docking opens the station overview (Prompt 12); the flight is paused until LAUNCH
@@ -1330,8 +1564,27 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       } else if (e.type === 'shotDown') {
         bursts.push({ x: e.x, y: e.y, startMs: lastFrameTs, size: 1 });
         if (bursts.length > 16) bursts.shift();
-      } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady') {
-        cue(e); // the HUD missile row and the MSL button carry the text (NO TARGET, LOCK LOST, LOW ENERGY...)
+      } else if (e.type === 'shipLocked' || e.type === 'shipLockRefused' || e.type === 'shipLockEnded') {
+        // P04.1: one short line in the corner log (never a card over the play area); the target carries the marker
+        cue(e);
+        const line = shipLockLine(e);
+        if (line) notify(line.text, undefined, line.tone);
+      } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady' || e.type === 'weaponSwitched') {
+        cue(e); // the HUD weapon row and the WPN button carry the text (NO TARGET, LOCK LOST, EMPTY...)
+      } else if (e.type === 'ordnanceSpent') {
+        // P03C: one round spent = the saved count, saved at once (an event, never per frame); a reload never refills it
+        profile = withOrdnance(profile, { ...profile.ordnance, [e.weapon]: e.left });
+        save();
+      } else if (e.type === 'detonation') {
+        cue(e);
+        const fx = WEAPON_BY_ID.get(e.weapon);
+        const ms = fx && fx.fire === 'ordnance' ? Math.max(260, (fx.effect.ringTicks * 1000) / 60) : 300;
+        if (e.r > 0) waves.push({ x: e.x, y: e.y, r: e.r, startMs: lastFrameTs, ms, double: e.weapon === 'nuke' });
+        if (waves.length > 8) waves.shift(); // bounded presentation effect
+        bursts.push({ x: e.x, y: e.y, startMs: lastFrameTs, size: e.weapon === 'nuke' ? 4 : e.weapon === 'heavy-missile' ? 3 : 2 });
+        if (bursts.length > 16) bursts.shift();
+      } else if (e.type === 'dilation') {
+        if (e.state === 'start') showNotice('info', 'TIME DILATION', 'HOSTILES NEAR THE BLAST AT HALF SPEED · 2 s', 1800);
       } else if (e.type === 'missileHit' || e.type === 'missileExpired') {
         if (e.type === 'missileHit') cue(e);
         // a small puff where it ended (a kill also gets the destroyed burst); bounded like every burst
@@ -1397,7 +1650,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           gateTarget = e.target;
           gateTitle.textContent = e.gate.label.toUpperCase();
           const lane = deriveSystemView(deriveView(graph, progress), galaxyOf(sys) as GalaxyId).graph.laneBetween(sys, e.target);
-          const need = lane ? hopCells(lane.cost, craft.stats.travel) : 0;
+          const need = lane ? travelCost(admin, hopCells(lane.cost, craft.stats.travel)) : 0;
           const have = held();
           gateText.textContent = `${e.gate.detail} The jump burns ${need} reactor cell${need === 1 ? '' : 's'} (you have ${have}); you arrive at the matching gate in the other system.${have < need ? ' Not enough cells: dock at a station for free emergency cells, or use the system map\'s free emergency jump.' : ''}`;
           gateJump.textContent = have < need ? `NEED ${need} CELLS` : `JUMP · ${need} CELL${need === 1 ? '' : 'S'}`;
@@ -1421,7 +1674,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
    * comes from the inventory: a repeat that changed nothing publishes nothing.
    */
   /** FR-TD-83: events the gravity test passes to the shell (combat feedback only; nothing that saves or publishes). */
-  const LAB_EVENTS: ReadonlySet<SectorEvent['type']> = new Set(['hit', 'fired', 'overheated', 'weaponCooled', 'struck', 'destroyed', 'telegraph', 'blast', 'shotDown', 'disabled', 'missileLock', 'missileLockLost', 'missileRefused', 'missileLaunched', 'missileHit', 'missileExpired', 'missileReady']);
+  const LAB_EVENTS: ReadonlySet<SectorEvent['type']> = new Set(['hit', 'fired', 'overheated', 'weaponCooled', 'struck', 'destroyed', 'telegraph', 'blast', 'shotDown', 'disabled', 'missileLock', 'missileLockLost', 'missileRefused', 'missileLaunched', 'missileHit', 'missileExpired', 'missileReady', 'weaponSwitched', 'detonation', 'dilation']); // never ordnanceSpent: the lab saves nothing
   const handleEvents = (r: SectorRun, events: readonly SectorEvent[]): void => {
     const sys = r.layout.systemId;
     hitCtx = { shieldBefore: batchShield ?? r.shield, shieldAfter: r.shield };
@@ -1492,7 +1745,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       resetRunCounters();
       services.sound.play('uiSelect');
       snapCamera(cam, run.ship.x, run.ship.y);
+      settleZoom();
       bursts.length = 0;
+    waves.length = 0;
       wrecks.length = 0;
       clock.resetTiming();
       showPanel(null);
@@ -1519,7 +1774,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         showNotice('warn', 'THE GATE DOES NOT RESPOND', undefined, 3000);
         return;
       }
-      const need = routeCells(r.plan.lanes, craft.stats.travel);
+      const need = travelCost(admin, routeCells(r.plan.lanes, craft.stats.travel));
       if (!burn(need)) {
         showPanel(null);
         resumeSector(run);
@@ -1575,6 +1830,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     recoveryContinue: (): void => {
       if (!run || panel !== 'recovery') return;
       snapCamera(cam, run.ship.x, run.ship.y);
+      settleZoom();
       arrivalMs = lastFrameTs;
       actions.resume();
     },
@@ -1622,6 +1878,22 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       services.sound.play('uiMove');
       refreshHint();
       showPanel(controlsReturn);
+    },
+    /** P04.2 guide: the HOW TO PLAY guide over the pause menu, opened on the controls for the input in use (live bindings). */
+    howTo: (): void => {
+      if (panel !== 'pause' || !guide || guide.isOpen()) return;
+      services.sound.play('uiSelect');
+      const used = container.dataset['input'];
+      const input: GuideInput = used === 'touch' ? 'touch' : pad.connected > 0 && used !== 'keyboard' ? 'controller' : 'keyboard';
+      const classicGate = parseRecord(services.store.read(FLEET_SPEC.key), FLEET_SPEC).data.classicComplete || classicRecordShowsGate(services.store);
+      guide.open({
+        kind: 'reference',
+        context: { mode: 'freeroam', input, bindings: controls.bindings, mouseAim: controls.mouseAim, classicGate },
+        step: 'controls',
+        canPlay: false,
+        // the Guild marks step points at the live balance on the ship card (measured; skipped if hidden or covered)
+        highlight: (step) => (step === 'marks' ? container.querySelector('.fr-marks') : null),
+      });
     },
     zoom: (dir: number): void => {
       const z = stepZoom(controls.zoom, dir);
@@ -1708,20 +1980,28 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (back && back.isConnected && !back.closest('[hidden]')) back.focus({ preventScroll: true });
     else if (panel) menus[panel].focus();
   };
+  const adminCommand = (c: PanelCommand): void => {
+    const m = c === 'prev' || c === 'next' || c === 'confirm' || c === 'back' ? c : c === 'pause' ? 'back' : null;
+    if (m) adminPanel?.command(m);
+  };
   const savesCommand = (c: PanelCommand): void => {
     const m: SavesCommand | null = c === 'prev' || c === 'next' || c === 'confirm' || c === 'back' ? c : c === 'pause' ? 'back' : null;
     if (m) saves.command(m);
   };
   const BLOCKED = 'browser storage is full or blocked';
+  const ADMIN_SAVES = 'Admin Access is active: this sandbox is never saved. Exit Admin Access to return to your normal save.';
+  const ADMIN_SLOTS = 'Exit Admin Access first: save slots do not change during an admin session.';
   const savesDeps: SavesDeps = {
     view: () => ({ slots: readSlots(services.store), active: saveSlotNo, persistent: services.store.persistent, writable, lastSaveAt, lastSaveFailed }),
     names: slotNames,
     saveNow: () => {
+      if (isAdmin(admin)) return ADMIN_SAVES;
       if (!writable) return 'This slot is read-only here: nothing was saved.';
       if (!persist()) return `Saving FAILED (${BLOCKED}). The game keeps running and tries again at the next save.`;
       return services.store.persistent ? `Saved to slot ${saveSlotNo}.` : `Saved to slot ${saveSlotNo} for this tab only (browser storage is unavailable).`;
     },
     load: (n) => {
+      if (isAdmin(admin) && n !== saveSlotNo) return ADMIN_SLOTS;
       if (n === saveSlotNo) {
         closeSaves();
         return '';
@@ -1733,6 +2013,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       return '';
     },
     newGame: (n) => {
+      if (isAdmin(admin)) return ADMIN_SLOTS;
       const info = readSlots(services.store)[n - 1]!;
       if (n !== saveSlotNo) persist();
       const key = slotKey(n);
@@ -1749,11 +2030,295 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       return '';
     },
     remove: (n) => {
+      if (isAdmin(admin)) return ADMIN_SLOTS;
       if (n === saveSlotNo) return 'The slot in use cannot be deleted: load another slot first.';
       return deleteSlot(services.store, n) ? `Slot ${n} deleted.` : `Could not delete slot ${n} (${BLOCKED}).`;
     },
     close: closeSaves,
     sound: panelSound,
+  };
+
+  /* ------------------------------ Admin Access (P04) ------------------------------ */
+  /*
+   * A hidden owner sandbox (docs/development/ADMIN_ACCESS.md). The rules are in admin/session.ts;
+   * this shell only applies them at the points where the normal rules live: the save gateway
+   * (save), the cross-mode registry (setFleet), the cell costs (travelCost), ship switching and
+   * the Admin Navigator's travel. Exiting restarts Free Roam from the untouched slot.
+   */
+  /** Where the hidden sequence is accepted: the galaxy / system maps and the docked station screens (never in flight). */
+  const adminContext = (): boolean => {
+    if (lifecycle === 'created' || lifecycle === 'disposed') return false;
+    if (saves.isOpen() || capture || adminLogin) return false;
+    if (screen === 'map' || screen === 'systems') return true;
+    return screen === 'flight' && run !== null && run.docked !== null && (panel === 'station' || panel === 'hangar' || panel === 'armory');
+  };
+  /** Capture-phase keydown: observes only; it consumes nothing but the key that completes the sequence (and F8 during a session). */
+  const onAdminKey = (e: KeyboardEvent): void => {
+    if (isAdmin(admin)) {
+      // F8: open / close the admin panel (a session control; not the activation)
+      if (e.code === 'F8' && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey && !isEditableTarget(e.target)) {
+        e.preventDefault();
+        if (adminPanel?.isOpen()) closeAdmin();
+        else openAdmin('');
+      }
+      return;
+    }
+    if (e.isComposing || isEditableTarget(e.target) || !adminContext()) {
+      adminKeys.reset();
+      return;
+    }
+    if (adminKeys.feed({ code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, repeat: e.repeat, t: e.timeStamp })) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openLogin(screen === 'flight' ? 'station' : screen === 'systems' ? 'systems' : 'map');
+    }
+  };
+  const ADMIN_UNSAFE = 'Ships switch at a safe place, as in normal play: dock at a station (HANGAR below takes you to one), open a map, or pick one during a sector briefing.';
+  const adminShipSafe = (): { readonly ok: boolean; readonly why: string } => {
+    if (__GALAXIA_GRAVITY_LAB__ && lab) return { ok: false, why: 'Leave the gravity test first.' };
+    if (!run || canSwitchShip(run) || run.phase === 'briefing') return { ok: true, why: '' };
+    return { ok: false, why: ADMIN_UNSAFE };
+  };
+  const placeName = (galaxy: string, system: string): string => `${graph.system(system)?.name ?? system} · ${galaxyName(galaxy)}`;
+  const adminShipRows = (): AdminShipRowList => {
+    const only = adminOnlyShips(admin);
+    return SHIPS.map((ship) => {
+      const st = upgradedShip(ship.id, loadoutOf(fleet, ship.id), levelsOf(ship.id)).stats;
+      const stats = (['hull', 'shield', 'maxSpeed', 'cargo', 'travel'] as const).map((k) => `${STAT_LABEL[k]} ${formatStat(k, st[k])}`).join(' · ');
+      return {
+        id: ship.id,
+        name: ship.name,
+        role: ship.role,
+        access: ship.id === fleet.active ? 'flying' : only.has(ship.id) ? 'admin' : 'owned',
+        stats,
+        weapons: compatibleWeapons(ship.id).map((w) => WEAPON_BY_ID.get(w)!.name).join(', '),
+      } as const;
+    });
+  };
+  /** Travel straight to a catalogue destination (no unlock, route or fuel requirement), through the normal sector entry. */
+  const adminTravel = (ref: DestinationRef): string => {
+    const d = resolveDestination(admin, graph, ref);
+    if (!d.ok) return DESTINATION_TEXT[d.reason];
+    const before = progress;
+    try {
+      commitProgress(adminArrive(progress, d));
+      mapReturn = 'system';
+      pendingResume = null;
+      moment('jump');
+      enterSector(d.system.id, undefined, 'briefing', d.arrival === 'station' ? stationApproach : undefined);
+      refreshBriefing();
+      showScreen('flight');
+      showPanel('briefing');
+    } catch (err) {
+      // never half-way: no sector, the previous position, a map on screen
+      leaveSector();
+      commitProgress(before);
+      showScreen('systems');
+      return `Could not load ${d.system.name}: ${err instanceof Error ? err.message : String(err)}. You are back on the system map.`;
+    }
+    closeAdmin();
+    return '';
+  };
+  const adminSelect = (id: string): string => {
+    const safe = adminShipSafe();
+    const r = adminSelectShip(admin, fleet, id, safe.ok);
+    if (!r.ok) return r.reason === 'unsafe' ? safe.why : r.reason === 'active' ? 'Already flying that ship.' : 'That ship does not exist in this build.';
+    setFleet(r.fleet);
+    if (run) {
+      applyShip(run, craft);
+      run.cargoSpace = holdFree();
+      lastKey = '';
+      if (run.phase === 'briefing') refreshBriefing();
+    }
+    return `Now flying the ${shipName()}${adminOnlyShips(admin).has(fleet.active) ? ' (admin access: not owned, not saved)' : ''}. Its weapon mounts are its own.`;
+  };
+  /** HANGAR: the real hangar when docked; otherwise straight to the nearest station (dock there with INTERACT). */
+  const adminHangar = (): string => {
+    if (run?.docked && !(__GALAXIA_GRAVITY_LAB__ && lab)) {
+      closeAdmin();
+      openStation('hangar');
+      return '';
+    }
+    const hops = systemGraph(graph, progress.current).hops(progress.system);
+    const far = (id: string): number => hops.get(id) ?? Number.MAX_SAFE_INTEGER;
+    const near = graph
+      .systemsIn(progress.current)
+      .filter((x) => x.sector.station)
+      .sort((a, b) => far(a.id) - far(b.id) || (a.id < b.id ? -1 : 1))[0];
+    const target = near ?? graph.systemsIn(graph.start).find((x) => x.sector.station);
+    if (!target) return 'No station exists in the game data.';
+    return adminTravel({ galaxy: target.galaxyId, system: target.id, arrival: 'station' });
+  };
+  const adminDeps: AdminPanelDeps = {
+    view: () => ({
+      origin: admin ? `${SHIP_BY_ID.get(admin.origin.ship)!.name} at ${placeName(admin.origin.galaxy, admin.origin.system)}` : '',
+      here: `${shipName()} · ${placeName(progress.current, run ? run.layout.systemId : progress.system)}`,
+      hereGalaxy: progress.current,
+      shipSwitch: adminShipSafe(),
+    }),
+    galaxies: () => navigatorGalaxies(deriveView(graph, admin ? admin.normalProgress : progress)),
+    systems: (galaxy, query) => navigatorSystems(deriveView(graph, admin ? admin.normalProgress : progress), galaxy, query),
+    ships: adminShipRows,
+    travel: adminTravel,
+    selectShip: adminSelect,
+    hangar: adminHangar,
+    exit: () => exitAdmin(),
+    close: () => closeAdmin(),
+    sound: (cue) => services.sound.play(cue),
+  };
+  const buildAdminUi = (): void => {
+    if (adminPanel) return;
+    adminPanel = createAdminPanel(adminDeps);
+    container.append(adminPanel.root);
+    // a small ADMIN chip on each screen while the session lasts (created only now: never in ordinary play)
+    const chip = (): HTMLButtonElement => {
+      const b = el('button', 'fr-admin-chip', 'ADMIN');
+      b.type = 'button';
+      b.setAttribute('aria-label', 'Admin Access panel (sandbox session active)');
+      b.addEventListener('click', () => {
+        b.blur(); // keep Space / Enter for flight
+        openAdmin('');
+      });
+      return b;
+    };
+    // the map titles give way to the chip on narrow screens (ellipsis instead of running under it)
+    for (const head of [map.head, systems.root.querySelector<HTMLElement>('.fr-map-head')]) {
+      head?.classList.add('has-admin');
+      head?.append(chip());
+    }
+    hudButtons.prepend(chip());
+  };
+  const openAdmin = (message: string): void => {
+    if (!isAdmin(admin) || !adminPanel || saves.isOpen() || adminLogin) return;
+    if (adminPanel.isOpen()) {
+      adminPanel.refresh();
+      return;
+    }
+    if (screen === 'flight' && run?.phase === 'flight' && !panel) actions.pause(); // the flight pauses under the panel
+    adminReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    keys.clear();
+    pointers.reset();
+    for (const n of [map.root, systems.root, flightRoot]) n.inert = true;
+    container.dataset['adminPanel'] = 'open';
+    adminPanel.open(message);
+  };
+  const closeAdmin = (): void => {
+    if (!adminPanel?.isOpen()) return;
+    adminPanel.hide();
+    for (const n of [map.root, systems.root, flightRoot]) n.inert = false;
+    delete container.dataset['adminPanel'];
+    keys.clear();
+    clock.resetTiming();
+    const back = adminReturn;
+    adminReturn = null;
+    // the hangar re-reads the fleet (a ship chosen in the admin panel, ADMIN labels)
+    if (panel === 'hangar' && run?.docked) hangar.open(dockLabel);
+    else if (back && back.isConnected && !back.closest('[hidden]')) back.focus({ preventScroll: true });
+    else if (panel) menus[panel].focus();
+  };
+  /**
+   * Start the session (after a correct login): the normal state is saved
+   * first, then nothing is written until the session ends.
+   */
+  const beginSession = (from: AdminSession['from']): void => {
+    if (isAdmin(admin)) return;
+    persist(); // the slot now holds exactly what exiting restores
+    admin = beginAdmin(fleet, progress, from);
+    setFleet(adminFleet(fleet)); // every roster ship usable in the sandbox (the save is not touched)
+    // sandbox ammunition: launches spend no round and no energy (the counts themselves are untouched)
+    if (run) setRunUnlimitedAmmo(run, true);
+    container.dataset['admin'] = 'on';
+    buildAdminUi();
+    refreshBriefing();
+  };
+  /**
+   * The login's destination: Sol (milky-way/sol), beside its Haven Guild
+   * station, docked, HANGAR tab. Catalogue-resolved like any admin trip; the
+   * arrival is START FLIGHT (without its sound: the reveal is the moment)
+   * followed by the normal docking. Returns '' or what went wrong (the
+   * session stays on and the admin panel opens with the message).
+   */
+  const adminHomeHangar = (): string => {
+    const d = resolveDestination(admin, graph, ADMIN_HOME);
+    if (!d.ok) return `Could not open the Sol hangar: ${DESTINATION_TEXT[d.reason]} Admin Access is active; use the navigator.`;
+    const before = progress;
+    try {
+      commitProgress(adminArrive(progress, d));
+      mapReturn = 'system';
+      pendingResume = null;
+      enterSector(d.system.id, undefined, 'briefing', stationApproach);
+      const r = run as SectorRun | null;
+      if (!r) throw new Error('the sector did not start');
+      refreshBriefing();
+      showScreen('flight');
+      resumeSector(r);
+      snapCamera(cam, r.ship.x, r.ship.y);
+      clock.resetTiming();
+      showPanel(null);
+      arrivalMs = lastFrameTs;
+      const ev = dockIfInRange(r);
+      if (!ev.some((e) => e.type === 'docked')) throw new Error('the station was out of docking range');
+      handleEvents(r, ev); // the normal docking: repairs, magazines, station overview, flight paused
+      openStation('hangar');
+      return '';
+    } catch (err) {
+      if (run) leaveSector();
+      commitProgress(before);
+      refreshBriefing();
+      showScreen('map');
+      return `Could not open the Sol hangar: ${err instanceof Error ? err.message : String(err)}. Admin Access is active; use the navigator.`;
+    }
+  };
+  /** The hidden activation opens the login screen; only a correct password starts the session. */
+  const openLogin = (from: AdminSession['from']): void => {
+    if (isAdmin(admin) || adminLogin || saves.isOpen() || lifecycle === 'disposed') return;
+    loginReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const login = createAdminLogin({
+      seed: randomSeed(),
+      reducedMotion,
+      sound: (cue) => moment(cue === 'deny' ? 'refused' : 'upgrade'),
+      arrive: () => {
+        beginSession(from);
+        return adminHomeHangar();
+      },
+      done: (error) => closeLogin(error, true),
+      abort: () => closeLogin('', false),
+    });
+    adminLogin = login;
+    adminKeys.reset();
+    loginInert = [...container.children].filter((n): n is HTMLElement => n instanceof HTMLElement).map((n) => [n, n.inert] as const);
+    for (const [n] of loginInert) n.inert = true;
+    container.append(login.root);
+    container.dataset['adminLogin'] = 'open';
+    keys.clear();
+    pointers.reset();
+    login.open(performance.now());
+  };
+  const closeLogin = (error: string, success: boolean): void => {
+    const login = adminLogin;
+    if (!login) return;
+    adminLogin = null;
+    login.destroy();
+    for (const [n, was] of loginInert) n.inert = was;
+    loginInert = [];
+    delete container.dataset['adminLogin'];
+    keys.clear();
+    pointers.reset();
+    clock.resetTiming();
+    const back = loginReturn;
+    loginReturn = null;
+    if (success && error) openAdmin(error);
+    else if (success && panel === 'hangar' && run?.docked) hangar.open(dockLabel); // focus could not land while the screen was up
+    else if (!success && back && back.isConnected && !back.closest('[hidden]')) back.focus({ preventScroll: true });
+    else if (panel) menus[panel].focus();
+  };
+  /** End the session: discard the sandbox and restart Free Roam from the untouched normal save. */
+  const exitAdmin = (): void => {
+    if (!isAdmin(admin)) return;
+    adminPanel?.hide();
+    adminKeys.reset();
+    writable = false; // this instance never writes again (the session also blocks every write until it is gone)
+    ctx.requestRestart(); // the fresh instance re-reads the slot: normal ship, place, ownership and rules
   };
 
   const buildPanel = (id: Exclude<Panel, null>, kicker: string, title: string, body: readonly HTMLElement[], buttons: readonly [string, () => void][]): HTMLElement => {
@@ -1799,6 +2364,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       else if (panel === 'sound') soundPanel.back();
       else if (panel === 'recovery') actions.recoveryContinue();
       else if (panel === 'hangar') hangar.back();
+      else if (panel === 'armory') armory.back();
       else if (panel === 'fabricator') fabricator.back();
       else if (panel === 'missions') missionsPanel.back();
       else if (panel === 'exchange') exchangePanel.back();
@@ -1833,6 +2399,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     controls = { ...controls, ...c };
     if (c.bindings) keys.setCodes(allCodes(controls.bindings));
     if (prefsWritable && !saveFreeRoamPrefs(services.store, { controls })) services.reportStorageProblem('write-failed');
+    if (c.zoom !== undefined) {
+      // a key, a button, a reset or the deferred wheel write: the view shows exactly the saved zoom
+      shownZoom = controls.zoom;
+      zoomSaveAt = null;
+    }
     if (zoomLabel) zoomLabel.textContent = `ZOOM ${Math.round(controls.zoom * 100)}%`;
   };
   const refreshControls = (message: string): void => {
@@ -1896,7 +2467,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     keys.clear();
     pointers.reset(true);
     pad.reset();
-    wheelAcc = 0;
+    lockPending = false;
+    targetPending = false;
+    if (zoomSaveAt !== null) setControls({ zoom: controls.zoom }); // a wheel zoom still waiting to be saved
     clock.resetTiming();
     if (why === 'orientation') status.orientationChanges += 1;
     if (run?.phase === 'flight') actions.pause();
@@ -1905,6 +2478,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /* ------------------------------ flight HUD ------------------------------- */
   /** Reactor cells short of any jump from here (the existing emergency rule; memoised). */
   const cellsShort = (r: SectorRun): boolean => {
+    if (isAdmin(admin)) return false;
     const key = `${held()}|${r.layout.systemId}|${craft.stats.travel}|${progress.charted.length}|${progress.visitedSystems.length}`;
     if (cellsShortCache?.key !== key) {
       const sv = deriveSystemView(deriveView(graph, progress), galaxyOf(r.layout.systemId) as GalaxyId);
@@ -1917,6 +2491,28 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (weaponCache?.key !== id) weaponCache = { key: id, name: EQUIPMENT_BY_ID.get(id)?.name ?? 'Weapon' };
     return weaponCache.name;
   };
+  /** P03C: the selected weapon as the HUD card and the WPN button show it (the gun keeps its module name in the header). */
+  const weaponCard = (r: SectorRun): MissileCardInput => {
+    const id: PilotWeaponId = r.arsenal.selected;
+    const w = WEAPON_BY_ID.get(id)!;
+    const ord = w.fire === 'ordnance' ? w : null;
+    const lockTicks = ord && ord.guidance.kind === 'lock' ? ord.guidance.acquire.lockTicks : MISSILE.lockTicks;
+    return {
+      label: w.short,
+      feed: w.ammo.kind === 'unlimited' ? 'gun' : w.ammo.kind,
+      stock: r.ammo[id] ?? 0,
+      capacity: w.ammo.kind === 'stock' ? w.ammo.capacity : 0,
+      state: r.missile.state === 'acquiring' ? 'acquiring' : r.arsenal.cooldown[id] > 0 ? 'cooldown' : 'ready',
+      lock: r.missile.lock,
+      lockTicks,
+      cooldown: r.arsenal.cooldown[id],
+      cooldownTicks: ord ? ord.cooldownTicks : 1,
+      inFlight: r.missiles.some((m) => m.weapon === id),
+      gate: gateOf(r, id),
+      notice: r.missile.noticeWeapon === id || r.missile.noticeWeapon === null ? r.missile.notice : null,
+      unlimited: r.unlimitedAmmo,
+    };
+  };
   /** Revealed, unfinished points of interest (the survey marks have the objective arrow). */
   const nearbyCandidates = (r: SectorRun): PoiCandidate[] => {
     const out: PoiCandidate[] = [];
@@ -1925,6 +2521,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       out.push({ id: p.id, label: p.kind === 'gate' ? r.gates[p.id]?.label ?? p.label : p.label, x: p.x, y: p.y });
     }
     return out;
+  };
+  /** Economy pass: the HUD balance, from the wallet (a small change counts up; the +N / −N tag fades). */
+  const marksReadout = (ts: number): MarksReadout => {
+    const t = tickerValue(prog.marks, marksFx.delta, ts - marksFx.at, reducedMotion());
+    return { value: `${MARKS.glyph} ${groupDigits(t.shown)}`, tag: t.tag ? formatDelta(marksFx.delta) : '', sign: !t.tag ? '' : marksFx.delta > 0 ? 'gain' : 'loss', serial: marksFx.serial, spoken: spokenMarks(prog.marks) };
   };
   const renderHud = (r: SectorRun, ts: number, live: boolean, thrust: number, firing: boolean): void => {
     const cap = holdCap();
@@ -1950,13 +2551,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       attention,
     );
     flightHud.render({
-      card: shipCard({ ship: SHIP_BY_ID.get(r.craft.ship)!.name, weapon: weaponName(), firing, docked: r.docked !== null, shield: r.shield, shieldMax: r.craft.stats.shield, hull: r.hull, hullMax: r.craft.stats.hull, energy: r.energy, energyMax: r.craft.stats.energy, boosting: r.boosting, heat: r.heat, overheated: r.overheated, missile: { state: r.missile.state, lock: r.missile.lock, lockTicks: MISSILE.lockTicks, cooldown: r.missile.cooldown, cooldownTicks: MISSILE.cooldownTicks, inFlight: r.missiles.length > 0, notice: r.missile.notice } }),
+      card: shipCard({ ship: SHIP_BY_ID.get(r.craft.ship)!.name, weapon: r.arsenal.selected === 'plasma' ? weaponName() : WEAPON_BY_ID.get(r.arsenal.selected)!.short, firing, docked: r.docked !== null, shield: r.shield, shieldMax: r.craft.stats.shield, hull: r.hull, hullMax: r.craft.stats.hull, energy: r.energy, energyMax: r.craft.stats.energy, boosting: r.boosting, heat: r.heat, overheated: r.overheated, missile: weaponCard(r) }),
       location: { name: hereName, galaxy: galaxyShort, survey: surveyText(r), surveyed: r.surveyed },
       view,
       objective: tracked?.text ?? null,
       objectiveHere: tracked?.here ?? false,
       cargo: cargoText(used, cap, cells),
       notice: panel ? null : notices.current,
+      marks: marksReadout(ts),
     });
     // the engine hum follows thrust and boost; silent while paused, behind a panel or hidden
     if (services.sound.unlocked && services.sound.loopLevel(ENGINE_LOOP) === null) services.sound.startLoop(ENGINE_LOOP, 'fr.engine', 0);
@@ -1976,6 +2578,39 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     const motionMode = reducedMotion() ? 'reduced' : 'full';
     if (container.dataset['motion'] !== motionMode) container.dataset['motion'] = motionMode;
+    if (adminLogin) {
+      // P04: the hidden login is modal over everything: it reads its own field; the game takes no press
+      keys.takePresses();
+      const login = adminLogin;
+      const arrivedBefore = login.status().arrived;
+      for (const c of panelPadCommands(update)) if (c === 'back') login.back();
+      login.frame(ts);
+      if (!arrivedBefore) {
+        if (panel === 'hangar') hangar.frame(ts);
+        status.frames += 1;
+        lastTs = ts;
+        surface?.sample(ts, 0, false);
+        return;
+      }
+      // the fade onto the arrival: the docked station draws underneath (input stays with the screen until it goes)
+    }
+    if (guide?.isOpen()) {
+      // P04.2 guide: the HOW TO PLAY guide is modal over the pause menu: it reads its own keys and pad; the game takes no press
+      keys.takePresses();
+      status.frames += 1;
+      lastTs = ts;
+      surface?.sample(ts, 0, false);
+      return;
+    }
+    if (adminPanel?.isOpen()) {
+      // P04: the admin panel is modal like the save slots panel: it takes every press; the flight stays paused
+      for (const c of panelKeyCommands(keys.takePresses(), controls.bindings)) adminCommand(c);
+      for (const c of panelPadCommands(update)) adminCommand(c);
+      status.frames += 1;
+      lastTs = ts;
+      surface?.sample(ts, 0, false);
+      return;
+    }
     if (saves.isOpen()) {
       // the save slots panel is modal over any screen: it takes every press; the flight stays paused
       for (const c of panelKeyCommands(keys.takePresses(), controls.bindings)) savesCommand(c);
@@ -2010,7 +2645,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         else if (offerKey && code === OFFER_KEYS.swap) offerActions.swap();
         else if (offerKey && code === OFFER_KEYS.leave) offerActions.leave();
         else for (const c of flightKeyCommands([code], binds)) flightCommand(c);
-        if (run?.phase === 'flight' && (binds.missile[0] === code || binds.missile[1] === code)) missilePending = true; // a tap shorter than a frame still counts
+        // P03C: NEXT WEAPON is one step per press; a FIRE tap shorter than a frame still reaches the trigger
+        if (run?.phase === 'flight' && (binds.missile[0] === code || binds.missile[1] === code)) cyclePending = 1;
+        // P04.1: LOCK TARGET (X) is one toggle per press (key repeat never reaches takePresses)
+        if (run?.phase === 'flight' && (binds.lock[0] === code || binds.lock[1] === code)) lockPending = !lockPending;
+        // P04.1 polish: NEXT TARGET (C) is one step per press (key repeat never reaches takePresses; two presses in one frame = one step)
+        if (run?.phase === 'flight' && (binds.target[0] === code || binds.target[1] === code)) targetPending = true;
+        if (run?.phase === 'flight' && (binds.fire[0] === code || binds.fire[1] === code)) firePending = true;
       }
     }
     if (panel) for (const c of panelPadCommands(update)) panelCommand(c);
@@ -2021,6 +2662,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       toLog(nt.toLog);
     }
     feed.tick(ts);
+    if (panel === 'hangar') hangar.frame(ts); // P03A: the bay preview animates on this loop (no timer of its own)
+    else if (panel === 'armory') armory.frame(ts); // P03B: the plot redraws after a change or resize only
     const r = run;
     if (!r || !art) {
       status.frames += 1;
@@ -2045,15 +2688,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     const fire = live && (keyboardFire(keys.heldCodes, binds) || padFire(snapshot) || pointers.firing);
     const boost = live && (keyboardBoost(keys.heldCodes, binds) || padBoost(snapshot) || pointers.boosting);
-    // missile (Combat P03): held state for the simulation's press edge, plus a latched press so a quick tap is
-    // never lost on a frame that runs no tick; nothing is latched behind a panel or outside flight
-    const padM = padMissile(snapshot);
-    if (pointers.takeMissilePress() && live) missilePending = true;
-    if (padM && !padMissileWas && live) missilePending = true;
-    padMissileWas = padM;
-    if (!live) missilePending = false;
-    const missile = live && (keyboardMissile(keys.heldCodes, binds) || padM || pointers.missileHeld);
-    let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost, missile } : { ...move, fire, boost, missile };
+    // weapons (Combat P03C): NEXT WEAPON (key, R3, WPN) is an edge command, one step per press, latched so a
+    // quick tap is never lost on a frame that runs no tick; nothing is latched behind a panel or outside flight
+    const padW = padWeapon(snapshot);
+    if (pointers.takeWeaponPress() && live) cyclePending = 1;
+    if (pointers.takeLockPress() && live) lockPending = !lockPending;
+    if (pointers.takeTargetPress() && live) targetPending = true;
+    if (padW && !padWeaponWas && live) cyclePending = 1;
+    padWeaponWas = padW;
+    const padF = padFire(snapshot);
+    if (padF && !padFireWas && live) firePending = true;
+    padFireWas = padF;
+    if (!live) {
+      cyclePending = 0;
+      firePending = false;
+      lockPending = false;
+      targetPending = false;
+    }
+    const weaponKey = live && (keyboardWeapon(keys.heldCodes, binds) || padW || pointers.weaponHeld);
+    let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost } : { ...move, fire, boost };
     if (__GALAXIA_GRAVITY_LAB__ && lab) {
       // FR-TD-83: rotate-and-thrust in the gravity test only (the same keys, pad and joystick, mapped there)
       const kv = keyboardVector(keys.heldCodes, binds);
@@ -2062,19 +2715,28 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       const sx = pv2.x + tv.x;
       const sy = pv2.y + tv.y;
       const sl = Math.hypot(sx, sy);
-      flight = { ...lab.input({ keys: kv, stick: sl > 1 ? { x: sx / sl, y: sy / sl } : { x: sx, y: sy }, aim, fire, boost }, live), missile };
+      flight = lab.input({ keys: kv, stick: sl > 1 ? { x: sx / sl, y: sy / sl } : { x: sx, y: sy }, aim, fire, boost }, live);
     }
-    lastInput = { moveX: move.moveX, moveY: move.moveY, aim, fire, boost, missile, stickActive: pv.stickActive, fireTouches: pv.fireTouches, boostTouches: pv.boostTouches, missileTouches: pv.missileTouches, mouseFire: pv.mouseFire, keys: [...keys.heldCodes] };
+    lastInput = { moveX: move.moveX, moveY: move.moveY, aim, fire, boost, weaponKey, stickActive: pv.stickActive, fireTouches: pv.fireTouches, boostTouches: pv.boostTouches, weaponTouches: pv.weaponTouches, mouseFire: pv.mouseFire, keys: [...keys.heldCodes] };
     fireBtn.classList.toggle('is-active', pv.fireTouches > 0);
     paintFireHeat(r.heat, r.overheated);
     boostBtn.classList.toggle('is-active', pv.boostTouches > 0);
-    paintMissileBtn(r, pv.missileTouches);
+    paintMissileBtn(r, pv.weaponTouches);
+    paintLockBtn(r, pv.lockTouches);
+    paintTargetBtn(r, pv.targetTouches);
     let events: SectorEvent[] = [];
     batchShield = r.shield;
     const alpha = clock.advance(ts, () => {
       if (r.phase !== 'flight' || run !== r) return;
-      const f = missilePending && !flight.missile ? { ...flight, missile: true } : flight;
-      missilePending = false;
+      // one weapon step and a latched FIRE press go to the first tick of the frame only
+      let f: SectorInput = cyclePending !== 0 ? { ...flight, cycle: cyclePending } : flight;
+      if (firePending && !f.fire) f = { ...f, fire: true };
+      if (lockPending) f = { ...f, lockToggle: true };
+      if (targetPending) f = { ...f, targetCycle: true };
+      cyclePending = 0;
+      firePending = false;
+      lockPending = false;
+      targetPending = false;
       events = events.concat(stepSector(r, f));
       status.ticks += 1;
     });
@@ -2095,7 +2757,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const moving = r.phase === 'flight';
     // combat framing: ease out while engaged so attackers at stand-off range stay on screen (presentation only)
     if (moving) framing = stepFraming(framing, hudModel?.level === 'engaged', realDt, reduced);
-    const zoom = cameraZoom(b.width, b.height, controls.zoom) * framing;
+    // P04.1: the displayed player zoom catches up with a wheel change (presentation only; bounded like controls.zoom)
+    shownZoom = easeZoom(shownZoom, controls.zoom, realDt, reduced);
+    if (zoomSaveAt !== null && ts - zoomSaveAt >= ZOOM_SAVE_MS) setControls({ zoom: controls.zoom });
+    const zoom = cameraZoom(b.width, b.height, shownZoom) * framing;
     // the camera reads the ship and never writes it (camera.ts): physics is identical at any zoom or canvas size
     if (moving) stepCamera(cam, r.ship.x, r.ship.y, r.ship.vx, r.ship.vy, realDt, reduced);
     clampCamera(cam, b.width / zoom, b.height / zoom, r.layout.width, r.layout.height);
@@ -2111,12 +2776,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     viewRatio = b.ratio;
     while (bursts.length > 0 && ts - bursts[0]!.startMs > BURST_MS) bursts.shift();
+    while (waves.length > 0 && ts - waves[0]!.startMs > waves[0]!.ms) waves.shift();
     while (wrecks.length > 0 && ts - wrecks[0]!.startMs > WRECK_MS) wrecks.shift();
     if (panel === 'sectormap') drawMapCanvas();
 
     // panels over a still scene: redraw only when something visible changed (no busy redraw while paused)
     const drawKey = `${b.width}x${b.height}|${r.phase}|${services.prefs.revision}|${panel}|${r.layout.systemId}|${zoom}|${r.pickups.length}|${r.offer?.id ?? ''}`;
-    if (moving || drawKey !== lastKey || (st.active && !panel) || bursts.length > 0 || wrecks.length > 0) {
+    if (moving || drawKey !== lastKey || (st.active && !panel) || bursts.length > 0 || waves.length > 0 || wrecks.length > 0) {
       lastKey = drawKey;
       const rect = surface.canvas.getBoundingClientRect();
       const ratio = b.ratio;
@@ -2129,6 +2795,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         stick: st.active && !panel ? { active: true, x: (st.originX - rect.left) * ratio, y: (st.originY - rect.top) * ratio, vx: st.vector.x, vy: st.vector.y, radius: stick.radius * ratio } : null,
         aim: live ? aimPoint : null,
         bursts,
+        waves,
         wrecks,
         arrivalMs,
       });
@@ -2198,7 +2865,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       for (const id of progress.visitedSystems) prog = { ...prog, log: recordEvent(prog.log, { type: 'system-visited', systemId: id, galaxyId: galaxyOf(id), first: false }, graph) };
       scope.add(bus.subscribe(onGameEvent)); // released with the mode
       // the saved fleet against the roster: unknown ships and invalid loadouts fall back (starter / stock)
-      setFleet(fleetFromSaved(profile.fleet));
+      // P03C: after the Classic Wave 20 milestone every slot flies the merged cross-mode fleet (modes/crossMode.ts)
+      const savedFleet = fleetFromSaved(profile.fleet);
+      const owned = mergeOwned(services.store, savedFleet.owned);
+      setFleet(owned.length !== savedFleet.owned.length ? { ...savedFleet, owned: [...owned] } : savedFleet);
       // Prompt 11: one-time starter reactor cells (as many as fit)
       if (!prog.fuel.starter) {
         profile = withCargo(profile, grantCells(profile.cargo, holdCap(), FUEL.starterCells).hold);
@@ -2249,9 +2919,23 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       boostBtn = el('button', 'fr-boost', 'BOOST');
       boostBtn.type = 'button';
       boostBtn.setAttribute('aria-label', 'Boost (hold while flying)');
-      missileBtn = el('button', 'fr-missile', 'MSL');
+      missileBtn = el('button', 'fr-wpn', 'PLASMA');
       missileBtn.type = 'button';
-      missileBtn.setAttribute('aria-label', 'Missile: press to lock the ship ahead and launch');
+      missileBtn.setAttribute('aria-label', 'Next weapon');
+      // P04.1: LOCK (left side): a crosshair and one word; aria-pressed follows the real lock
+      lockBtn = el('button', 'fr-lock');
+      lockBtn.type = 'button';
+      lockBtn.setAttribute('aria-label', 'Lock target (toggle)');
+      lockBtn.setAttribute('aria-pressed', 'false');
+      lockBtn.dataset['state'] = 'off';
+      lockBtn.innerHTML = '<svg class="fr-lock-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1.5v5M12 17.5v5M1.5 12h5M17.5 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/></svg><span class="fr-lock-text">LOCK</span>';
+      // P04.1 polish: NEXT TARGET, a compact chevron button beside LOCK, shown only while a lock holds
+      targetBtn = el('button', 'fr-target');
+      targetBtn.type = 'button';
+      targetBtn.hidden = true;
+      targetBtn.setAttribute('aria-label', 'Next target');
+      targetBtn.dataset['state'] = 'off';
+      targetBtn.innerHTML = '<svg class="fr-target-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5l7 7-7 7M13 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       interactBtn = el('button', 'fr-interact');
       interactBtn.type = 'button';
       interactBtn.hidden = true;
@@ -2268,7 +2952,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         cargo: () => profile.cargo,
         licenceMet: (req) => deriveView(graph, progress).requirementMet(req),
         describe: (req) => describeRequirement(deriveView(graph, progress), req),
+        levels: (id) => levelsOf(id),
         safe: () => run !== null && canSwitchShip(run),
+        adminOnly: () => adminOnlyShips(admin),
+        balance: () => formatMarks(prog.marks),
         commitAcquire: (f, cargo) => {
           setFleet(f);
           profile = withCargo(profile, cargo);
@@ -2286,8 +2973,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         },
         launch: () => actions.launch(),
         back: () => openStation('station'),
+        armory: () => openStation('armory'),
         sound: panelSound,
         glow: () => services.prefs.get().display.glow,
+        reducedMotion,
+      });
+      armory = createArmoryPanel({
+        sprites: services.sprites,
+        fleet: () => fleet,
+        ordnance: () => profile.ordnance,
+        craft: () => craft,
+        // the start weapon and cycle are fleet data: stored in the profile and saved at once
+        commit: (f) => {
+          setFleet(f);
+          save();
+        },
+        back: () => openStation('hangar'),
+        sound: panelSound,
+        glow: () => services.prefs.get().display.glow,
+        balance: () => formatMarks(prog.marks),
       });
       briefingStats = el('p', 'fr-stats');
       briefingTarget = el('p', 'fr-text');
@@ -2415,11 +3119,15 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         condition: () => ({ hull: run ? run.hull : 0, hullMax: craft.stats.hull, shield: run ? run.shield : 0, shieldMax: craft.stats.shield }),
         emergency: emergencyDue,
         claimEmergency,
-        commit: (w) => commitWallet(w),
+        commit: (w, what) => {
+          commitWallet(w, what);
+        },
         commitShip: (f, w) => {
           setFleet(f);
-          commitWallet(w);
+          commitWallet(w, 'Ship acquired', 'ship');
         },
+        free: () => isAdmin(admin),
+        sellBlocked: () => (isAdmin(admin) ? 'Selling is off during Admin Access: marks never change in the sandbox.' : null),
         back: () => actions.stationBack(),
         sound: sound3,
       });
@@ -2430,15 +3138,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         levels: () => levelsOf(fleet.active),
         licences: () => prog.licences,
         wallet,
-        commit: (levels, w) => {
+        commit: (levels, w, track) => {
+          // atomic: the levels and the payment land together, or neither does
+          const beforeProg = prog;
+          const beforeProfile = profile;
           prog = { ...prog, upgrades: { ...prog.upgrades, [fleet.active]: levels } };
           setFleet(fleet); // re-derive: the cargo track changes the hold before the wallet is applied
+          const def = UPGRADE_BY_TRACK.get(track as UpgradeTrack);
+          if (!commitWallet(w, `Upgrade · ${def ? `${def.name} ${LEVEL_NAME(levels[def.id] ?? 0)}` : track} · ${SHIP_BY_ID.get(fleet.active)!.name}`, 'upgrade')) {
+            prog = beforeProg;
+            profile = beforeProfile;
+            setFleet(fleet);
+            return;
+          }
           if (run) {
             applyShip(run, craft);
             lastKey = '';
           }
-          commitWallet(w);
         },
+        free: () => isAdmin(admin),
         back: () => actions.stationBack(),
         sound: sound3,
       });
@@ -2448,7 +3166,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           return explorationStats(prog.log, { visitedSystems: progress.visitedSystems.length, visitedGalaxies: progress.visited.length, routesOpen: graph.edges.filter((e) => view.routeOpen(e)).length, missionsCompleted: prog.missions.completed.length, charted: progress.charted.length });
         },
         entries: () => discoveryEntries(prog.log, graph),
-        progressLine: () => `GUILD MARKS ${prog.marks} · MISSIONS DONE ${prog.missions.claimed.length} · LICENCES ${prog.licences.length ? prog.licences.map((l) => (l === 'mk2' ? 'MK II' : 'MK III')).join(' + ') : 'NONE'}`,
+        marks: () => ({
+          balance: prog.marks,
+          history: prog.ledger.history,
+          note: isAdmin(admin) ? 'ADMIN ACCESS: prices are free and nothing is paid or charged; the balance is unchanged.' : bountyNote(),
+        }),
+        progressLine: () => `${formatMarks(prog.marks)} · MISSIONS DONE ${prog.missions.claimed.length} · LICENCES ${prog.licences.length ? prog.licences.map((l) => (l === 'mk2' ? 'MK II' : 'MK III')).join(' + ') : 'NONE'}`,
         back: () => actions.stationBack(),
         sound: sound3,
       });
@@ -2503,6 +3226,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           ['RECORD', () => actions.log('record')],
           ['SAVES', openSaves],
           ['CONTROLS', actions.controls],
+          ['HOW TO PLAY', actions.howTo],
           ['SOUND', actions.sound],
           ['GALAXY MAP', actions.openMap],
           ['MAIN MENU', actions.exit],
@@ -2513,6 +3237,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         ]),
         cargo: inventory.root,
         hangar: hangar.root,
+        armory: armory.root,
         fabricator: fabricator.root,
         missions: missionsPanel.root,
         exchange: exchangePanel.root,
@@ -2554,6 +3279,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       panels.controls.querySelector('.fr-menu')!.prepend(controlsGrid);
       menus.cargo = inventory.menu;
       menus.hangar = hangar.menu;
+      menus.armory = armory.menu;
       menus.fabricator = fabricator.menu;
       menus.missions = missionsPanel.menu;
       menus.exchange = exchangePanel.menu;
@@ -2577,10 +3303,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       returnButtons = [];
       for (const pnl of Object.values(panels)) for (const b of pnl.querySelectorAll<HTMLButtonElement>('.fr-btn')) if (b.textContent === 'GALAXY MAP') returnButtons.push(b);
       const panelLayer = el('div', 'fr-panels');
-      panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery);
+      panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.armory, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery);
       flightRoot.append(hud);
       flightHud = createFlightHud(flightRoot, motion);
-      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, feed.root, offerView.root);
+      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, lockBtn, targetBtn, feed.root, offerView.root);
       combatView = createCombatHud(flightRoot);
       // measured HUD stacking under the ship card (FR-TD-80; ui/hudStack.ts)
       stackFlightHud(scope, flightRoot, flightHud.card, feed.root);
@@ -2597,7 +3323,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           const before = progress;
           const r = applyTravel(graph, progress, to);
           if (!r.ok) return r;
-          const need = galaxyJumpCells(r.edge, craft.stats.travel);
+          const need = travelCost(admin, galaxyJumpCells(r.edge, craft.stats.travel));
           if (!burn(need)) return { ok: false, reason: 'fuel', need, have: held() };
           commitProgress(r.progress);
           arrived([r.progress.system], before, 1, [{ type: 'galaxy-reached', galaxyId: to, first: !before.visited.includes(to) }, ...routeEvents(r.newRoutes)]);
@@ -2606,8 +3332,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         },
         fuel: {
           held,
-          jump: (edge) => galaxyJumpCells(edge, craft.stats.travel),
+          jump: (edge) => travelCost(admin, galaxyJumpCells(edge, craft.stats.travel)),
           homeDue,
+          fee: travelFee,
           home: goHome,
         },
         startSurvey: () => actions.briefing('galaxy'),
@@ -2624,8 +3351,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         travel: (to) => systemTravel(to, false),
         fuel: {
           held,
-          hop: (cost) => hopCells(cost, craft.stats.travel),
+          hop: (cost) => travelCost(admin, hopCells(cost, craft.stats.travel)),
           emergency: emergencyTarget,
+          fee: travelFee,
           // R2 is free only to the target it offers; anything else is an ordinary (paid) route
           emergencyJump: (to) => {
             const r = systemTravel(to, emergencyTarget() === to);
@@ -2644,6 +3372,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       // Prompt 13: the save slots panel (modal over any screen) and its galaxy map button
       saves = createSavesPanel(savesDeps);
       container.append(saves.root);
+      // P04.2 guide: the guide (one instance; released with the mode)
+      const guideDialog = new GuideDialog(container, { onEnd: () => services.sound.play('uiMove'), onMove: () => services.sound.play('uiMove'), reducedMotion });
+      guide = guideDialog;
+      scope.add(() => {
+        guideDialog.dispose();
+        guide = null;
+      });
       savesBtn = el('button', 'fr-map-back fr-saves-btn', 'SAVES');
       savesBtn.type = 'button';
       savesBtn.addEventListener('click', openSaves);
@@ -2654,6 +3389,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       // input: keys on window, touch stick on the canvas (window catches the release)
       // rebinding listens in the capture phase so the key never reaches the tracker or a menu
       scope.on<KeyboardEvent>(window, 'keydown', onCaptureKey, { capture: true });
+      // P04: the hidden Admin Access sequence (observes only; after the rebinding capture, which stops a captured key)
+      scope.on<KeyboardEvent>(window, 'keydown', onAdminKey, { capture: true });
       keys.attach(scope, window);
       if (anyPadConnected()) pad.reset(); // the A that chose Free Roam may still be held
       // pointers (FR-TD-44): each pointer id has one role; releasing one never cancels another
@@ -2683,14 +3420,18 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         surface.canvas,
         'wheel',
         (e) => {
+          // P04.1: the wheel zooms the flight camera only (forward = in, back = out; a trackpad pinch, sent as
+          // Ctrl + wheel, zooms too). It never switches weapons (Q / R3 / WPN do). It is listened to on the
+          // flight canvas alone, so menus, panels, the hangar, the armory and text fields keep their own
+          // scrolling, and the page is only kept from scrolling or zooming while this zoom is in use.
           if (panel || run?.phase !== 'flight') return;
           e.preventDefault();
-          // accumulate so a trackpad's many small deltas make one step per notch-sized gesture
-          wheelAcc += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
-          if (Math.abs(wheelAcc) >= 60) {
-            actions.zoom(wheelAcc < 0 ? 1 : -1);
-            wheelAcc = 0;
-          }
+          const z = wheelZoom(controls.zoom, e.deltaY, e.deltaMode, e.ctrlKey || e.metaKey);
+          if (z === controls.zoom) return;
+          if (!Number.isFinite(shownZoom)) shownZoom = controls.zoom;
+          controls = { ...controls, zoom: z };
+          zoomSaveAt = e.timeStamp;
+          if (zoomLabel) zoomLabel.textContent = `ZOOM ${Math.round(controls.zoom * 100)}%`;
         },
         { passive: false },
       );
@@ -2731,11 +3472,41 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         } catch {
           /* synthetic pointers cannot be captured; window pointerup still releases them */
         }
-        pointers.missileDown(e.pointerId);
+        pointers.weaponDown(e.pointerId);
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
       scope.on<PointerEvent>(missileBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
       scope.on<Event>(missileBtn, 'contextmenu', (e) => e.preventDefault());
+      // P04.1 LOCK: its own pointer role (pointers.ts), so a finger on it never takes or drags the stick
+      scope.on<PointerEvent>(lockBtn, 'pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (panel || run?.phase !== 'flight') return;
+        try {
+          lockBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* synthetic pointers cannot be captured; window pointerup still releases them */
+        }
+        pointers.lockDown(e.pointerId);
+        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+      });
+      scope.on<PointerEvent>(lockBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+      scope.on<Event>(lockBtn, 'contextmenu', (e) => e.preventDefault());
+      // P04.1 polish NEXT TARGET: its own pointer role too (never the stick, never FIRE or BOOST)
+      scope.on<PointerEvent>(targetBtn, 'pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (panel || run?.phase !== 'flight') return;
+        try {
+          targetBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* synthetic pointers cannot be captured; window pointerup still releases them */
+        }
+        pointers.targetDown(e.pointerId);
+        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+      });
+      scope.on<PointerEvent>(targetBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+      scope.on<Event>(targetBtn, 'contextmenu', (e) => e.preventDefault());
       scope.on<PointerEvent>(container, 'pointerdown', (e) => {
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
@@ -2783,6 +3554,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         fleet: () => fleet,
         craft: () => craft,
         hangar: () => hangar.status(),
+        armory: () => armory.status(),
+        loadout: () => armedLoadout(fleet),
+        ordnance: () => profile.ordnance,
         inventory: () => inventory.status(),
         fabricator: () => fabricator.status(),
         progression: () => prog,
@@ -2807,6 +3581,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           overlays: Object.values(panels).filter((n) => !n.hidden).length,
         }),
         fuel: () => ({ held: held(), emergency: emergencyDue(), homeDue: homeDue(), emergencyJump: emergencyTarget() }),
+        adminLogin: () => (adminLogin ? adminLogin.status() : null),
+        admin: () => (admin ? { from: admin.from, owned: [...admin.owned], panel: adminPanel ? adminPanel.status() : null } : null),
         toWorld: (cx, cy) => {
           const d = clientToDevice(cx, cy, surface.canvas.getBoundingClientRect(), viewRatio);
           return screenToWorld(view, d.x, d.y);
@@ -2844,6 +3620,17 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
               return a ? a.id : null;
             }
           : () => null,
+        economy: () => ({ marks: prog.marks, history: prog.ledger.history.map((e) => ({ ...e })), recent: prog.ledger.recent.length, bounty: { ...prog.bounty }, jumps: prog.missions.jumps, fx: marksFx.serial }),
+        qaMarks: __GALAXIA_TEST_HOOKS__
+          ? (n: number): boolean => {
+              if (!(Number.isSafeInteger(n) && n >= 0 && n <= MARKS.max) || isAdmin(admin)) return false;
+              prog = { ...prog, marks: n };
+              saveProg();
+              save();
+              return true;
+            }
+          : () => false,
+        qaEvent: __GALAXIA_TEST_HOOKS__ ? (e: GameEvent): void => publish([e]) : () => undefined,
         frames: 0,
         ticks: 0,
         draws: 0,
@@ -2852,6 +3639,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       refreshBriefing();
       showScreen('map');
       lifecycle = 'initialized';
+      // P04: the title screen recognised the hidden gesture / sequence just before this start
+      if (takeAdminRequest(performance.now())) openLogin('title');
       // FR-TD-83: ?lab=gravity opens the Gravity Flight test directly (dev / QA builds only)
       if (__GALAXIA_GRAVITY_LAB__ && new URLSearchParams(window.location.search).get('lab') === 'gravity') void enterGravityLab();
     },
@@ -2889,10 +3678,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       if (wasInitialized) persist();
       services.sound.stopLoops();
       if (motion) motion.cancelAll(); // no UI animation outlives the mode
+      adminLogin?.destroy();
+      adminLogin = null;
       scope.dispose(); // listeners, frame loop, ResizeObserver, canvas memory
       keys.clear();
       pointers.reset(true);
       bursts.length = 0;
+    waves.length = 0;
       wrecks.length = 0;
       if (__GALAXIA_TEST_HOOKS__ && window.__galaxiaFreeRoam === status) delete window.__galaxiaFreeRoam;
       container.replaceChildren(); // html.game-mode and the shell's observer went with scope.dispose()

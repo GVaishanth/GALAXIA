@@ -66,6 +66,9 @@ import { Hud } from '../ui/hud.ts';
 import { formatScore, hudModel, notificationsFor, NotificationQueue } from '../ui/presentation.ts';
 import { overlayForPhase, screenFor, type Overlay } from '../ui/screenModel.ts';
 import { Screens, type SettingChange } from '../ui/screens.ts';
+import { ordnanceView } from '../ui/ordnanceView.ts';
+import { SPRITES, type SpriteId } from '../assets/sprites/index.ts';
+import type { WeaponId } from '../config/weapons.ts';
 import { applyMenuAction } from './menuActions.ts';
 import { Presenter } from './presenter.ts';
 import { DEV_TOOLS } from '../config/buildFlags.ts';
@@ -134,6 +137,8 @@ export interface GameStatus {
   disposed: boolean;
   /** Listeners currently registered on long-lived targets by this mount (diagnostics). */
   readonly listenerCount: () => number;
+  /** Combat P03C (automated checks): the gate, the selector's choices and the ship the next game flies. */
+  readonly fleet: () => { open: boolean; ships: readonly string[]; selected: string | null };
 }
 
 const PERF_FRAMES = 600;
@@ -166,6 +171,39 @@ function createAudioContext(): AudioContextLike | null {
   return Ctor ? new Ctor() : null;
 }
 
+/** Combat P03C: one ship Classic can fly after Wave 20 (plain data from modes/crossMode.ts). */
+export interface ClassicShipChoice {
+  readonly id: string;
+  readonly name: string;
+  /** Its Free Roam sprite id. */
+  readonly sprite: string;
+  readonly compatible: readonly WeaponId[];
+  readonly rotation: readonly WeaponId[];
+  readonly start: WeaponId;
+  /** Short weapon names in rotation order. */
+  readonly weapons: string;
+}
+
+export interface ClassicFleetState {
+  readonly open: boolean;
+  readonly ships: readonly ClassicShipChoice[];
+  readonly selected: string | null;
+}
+
+/** Combat P03C: the cross-mode ship registry as Classic sees it (absent = standalone Classic, legacy only). */
+export interface ClassicFleetBridge {
+  /** Current gate and unlocked ships (re-read when the title is shown). */
+  readonly read: () => ClassicFleetState;
+  /** Remember the title choice (null = legacy fighter). */
+  readonly select: (id: string | null) => void;
+  /** Classic just completed the gate stage (persist the milestone). */
+  readonly complete: () => void;
+  /** Stage whose completion opens the gate. */
+  readonly gateStage: number;
+}
+
+const LEGACY_FIGHTER = 'FIGHTER';
+
 export interface MountOptions {
   /** Called once if the frame loop halts after repeated errors (shows the fatal panel). */
   readonly onHalt?: () => void;
@@ -176,6 +214,8 @@ export interface MountOptions {
   readonly store?: KeyValueStore | undefined;
   /** "Back to the main menu" (title-screen MENU button, Esc / gamepad B on the title). Absent = no button. */
   readonly onExit?: (() => void) | undefined;
+  /** Combat P03C: cross-mode ships (post-Wave-20 SHIP selector and weapons). */
+  readonly fleet?: ClassicFleetBridge | undefined;
 }
 
 export function mountGame(root: HTMLElement, options: MountOptions = {}): GameStatus {
@@ -228,6 +268,7 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
       run is still recorded, but the GAME OVER banner is for real game overs only. */
   let abandoning = false;
   const screens = new Screens(stage, {
+    onShip: (dir) => stepShip(dir),
     onAction: (action) => {
       sound.play('uiSelect');
       abandoning = engine.phase === 'paused' && (action === 'restart' || action === 'quit');
@@ -410,6 +451,7 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
     dispose: () => dispose(),
     disposed: false,
     listenerCount: () => scope.activeListeners,
+    fleet: () => ({ open: fleetState.open, ships: fleetState.ships.map((c) => c.id), selected: shipChoice()?.id ?? null }),
   };
   let consecutiveErrors = 0;
   let perfPrevTs: number | null = null;
@@ -508,6 +550,47 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
     applySetting({ kind: 'muted', value: !prefs.get().audio.muted });
   });
 
+  /* Combat P03C: post-Wave-20 ships (title SHIP selector, the ship's weapons, its sprite).
+     Without the bridge, or before the gate, nothing here changes Classic: the
+     selector stays hidden and the engine flies the legacy fighter (loadout null). */
+  const fleetBridge = options.fleet;
+  let fleetState: ClassicFleetState = fleetBridge?.read() ?? { open: false, ships: [], selected: null };
+  /** 0 = legacy fighter, i = fleetState.ships[i - 1]. */
+  let shipIndex = 0;
+  const shipChoice = (): ClassicShipChoice | null => (shipIndex > 0 ? (fleetState.ships[shipIndex - 1] ?? null) : null);
+  const applyShip = (): void => {
+    const c = shipChoice();
+    engine.setLoadout(c ? { ship: c.id, compatible: c.compatible, rotation: c.rotation, start: c.start } : null);
+    screens.setShip(fleetState.open && fleetState.ships.length > 0 ? { name: c ? c.name.toUpperCase() : LEGACY_FIGHTER, weapons: c ? c.weapons : 'CLASSIC GUN', count: fleetState.ships.length + 1 } : null);
+  };
+  const refreshFleet = (): void => {
+    if (!fleetBridge) return;
+    fleetState = fleetBridge.read();
+    const i = fleetState.selected ? fleetState.ships.findIndex((c) => c.id === fleetState.selected) : -1;
+    shipIndex = fleetState.open ? i + 1 : 0;
+    applyShip();
+  };
+  function stepShip(dir: 1 | -1): void {
+    if (!fleetBridge || !fleetState.open || engine.phase !== 'title') return;
+    const n = fleetState.ships.length + 1;
+    shipIndex = (shipIndex + dir + n) % n;
+    fleetBridge.select(shipChoice()?.id ?? null);
+    sound.play('uiMove');
+    applyShip();
+  }
+  refreshFleet();
+  /** The sprite of the ship the current game flies (null = the legacy fighter's sprites). */
+  const flownSprite = (): SpriteId | null => {
+    const id = engine.world.ordnance?.ship;
+    if (!id) return null;
+    const sprite = fleetState.ships.find((c) => c.id === id)?.sprite;
+    return sprite && sprite in SPRITES ? (sprite as SpriteId) : null;
+  };
+  let lastPhase = engine.phase;
+  /* P04.1: the mouse wheel no longer switches weapons in Classic (it was one step per notch after the gate).
+     Q, gamepad Y and the touch NEXT control step forward through the ship's rotation; Classic's fixed
+     arcade camera has no zoom, so the wheel does nothing here (and the page keeps its default handling). */
+
   /* reward events -> HUD notifications, effects / audio, persistence (independent subscribers) */
   let presentationMs = 0;
   let uiMs = 0;
@@ -582,6 +665,7 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
       for (const b of u.presses) {
         if (b === 'a' || b === 'x') input.press('fire', 'gamepad');
         else if (b === 'start') input.press('pause', 'gamepad');
+        else if (b === 'y' && engine.world.ordnance) input.press('next', 'gamepad'); // P03C: next weapon (roster ships only)
       }
       return;
     }
@@ -660,6 +744,11 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
       // menu actions call the engine outside step(); collect their events too
       for (const e of engine.drainEvents()) pending.push(e);
       if (pending.length > 0) {
+        // P03C: completing the gate stage opens weapon switching and cross-mode ships (persisted at once)
+        if (fleetBridge && !fleetState.open && pending.some((e) => e.type === 'stageCleared' && e.stage >= fleetBridge.gateStage)) {
+          fleetBridge.complete();
+          fleetState = fleetBridge.read();
+        }
         // overheat: a short buzz on phones that support it (touch layouts, full motion only; presentation)
         if (touchUI && !presenter.isReducedMotion && pending.some((e) => e.type === 'weaponOverheated') && typeof navigator.vibrate === 'function') {
           navigator.vibrate([70, 50, 70]);
@@ -686,8 +775,14 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
       // weapon heat (TD-74): HUD meter during a run, and the touch FIRE button
       const heat = engine.world.heat;
       const inRun = engine.phase !== 'title' && engine.phase !== 'gameOver' && engine.phase !== 'boot' && engine.phase !== 'restarting';
-      hud.setHeat(heat.level, heat.overheated, inRun);
+      // P03C: back on the title, re-read the registry (a Free Roam purchase or the milestone may have added ships)
+      if (engine.phase === 'title' && lastPhase !== 'title') refreshFleet();
+      lastPhase = engine.phase;
+      const wv = ordnanceView(engine.world.ordnance);
+      hud.setHeat(heat.level, heat.overheated, inRun && (!wv || wv.gun));
+      hud.setWeapon(wv, inRun);
       touch.setHeat(inRun ? heat.level : 0, inRun && heat.overheated);
+      touch.setWeapon(wv && inRun && wv.count > 1 ? wv : null);
       const tr = presenter.frame(realDt, uiMs, engine.world, phaseClock, engine.isStageIntro);
 
       const display = prefs.get().display;
@@ -731,6 +826,7 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
           transition: tr,
           debug,
           hitboxes: ENGINE.hitboxes,
+          ship: flownSprite(),
         });
         const rect = { left: v.offsetX / ratio, top: v.offsetY / ratio, width: (v.artWidth * v.scale) / ratio, height: (v.artHeight * v.scale) / ratio };
         hud.setPlayfieldRect(rect);

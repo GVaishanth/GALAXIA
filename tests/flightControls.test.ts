@@ -433,14 +433,18 @@ describe('Free Roam pointers (pointers.ts, FR-TD-44)', () => {
     p.stickDown(1, 0, 0);
     p.move(1, 50, 0);
     p.fireDown(2);
-    p.missileDown(3);
+    p.weaponDown(3);
+    p.lockDown(4); // P04.1 LOCK
+    p.targetDown(5); // P04.1 polish NEXT TARGET
     p.setCursor(30, 40);
     p.setMouseFire(true);
     p.reset();
-    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, missileTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
+    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, weaponTouches: 0, lockTouches: 0, targetTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
+    expect(p.takeLockPress()).toBe(false); // a latched LOCK press does not survive a reset
+    expect(p.takeTargetPress()).toBe(false); // nor a latched NEXT TARGET press
     expect(p.firing).toBe(false);
-    expect(p.missileHeld).toBe(false);
-    expect(p.takeMissilePress()).toBe(false); // a latched press does not survive a reset
+    expect(p.weaponHeld).toBe(false);
+    expect(p.takeWeaponPress()).toBe(false); // a latched press does not survive a reset
     p.reset(true);
     expect(p.snapshot().cursor).toBeNull();
     // a pointerup that arrives after the reset is harmless

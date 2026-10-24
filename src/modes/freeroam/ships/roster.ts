@@ -16,6 +16,16 @@
  *    price fits the starter's hold, so no ship needs grinding or a bigger
  *    ship first.
  *  - Ships trade strengths: nothing is strictly better than the starter.
+ *
+ * Weapon mounts (Combat P03B, FR-TD-88; config/weapons.ts):
+ *  - every ship: the primary gun and the pilot missile rack (the lock-on
+ *    missile every ship already fired in Combat P03);
+ *  - heavy missile rack: the hulls whose hardpoints take medium weapons
+ *    (Petrel, Shrike, Condor, Albatross); the light-only Swift and Magpie
+ *    have no room for it (tests/armory.test.ts keeps the two in step);
+ *  - nuke bay: only the Condor and the Albatross, the two advanced ships
+ *    behind the late licences (the Lantern Gate milestone, a visit to the
+ *    Large Magellanic Cloud). The owner chose this set.
  */
 import type { ShipDef, ShipId } from './types.ts';
 
@@ -34,6 +44,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 1 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    mounts: ['primary', 'missile-rack', 'heavy-rack'],
+    defaultWeapon: 'plasma',
     licence: [],
     cost: [],
   },
@@ -49,6 +61,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 2, sensor: 1, cargo: 0 },
     weaponClasses: ['light'],
     stock: { weapon: ['needle-repeater'], shield: ['deflector'], engine: ['sprint-thrusters'], sensor: ['survey-scanner'], cargo: [] },
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 1 }],
     cost: [
       { resource: 'scrap', amount: 10 },
@@ -67,6 +81,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 2, shield: 1, engine: 1, sensor: 1, cargo: 0 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['twin-pulse'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: [] },
+    mounts: ['primary', 'missile-rack', 'heavy-rack'],
+    defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 2 }],
     cost: [
       { resource: 'alloy', amount: 10 },
@@ -85,6 +101,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 2, shield: 2, engine: 1, sensor: 1, cargo: 1 },
     weaponClasses: ['light', 'medium', 'heavy'],
     stock: { weapon: ['lance-driver'], shield: ['bastion-array'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    mounts: ['primary', 'missile-rack', 'heavy-rack', 'nuke-bay'],
+    defaultWeapon: 'plasma',
     licence: [{ kind: 'milestone', milestoneId: 'lantern-gate' }],
     cost: [
       { resource: 'alloy', amount: 18 },
@@ -103,6 +121,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 3 },
     weaponClasses: ['light'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['salvage-rig', 'cargo-pod'] },
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 1 }],
     cost: [
       { resource: 'scrap', amount: 12 },
@@ -121,6 +141,8 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 2, cargo: 1 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['cruise-drive'], sensor: ['deep-array'], cargo: ['cargo-pod'] },
+    mounts: ['primary', 'missile-rack', 'heavy-rack', 'nuke-bay'],
+    defaultWeapon: 'plasma',
     licence: [{ kind: 'galaxy', galaxyId: 'lmc' }],
     cost: [
       { resource: 'fuel', amount: 10 },

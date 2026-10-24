@@ -48,6 +48,17 @@ export function cuesForGameEvent(e: GameEvent): Cue[] {
       return [play('overheat')];
     case 'weaponCooled':
       return [play('cooled')];
+    // Combat P03C: Classic ordnance (only a post-Wave-20 roster ship emits these)
+    case 'weaponSwitched':
+      return [play('weaponSwitch')];
+    case 'ordnanceLaunched':
+      return [play('missileLaunch')];
+    case 'ordnanceRefused':
+      return e.reason === 'unavailable' ? [] : [play('refused')];
+    case 'lockStarted':
+      return [play('lockTone')];
+    case 'detonation':
+      return [play(e.weapon === 'nuke' ? 'nukeBlast' : 'missileBlast')];
     case 'phaseChanged':
       // leaving play for the title (quit) or restarting silences any hum
       return e.to === 'title' || e.to === 'restarting' ? [{ kind: 'stopLoops' }] : [];

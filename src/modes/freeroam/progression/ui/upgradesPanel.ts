@@ -14,7 +14,8 @@ import type { Loadout, ShipDef } from '../../ships/types.ts';
 import { LEVEL_NAME, maxLevel, UPGRADES, type UpgradeLevels } from '../../ships/upgrades.ts';
 import type { Quote, Wallet } from '../economy.ts';
 import { quoteUpgrade } from '../station.ts';
-import { btn, el, focusedKey, panelShell, quoteTable, restoreFocus } from './common.ts';
+import { btn, el, focusedKey, panelShell, quoteTable, restoreFocus, strayRepeat } from './common.ts';
+import { formatMarks } from '../ledger.ts';
 
 export interface UpgradesDeps {
   readonly station: () => string;
@@ -24,6 +25,8 @@ export interface UpgradesDeps {
   readonly licences: () => readonly string[];
   readonly wallet: () => Wallet;
   readonly commit: (levels: UpgradeLevels, w: Wallet, track: string) => void;
+  /** Admin Access: the marks price resolves to 0 (materials and licences still apply; the balance never changes). */
+  readonly free?: (() => boolean) | undefined;
   readonly back: () => void;
   readonly sound: (cue: 'uiMove' | 'uiSelect' | 'bonus') => void;
 }
@@ -56,12 +59,13 @@ export function createUpgradesPanel(d: UpgradesDeps): UpgradesPanel {
     const levels = d.levels();
     const w = d.wallet();
     const lic = d.licences();
-    s.head.textContent = `${ship.name.toUpperCase()} · MARKS ${w.marks} · LICENCES ${lic.length ? lic.map((l) => (l === 'mk2' ? 'MK II' : 'MK III')).join(' + ') : 'NONE (MK I ONLY)'}`;
+    const free = d.free?.() ?? false;
+    s.head.textContent = `${ship.name.toUpperCase()} · ${formatMarks(w.marks)}${free ? ' · ADMIN ACCESS: NO MARKS CHARGED' : ''} · LICENCES ${lic.length ? lic.map((l) => (l === 'mk2' ? 'MK II' : 'MK III')).join(' + ') : 'NONE (MK I ONLY)'}`;
     const ul = el('ul', 'fr-fab-list');
     for (const u of UPGRADES) {
       const cap = maxLevel(ship.id, u.id);
       const lv = levels[u.id] ?? 0;
-      const q = quoteUpgrade(w, ship.id, d.loadout(), levels, u.id, lic);
+      const q = quoteUpgrade(w, ship.id, d.loadout(), levels, u.id, lic, free);
       const li = el('li', `fr-fab-row fr-upgrade${cap === 0 ? ' is-locked' : ''}`);
       li.dataset['track'] = u.id;
       const info = el('div', 'fr-fab-info');
@@ -69,14 +73,15 @@ export function createUpgradesPanel(d: UpgradesDeps): UpgradesPanel {
       info.append(el('span', 'fr-fab-name', `${u.name.toUpperCase()} · ${pips} ${lv ? LEVEL_NAME(lv) : 'STOCK'}${cap < 3 ? ` · MAX ${cap ? LEVEL_NAME(cap) : 'NONE'} ON THIS FRAME` : ''}`), el('span', 'fr-fab-desc', u.description));
       const next = lv < cap ? u.steps[lv] : undefined;
       if (next) {
-        const cost = [`${next.cost.marks} marks`, ...next.cost.materials.map((m) => `${m.amount} ${resourceName(m.resource)}`)].join(' + ');
+        const cost = [free ? 'FREE (ADMIN ACCESS)' : formatMarks(next.cost.marks), ...next.cost.materials.map((m) => `${m.amount} ${resourceName(m.resource)}`)].join(' + ');
         info.append(el('span', 'fr-fab-desc', `NEXT ${LEVEL_NAME(next.level)} · ${cost}${next.licence ? ` · needs the ${next.licence === 'mk2' ? 'Mk II' : 'Mk III'} licence` : ''}`));
       }
       const key = `install:${u.id}`;
       if (q.quote.ok) installable.push(u.id);
       if (next) {
-        const b = btn(`fr-fab-build${pending === key ? ' is-armed' : ''}`, pending === key ? `CONFIRM · ${LEVEL_NAME(next.level)}` : `INSTALL ${LEVEL_NAME(next.level)}`, key, () => {
-          const again = quoteUpgrade(d.wallet(), d.ship().id, d.loadout(), d.levels(), u.id, d.licences());
+        const b = btn(`fr-fab-build${pending === key ? ' is-armed' : ''}`, pending === key ? `CONFIRM · ${LEVEL_NAME(next.level)}` : `INSTALL ${LEVEL_NAME(next.level)}`, key, (e) => {
+          if (pending === key && strayRepeat(e)) return; // a double-click arms; it never also installs
+          const again = quoteUpgrade(d.wallet(), d.ship().id, d.loadout(), d.levels(), u.id, d.licences(), d.free?.() ?? false);
           if (pending !== key) {
             pending = key;
             d.sound('uiMove');

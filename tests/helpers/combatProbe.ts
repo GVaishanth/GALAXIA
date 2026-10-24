@@ -152,9 +152,18 @@ export function duel(d: number, fams: readonly FamilyId[], seed: number, o: Prob
       input = { moveX: (dx / dd) * 0.6 - (dy / dd) * 0.8, moveY: (dy / dd) * 0.6 + (dx / dd) * 0.8, boost: true };
     }
     if (o.missile) {
-      // press when ready (a person taps the button; the skill itself checks range and cone)
+      // Combat P03C: FIRE fires the selected weapon, so a pilot using the lock-on switches to it when it is
+      // ready, presses FIRE (the skill itself checks range and cone; a refusal costs nothing), lets the lock
+      // run, and switches back to plasma (one step per tick, as one wheel notch or tap per frame at most)
+      const a = r.arsenal;
       const m = r.missile;
-      input = { ...input, missile: !!m && m.state === 'ready' && t % 6 === 0 } as SectorInput;
+      const lockReady = a.cooldown['lock-missile'] === 0 && r.energy >= 30 && a.rotation.includes('lock-missile');
+      if (m.state === 'acquiring') input = { ...input, fire: false };
+      else if (a.selected === 'lock-missile') {
+        if (!lockReady || m.notice === 'noTarget' || m.notice === 'lowEnergy') input = { ...input, fire: false, cycle: 1 };
+        else input = { ...input, fire: t % 6 === 0 };
+      } else if (lockReady && t % 6 === 0 && (input.fire ?? false)) input = { ...input, fire: false, cycle: 1 };
+      else if (a.selected !== 'plasma') input = { ...input, fire: false, cycle: 1 };
     }
     for (const a of r.hostiles) prev.set(a.id, { shield: a.shield, state: a.state });
     const ev = stepSector(r, input);
@@ -179,7 +188,7 @@ export function duel(d: number, fams: readonly FamilyId[], seed: number, o: Prob
       if (a.state === 'evade' && p.state !== 'evade' && a.sinceHit <= 2) evades += 1;
       if (a.state === 'retreat') retreatTicks += 1;
     }
-    if (r.missile && r.missile.state === 'cooldown') cooldownTicks += 1;
+    if (r.arsenal && r.arsenal.cooldown['lock-missile'] > 0) cooldownTicks += 1;
     maxShots = Math.max(maxShots, r.shots.length);
     maxMissiles = Math.max(maxMissiles, r.missiles?.length ?? 0);
     maxEnemyShots = Math.max(maxEnemyShots, r.enemyShots.length);

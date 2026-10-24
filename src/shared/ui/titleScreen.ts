@@ -36,6 +36,8 @@ export interface TitleCallbacks {
   readonly onMove?: (() => void) | undefined;
   /** The game's reduced-motion setting (shared prefs + system); true keeps the sky still. Default: the system setting. */
   readonly reducedMotion?: (() => boolean) | undefined;
+  /** P04.2 guide: HOW TO PLAY (button, H key, gamepad Y): open the guide. */
+  readonly onGuide?: (() => void) | undefined;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
@@ -57,6 +59,11 @@ export class TitleScreen {
   private readonly cards: Record<TitleChoice, HTMLButtonElement>;
   private scope: DisposableScope | null = null;
   private focused: TitleChoice = 'classic';
+  private readonly inner: HTMLElement;
+  /** P04.2 guide: HOW TO PLAY button (the guide returns focus here). */
+  readonly guideButton: HTMLButtonElement;
+  /** P04.2 guide: a modal guide is open over the screen: keys, taps and the gamepad leave the cards alone. */
+  private blocked = false;
   /** Times show() was called (diagnostics). */
   shows = 0;
 
@@ -69,6 +76,7 @@ export class TitleScreen {
     this.stars.setAttribute('aria-hidden', 'true');
 
     const inner = el('div', 'title-inner');
+    this.inner = inner;
     const heading = el('h1', 'title-logo');
     const logo = logoCanvas(1);
     logo.setAttribute('aria-hidden', 'true');
@@ -99,10 +107,13 @@ export class TitleScreen {
     this.menu = new MenuList(list, () => this.cb.onMove?.());
 
     const hint = el('p', 'title-hint');
-    hint.append(el('span', 'title-hint-keys', '← → / ↑ ↓ CHOOSE · ENTER START'), el('span', 'title-hint-touch', 'TAP A MODE TO START'));
+    hint.append(el('span', 'title-hint-keys', '← → / ↑ ↓ CHOOSE · ENTER START · H HOW TO PLAY'), el('span', 'title-hint-touch', 'TAP A MODE TO START'));
+    this.guideButton = el('button', 'title-guide', 'HOW TO PLAY');
+    this.guideButton.type = 'button';
+    this.guideButton.addEventListener('click', () => this.cb.onGuide?.()); // element-owned
     this.notices = el('div', 'title-notices');
     this.notices.setAttribute('role', 'status');
-    inner.append(heading, kicker, list, hint, this.notices);
+    inner.append(heading, kicker, list, hint, this.guideButton, this.notices);
     this.root.append(this.stars, inner);
     parent.append(this.root);
   }
@@ -111,8 +122,29 @@ export class TitleScreen {
     return !this.root.hidden;
   }
 
+  /** The mode card last focused (the guide starts on that mode). */
+  get focusedChoice(): TitleChoice {
+    return this.focused;
+  }
+
+  /**
+   * P04.2 guide: while a modal guide is open the cards are inert (no focus, no taps) and
+   * the title's keys and gamepad do nothing; unblocking restores the card focus.
+   */
+  setBlocked(on: boolean): void {
+    if (this.blocked === on) return;
+    this.blocked = on;
+    this.inner.inert = on;
+    if (!on && this.visible && !this.inner.contains(document.activeElement)) this.menu.focus(this.focused === 'classic' ? 0 : 1);
+  }
+
+  get isBlocked(): boolean {
+    return this.blocked;
+  }
+
   show(model: TitleModel): void {
     this.shows += 1;
+    this.setBlocked(false);
     this.meta.classic.textContent = model.classicMeta;
     this.meta.freeroam.textContent = model.freeRoamMeta;
     const lines = [...(model.error ? [model.error] : []), ...model.notices];
@@ -124,6 +156,7 @@ export class TitleScreen {
   }
 
   hide(): void {
+    this.setBlocked(false);
     this.root.hidden = true;
     this.scope?.dispose();
     this.scope = null;
@@ -144,7 +177,12 @@ export class TitleScreen {
     const scope = new DisposableScope();
     this.scope = scope;
     scope.on<KeyboardEvent>(window, 'keydown', (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || isEditableTarget(e.target)) return;
+      if (this.blocked || e.ctrlKey || e.metaKey || e.altKey || isEditableTarget(e.target)) return;
+      if (e.code === 'KeyH' && !e.shiftKey && !e.repeat && this.cb.onGuide) {
+        e.preventDefault();
+        this.cb.onGuide();
+        return;
+      }
       const prev = e.code === 'ArrowLeft' || e.code === 'ArrowUp' || e.code === 'KeyA' || e.code === 'KeyW';
       const next = e.code === 'ArrowRight' || e.code === 'ArrowDown' || e.code === 'KeyD' || e.code === 'KeyS';
       if (prev || next) {
@@ -168,7 +206,12 @@ export class TitleScreen {
       loop = scope.frameLoop((ts) => {
         const { update } = pad.poll(ts);
         if (pad.connected === 0) return false;
+        if (this.blocked) return true; // the guide polls the pad itself while it is open
         for (const b of update.presses) {
+          if (b === 'y' && this.cb.onGuide) {
+            this.cb.onGuide();
+            return true;
+          }
           if (b === 'up' || b === 'left') this.menu.move(-1);
           else if (b === 'down' || b === 'right') this.menu.move(1);
           else if (b === 'a' || b === 'start') {

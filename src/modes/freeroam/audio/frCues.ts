@@ -66,7 +66,7 @@ export function sectorCue(e: SectorEvent, ctx: HitContext): FrSoundId | null {
       return 'fr.complete';
     case 'gate':
       return e.gate.state === 'open' ? null : 'fr.deny';
-    /* pilot missile (Combat P03) */
+    /* pilot ordnance (Combat P03 / P03C) */
     case 'missileLock':
       return 'fr.lock';
     case 'missileLaunched':
@@ -78,6 +78,20 @@ export function sectorCue(e: SectorEvent, ctx: HitContext): FrSoundId | null {
       return 'fr.deny';
     case 'missileReady':
       return 'fr.armed';
+    /* pilot ordnance (Combat P03C) */
+    case 'weaponSwitched':
+      return 'fr.chip';
+    /* ship target lock (P04.1): a soft tick when it locks, the refusal tone when nothing qualifies or it drops out of
+       range; releasing it, or the target's destruction (its own boom), stays quiet */
+    case 'shipLocked':
+      return 'fr.chip';
+    case 'shipLockRefused':
+      return 'fr.deny';
+    case 'shipLockEnded':
+      return e.why === 'range' || e.why === 'gone' || e.why === 'invalid' ? 'fr.deny' : null;
+    case 'detonation':
+      // heavy and nuke blasts are loud; the lock-on's small blast rides on its impact sound
+      return e.weapon === 'lock-missile' ? null : 'fr.bigBoom';
     default:
       return null;
   }

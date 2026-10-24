@@ -7,6 +7,8 @@ import type { StageKind } from '../../config/stages.ts';
 import type { StageTuning } from '../../config/difficulty.ts';
 import type { Rng } from '../rng.ts';
 import type { Path } from '../systems/paths.ts';
+import type { Arsenal } from '../weapons/arsenal.ts';
+import type { WeaponId } from '../../config/weapons.ts';
 
 export type EnemyKind = 'scout' | 'interceptor' | 'commander' | 'transform' | 'capturedFighter';
 
@@ -191,6 +193,70 @@ export interface World {
   heat: WeaponHeat;
   /** A hostile captive that escaped; re-attached next normal stage. */
   pendingRebound: string | null;
+  /**
+   * Combat P03C: the post-Wave-20 ship's weapons (core/systems/ordnance.ts).
+   * null = the legacy fighter: one gun, exactly the original game.
+   */
+  ordnance: ClassicOrdnance | null;
   nextId: number;
   readonly rng: Rng;
+}
+
+/* ------------------------------------------- Combat P03C: Classic ordnance */
+
+/** A missile or nuke in flight (Classic units: art px, ms). */
+export interface ClassicMissile {
+  readonly id: number;
+  readonly weapon: WeaponId;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  vx: number;
+  vy: number;
+  speed: number;
+  /** Flight time left (ms). */
+  lifeMs: number;
+  /** Lock-on: the enemy it steers to (null = flies straight). */
+  target: string | null;
+}
+
+/** The local slow-down a nuke leaves (Classic: enemy shots and enemies on a flight path). */
+export interface ClassicTimeZone {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+  readonly scale: number;
+  msLeft: number;
+  readonly durationMs: number;
+}
+
+/** A detonation ring for the renderer (presentation only; aged by updateOrdnance). */
+export interface ClassicBlast {
+  readonly x: number;
+  readonly y: number;
+  readonly r: number;
+  readonly weapon: WeaponId;
+  ageMs: number;
+  readonly durationMs: number;
+}
+
+export type ClassicOrdnanceNotice = 'noTarget' | 'empty' | 'cooling' | 'busy' | 'lockLost' | null;
+
+export interface ClassicOrdnance {
+  /** The ship's id (Free Roam roster) and its rotation / selection / cooldowns (in 60 Hz ticks, as the catalogue). */
+  readonly ship: string;
+  arsenal: Arsenal;
+  /** Stock weapons left this stage (refilled at every stage start). */
+  readonly ammo: Record<string, number>;
+  missiles: ClassicMissile[];
+  zones: ClassicTimeZone[];
+  blasts: ClassicBlast[];
+  /** Lock-on acquisition in progress. */
+  lock: { target: string; ms: number } | null;
+  notice: ClassicOrdnanceNotice;
+  noticeMs: number;
+  /** FIRE level last tick (press edge for ordnance). */
+  held: boolean;
+  nextId: number;
 }

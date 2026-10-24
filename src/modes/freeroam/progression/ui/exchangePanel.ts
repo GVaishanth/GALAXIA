@@ -16,7 +16,8 @@ import { holdUnits } from '../../inventory/inventory.ts';
 import { resourceName } from '../../inventory/resources.ts';
 import { ECONOMY, MODULE_PRICES, moduleStock, quoteBuyCells, quoteBuyModule, quoteSell, repairLine, sellPrice, stationDemand, UNSELLABLE, type Quote, type Wallet } from '../economy.ts';
 import { quoteShip } from '../station.ts';
-import { btn, el, focusedKey, panelShell, quoteTable, restoreFocus } from './common.ts';
+import { btn, el, focusedKey, panelShell, quoteTable, restoreFocus, strayRepeat } from './common.ts';
+import { formatMarks } from '../ledger.ts';
 
 export interface ExchangeDeps {
   readonly station: () => { readonly id: string; readonly name: string };
@@ -28,7 +29,12 @@ export interface ExchangeDeps {
   /** Free emergency cells due now (0 = none). */
   readonly emergency: () => number;
   readonly claimEmergency: () => string;
+  /** Commit a confirmed wallet; `what` is the history label ("Sold 3 Hull scrap"). */
   readonly commit: (w: Wallet, what: string) => void;
+  /** Admin Access: marks prices resolve to 0 (the balance never changes). */
+  readonly free?: (() => boolean) | undefined;
+  /** Admin Access: why selling is off (null when trading normally). */
+  readonly sellBlocked?: (() => string | null) | undefined;
   readonly commitShip: (fleet: FleetState, w: Wallet, id: ShipId) => void;
   readonly back: () => void;
   readonly sound: (cue: 'uiMove' | 'uiSelect' | 'bonus') => void;
@@ -69,7 +75,8 @@ export function createExchangePanel(d: ExchangeDeps): ExchangePanel {
   const trade = (cls: string, label: string, key: string, quote: () => Quote, commit: (q: Extract<Quote, { ok: true }>) => void): HTMLButtonElement => {
     keys.push(key);
     const q0 = quote();
-    const b = btn(`${cls}${pending === key ? ' is-armed' : ''}`, pending === key ? 'CONFIRM' : label, key, () => {
+    const b = btn(`${cls}${pending === key ? ' is-armed' : ''}`, pending === key ? 'CONFIRM' : label, key, (e) => {
+      if (pending === key && strayRepeat(e)) return; // the second click of a double-click never confirms
       const q = quote();
       if (pending !== key) {
         pending = key;
@@ -120,7 +127,9 @@ export function createExchangePanel(d: ExchangeDeps): ExchangePanel {
     const w = d.wallet();
     const st = d.station();
     const ship = d.ship();
-    s.head.textContent = `MARKS ${w.marks} · HOLD ${holdUnits(w.hold)}/${w.holdCap} · CELLS ${w.hold['fuel'] ?? 0}`;
+    const free = d.free?.() ?? false;
+    const noSell = d.sellBlocked?.() ?? null;
+    s.head.textContent = `${formatMarks(w.marks)}${free ? ' · ADMIN ACCESS: PRICES FREE' : ''} · HOLD ${holdUnits(w.hold)}/${w.holdCap} · CELLS ${w.hold['fuel'] ?? 0}`;
     const out: HTMLElement[] = [];
 
     const due = d.emergency();
@@ -146,26 +155,28 @@ export function createExchangePanel(d: ExchangeDeps): ExchangePanel {
         continue;
       }
       sellRows.push(
-        row(`${resourceName(res).toUpperCase()} · ${n} ABOARD`, `${price} marks each`, [
-          trade('fr-fab-fit', 'SELL 1', `sell1:${res}`, () => quoteSell(d.wallet(), st.id, res, 1), (q) => d.commit(q.result, `sold 1 ${res}`)),
-          ...(n > 1 ? [trade('fr-fab-fit', `SELL ALL ${n}`, `sellall:${res}`, () => quoteSell(d.wallet(), st.id, res, d.wallet().hold[res] ?? 0), (q) => d.commit(q.result, `sold ${res}`))] : []),
-        ]),
+        noSell
+          ? row(`${resourceName(res).toUpperCase()} · ${n} ABOARD`, `${formatMarks(price)} each`, [], noSell)
+          : row(`${resourceName(res).toUpperCase()} · ${n} ABOARD`, `${formatMarks(price)} each`, [
+              trade('fr-fab-fit', 'SELL 1', `sell1:${res}`, () => quoteSell(d.wallet(), st.id, res, 1), (q) => d.commit(q.result, `Sold 1 ${resourceName(res)}`)),
+              ...(n > 1 ? [trade('fr-fab-fit', `SELL ALL ${n}`, `sellall:${res}`, () => quoteSell(d.wallet(), st.id, res, d.wallet().hold[res] ?? 0), (q) => d.commit(q.result, `Sold ${d.wallet().hold[res] ?? 0} ${resourceName(res)}`))] : []),
+            ]),
       );
     }
     out.push(...list(`SELL · PAYS MORE FOR ${CATEGORY_NAME[dem.demand]?.toUpperCase()} · LESS FOR ${CATEGORY_NAME[dem.surplus]?.toUpperCase()}`, sellRows, 'The hold is empty.'));
 
     // buy
     const buyRows: HTMLElement[] = [
-      row('REACTOR CELLS', `${ECONOMY.cellPrice} marks each. Every lane hop burns cells.`, [
-        trade('fr-fab-build', 'BUY 1', 'cells:1', () => quoteBuyCells(d.wallet(), 1), (q) => d.commit(q.result, 'bought cells')),
-        trade('fr-fab-build', 'BUY 5', 'cells:5', () => quoteBuyCells(d.wallet(), 5), (q) => d.commit(q.result, 'bought cells')),
+      row('REACTOR CELLS', `${free ? 'FREE · ADMIN ACCESS' : `${formatMarks(ECONOMY.cellPrice)} each`}. Every lane hop burns cells.`, [
+        trade('fr-fab-build', 'BUY 1', 'cells:1', () => quoteBuyCells(d.wallet(), 1, free), (q) => d.commit(q.result, 'Bought 1 reactor cell')),
+        trade('fr-fab-build', 'BUY 5', 'cells:5', () => quoteBuyCells(d.wallet(), 5, free), (q) => d.commit(q.result, 'Bought 5 reactor cells')),
       ]),
     ];
     for (const id of moduleStock(ship)) {
       const item = EQUIPMENT_BY_ID.get(id)!;
       const p = MODULE_PRICES[id]!;
-      const price = [`${p.marks} marks`, ...p.materials.map((m) => `${m.amount} ${resourceName(m.resource)}`)].join(' + ');
-      buyRows.push(row(`${item.name.toUpperCase()} · ${item.slot.toUpperCase()}`, `${item.description} · ${price}`, [trade('fr-fab-build', 'BUY', `module:${id}`, () => quoteBuyModule(d.wallet(), d.ship(), id), (q) => d.commit(q.result, `bought ${id}`))]));
+      const price = [free ? 'FREE (ADMIN ACCESS)' : formatMarks(p.marks), ...p.materials.map((m) => `${m.amount} ${resourceName(m.resource)}`)].join(' + ');
+      buyRows.push(row(`${item.name.toUpperCase()} · ${item.slot.toUpperCase()}`, `${item.description} · ${price}`, [trade('fr-fab-build', 'BUY', `module:${id}`, () => quoteBuyModule(d.wallet(), d.ship(), id, free), (q) => d.commit(q.result, `Bought ${item.name}`))]));
     }
     out.push(...list(`BUY · EQUIPMENT FOR THE ${ship.name.toUpperCase()} GOES TO STORAGE`, buyRows, ''));
 

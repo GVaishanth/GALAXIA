@@ -2,16 +2,18 @@
  * Station interface model (Prompt 12): the docked hub's tabs and its overview.
  * Pure (no DOM), unit-tested. The tab strip is presentation: every tab opens a
  * panel that already existed (hangar, fabricator, missions, exchange,
- * upgrades) or the equipment screen, whose actions call the same rules as
+ * upgrades), the equipment screen or the armory (Combat P03B), whose actions call the same rules as
  * before. Nothing here changes what docking does.
  */
+import { formatMarks } from '../progression/ledger.ts';
 
-export const STATION_TABS = Object.freeze(['station', 'hangar', 'equipment', 'fabricator', 'missions', 'exchange', 'upgrades'] as const);
+export const STATION_TABS = Object.freeze(['station', 'hangar', 'armory', 'equipment', 'fabricator', 'missions', 'exchange', 'upgrades'] as const);
 export type StationTab = (typeof STATION_TABS)[number];
 
 export const TAB_LABEL: Readonly<Record<StationTab, string>> = Object.freeze({
   station: 'STATION',
   hangar: 'HANGAR',
+  armory: 'ARMORY',
   equipment: 'EQUIPMENT',
   fabricator: 'FABRICATOR',
   missions: 'MISSIONS',
@@ -29,9 +31,9 @@ export function stepTab(current: StationTab, dir: 1 | -1): StationTab {
   return STATION_TABS[(i + dir + STATION_TABS.length) % STATION_TABS.length]!;
 }
 
-/** Where Back goes from a tab: sub-tabs return to the overview; the overview has no back (LAUNCH leaves). */
+/** Where Back goes from a tab: the armory returns to the hangar it is entered from (P03B), other sub-tabs to the overview; the overview has no back (LAUNCH leaves). */
 export function backFrom(tab: StationTab): StationTab | null {
-  return tab === 'station' ? null : 'station';
+  return tab === 'station' ? null : tab === 'armory' ? 'hangar' : 'station';
 }
 
 /** What the overview says (all values come from the shell; nothing is computed from game rules here). */
@@ -78,12 +80,13 @@ export function stationOverview(s: StationSummary): StationOverview {
   const status = `Docked. Hull, shield and energy restored; the ${s.ship} is safe here.${s.first ? ' Station logged in your record.' : ''}`;
   const lines: OverviewLine[] = [
     { label: 'REACTOR CELLS', value: s.emergency > 0 ? `${s.cells} (+${s.emergency} FREE EMERGENCY)` : String(s.cells), accent: s.emergency > 0 },
-    { label: 'GUILD MARKS', value: String(s.marks), accent: false },
+    { label: 'GUILD MARKS', value: formatMarks(s.marks), accent: false },
     { label: 'MISSIONS', value: s.ready > 0 ? `${s.ready} READY TO TURN IN` : s.active > 0 ? `${s.active} ACTIVE` : 'NONE ACTIVE', accent: s.ready > 0 },
   ];
   const services: ServiceCard[] = [
     { tab: 'missions', title: 'MISSIONS', detail: s.ready > 0 ? 'Turn in completed work, take new jobs.' : 'Take contracts and story missions.', badge: s.ready > 0 ? `${s.ready} READY` : s.offers > 0 ? plural(s.offers, 'OFFER') : '' },
     { tab: 'hangar', title: 'HANGAR', detail: 'Choose, buy and inspect ships.', badge: '' },
+    { tab: 'armory', title: 'ARMORY', detail: 'Choose the weapons your ship carries and starts with.', badge: '' },
     { tab: 'equipment', title: 'EQUIPMENT', detail: 'Fit stored modules to the ship’s slots.', badge: s.stored > 0 ? `${s.stored} STORED` : '' },
     { tab: 'fabricator', title: 'FABRICATOR', detail: 'Build modules from cargo.', badge: '' },
     { tab: 'exchange', title: 'EXCHANGE', detail: 'Trade cargo with the Guild for marks.', badge: '' },

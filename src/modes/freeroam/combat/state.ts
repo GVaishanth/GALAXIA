@@ -63,6 +63,9 @@ export interface Agent {
   vy: number;
   /** Facing (radians, 0 = nose up, clockwise), as the player ship. */
   heading: number;
+  /** Combat P03C local time dilation (combat/dilation.ts): step accumulator and the scale it ran at (absent = normal time). */
+  tacc?: number;
+  tscale?: number;
   px: number;
   py: number;
   pheading: number;

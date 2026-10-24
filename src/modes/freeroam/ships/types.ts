@@ -2,6 +2,7 @@
  * Free Roam ship and equipment types (Free Roam Prompt 8). Pure types: the
  * balance values live in roster.ts (ships) and equipment.ts (modules) only.
  */
+import type { MountType, WeaponId } from '../../../config/weapons.ts';
 import type { UnlockRequirement } from '../catalogue/types.ts';
 
 export const SHIP_IDS = ['petrel', 'swift', 'shrike', 'condor', 'magpie', 'albatross'] as const;
@@ -76,6 +77,14 @@ export interface ShipDef {
   readonly weaponClasses: readonly WeaponClass[];
   /** Stock modules, one list per slot type (shorter than the slot count = empty slots). */
   readonly stock: Loadout;
+  /**
+   * Combat P03B: weapon mounts the hull provides (config/weapons.ts). A weapon
+   * can be carried only if its mount is listed here; this is the only place
+   * ship-to-weapon compatibility is decided (ships/armory.ts reads it).
+   */
+  readonly mounts: readonly MountType[];
+  /** The weapon a flight starts with when no valid preference is saved (must be mountable and initial-selectable). */
+  readonly defaultWeapon: WeaponId;
   /** Licence: every requirement must be met before the ship can be acquired (empty = starter). */
   readonly licence: readonly UnlockRequirement[];
   /** Price in cargo resources, paid once at a station hangar. */

@@ -24,6 +24,7 @@ import type { Enemy, World } from '../core/game/types.ts';
 import type { GamePhase } from '../core/game/stateMachine.ts';
 import { marginSides, type SpaceBackdrop } from './backdrop.ts';
 import { drawTractorBeam } from './beam.ts';
+import { drawOrdnance, drawTimeZones } from './ordnanceRender.ts';
 import type { FxDirector } from './fx/fxDirector.ts';
 import { frameIndexAt, oneShotFrameAt } from './sprite/animation.ts';
 import { drawFrame } from './sprite/drawSprite.ts';
@@ -47,6 +48,8 @@ export interface RenderState {
   /** Optional debug overlay (hitboxes). */
   readonly debug?: boolean;
   readonly hitboxes?: Readonly<Record<string, { w: number; h: number }>>;
+  /** Combat P03C: the roster ship flown after the Wave 20 milestone (its Free Roam sprite); absent = the legacy fighter. */
+  readonly ship?: SpriteId | null;
 }
 
 export interface RenderDeps {
@@ -212,6 +215,9 @@ export function drawGame(ctx: CanvasRenderingContext2D, deps: RenderDeps, v: Vie
   }
   mark('beams');
 
+  // Combat P03C: nuke time zones under the enemies (only with a roster ship)
+  drawTimeZones(ctx, sv, world, rs.timeMs, rs.motion);
+
   /* enemies */
   for (const e of world.enemies) {
     if (e.state === 'destroyed') continue;
@@ -230,7 +236,17 @@ export function drawGame(ctx: CanvasRenderingContext2D, deps: RenderDeps, v: Vie
   const p = world.player;
   const px = lerp(p.prevX, p.x, k);
   const py = lerp(p.prevY, p.y, k);
-  if (p.state === 'alive' && tr.playerVisible) {
+  const ship = rs.ship ?? null;
+  if (ship && p.state === 'alive' && tr.playerVisible) {
+    // P03C: the roster ship's own sprite (its engine flame is part of the 'thrust' frames); same hitbox and position
+    if (p.dual) {
+      const o = ENGINE.player.dualHalfOffset;
+      sprite(ds, ship, 'thrust', px - o, py);
+      sprite(ds, ship, 'thrust', px + o, py);
+    } else sprite(ds, ship, 'thrust', px, py);
+  } else if (ship && p.state === 'tractored') {
+    sprite(ds, ship, 'idle', px, py, { rotation: (rs.timeMs / 140) % (Math.PI * 2) });
+  } else if (p.state === 'alive' && tr.playerVisible) {
     if (p.dual) {
       const o = ENGINE.player.dualHalfOffset;
       drawExhaust(ctx, sv, px - o, py, rs.timeMs, rs.motion);
@@ -253,6 +269,9 @@ export function drawGame(ctx: CanvasRenderingContext2D, deps: RenderDeps, v: Vie
     if (frame >= 0) sprite(ds, id, state, f.x, f.y, { frame });
   }
   mark('explosions');
+
+  // P03C: missiles, lock brackets and blast rings (enemy shots are still drawn after them)
+  drawOrdnance(ctx, sv, world, k, rs.timeMs, rs.motion);
 
   fx?.drawOver(ctx, v);
   mark('fxOver');

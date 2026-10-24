@@ -40,8 +40,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const engines = { chromium, firefox, webkit };
 const near = (a, b, tol = 1) => Math.abs(a - b) <= tol;
 
+// P04.2 guide: start as a returning player (only the first-run guide record is seeded, and only when absent)
+const SEED_GUIDE = () => {
+  try {
+    if (!localStorage.getItem('galaxia:guide')) localStorage.setItem('galaxia:guide', JSON.stringify({ version: 1, seen: 1, outcome: 'skipped' }));
+  } catch {}
+};
 async function context(bt, w, h, dpr, touch, extra = {}) {
-  return bt.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, ...(touch ? { hasTouch: true, isMobile: true } : {}), ...extra });
+  const ctx = await bt.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, ...(touch ? { hasTouch: true, isMobile: true } : {}), ...extra });
+  await ctx.addInitScript(SEED_GUIDE);
+  return ctx;
 }
 
 function watch(p) {

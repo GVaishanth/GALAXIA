@@ -62,6 +62,8 @@ export interface GalaxyFuelDeps {
   readonly jump: (edge: NavEdge) => number;
   /** R3: a free return to the start galaxy is due (no affordable route out). */
   readonly homeDue: () => boolean;
+  /** Economy pass: the marks side of the jump in the confirmation (no marks fee). */
+  readonly fee?: (() => string) | undefined;
   /** Commit the free return home (shell). */
   readonly home: () => boolean;
 }
@@ -395,7 +397,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     const r = check.edge.route;
     cTitle.textContent = to.name.toUpperCase();
     cRoute.textContent = `${from.shortName} → ${to.shortName} via ${r.name}`;
-    cStats.textContent = `${ROUTE_LABEL[r.routeClass].toUpperCase()} · RISK ${RISK_LABEL[r.risk].toUpperCase()} · ${deps.fuel ? `COST ${deps.fuel.jump(check.edge)} CELLS · YOU HAVE ${deps.fuel.held()}` : `CHARGE ${r.cost}`}`;
+    cStats.textContent = `${ROUTE_LABEL[r.routeClass].toUpperCase()} · RISK ${RISK_LABEL[r.risk].toUpperCase()} · ${deps.fuel ? `COST ${deps.fuel.jump(check.edge)} CELLS · YOU HAVE ${deps.fuel.held()}${deps.fuel.fee ? ` · ${deps.fuel.fee()}` : ''}` : `CHARGE ${r.cost}`}`;
     confirmLayer.hidden = false;
     root.dataset['confirm'] = 'open';
     setInert(true);

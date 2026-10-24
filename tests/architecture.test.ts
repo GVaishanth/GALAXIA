@@ -219,7 +219,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   });
 
   it('keeps the controller, Free Roam rules and persistence namespaces pure', () => {
-    const pure = ['modes/controller.ts', 'modes/types.ts', 'modes/freeroam/sim.ts', 'modes/freeroam/camera.ts', 'modes/freeroam/input.ts', 'modes/freeroam/profile.ts', 'shared/persistence/namespaces.ts', 'shared/persistence/record.ts', 'shared/persistence/preferences.ts', 'shared/input/pointerStick.ts', 'shared/input/keyTracker.ts', 'modes/freeroam/galaxy/graph.ts', 'modes/freeroam/galaxy/progress.ts', 'modes/freeroam/galaxy/layout.ts', 'modes/freeroam/galaxy/systems.ts', 'modes/freeroam/galaxy/systemLayout.ts'];
+    const pure = ['modes/controller.ts', 'modes/types.ts', 'modes/freeroam/sim.ts', 'modes/freeroam/camera.ts', 'modes/freeroam/input.ts', 'modes/freeroam/profile.ts', 'shared/persistence/namespaces.ts', 'shared/persistence/record.ts', 'shared/persistence/preferences.ts', 'shared/input/pointerStick.ts', 'shared/input/keyTracker.ts', 'modes/freeroam/galaxy/graph.ts', 'modes/freeroam/galaxy/progress.ts', 'modes/freeroam/galaxy/layout.ts', 'modes/freeroam/galaxy/systems.ts', 'modes/freeroam/galaxy/systemLayout.ts', 'config/weapons.ts', 'modes/freeroam/ships/armory.ts', 'modes/freeroam/ships/armoryView.ts'];
     for (const r of pure) {
       const code = readFileSync(join(src, r), 'utf8');
       expect(code, r).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now)\b/);
@@ -273,7 +273,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps Free Roam combat pure and independent of Classic (Prompt 9)', () => {
     const dir = join(src, 'modes/freeroam/combat');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'encounters.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'state.ts', 'weapons.ts', 'world.ts']);
+    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'dilation.ts', 'encounters.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'shipLock.ts', 'state.ts', 'weapons.ts', 'world.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // deterministic simulation: no DOM, wall clock, unseeded randomness or storage
@@ -316,7 +316,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps missions, economy and progression pure; the panels only display and forward (Prompt 11)', () => {
     const dir = join(src, 'modes/freeroam/progression');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['contracts.ts', 'discovery.ts', 'economy.ts', 'events.ts', 'fromSector.ts', 'fuel.ts', 'missionData.ts', 'missionTypes.ts', 'missionWorld.ts', 'missions.ts', 'persistence.ts', 'station.ts', 'view.ts']);
+    expect(files.sort()).toEqual(['contracts.ts', 'discovery.ts', 'economy.ts', 'events.ts', 'fromSector.ts', 'fuel.ts', 'ledger.ts', 'marksRewards.ts', 'missionData.ts', 'missionTypes.ts', 'missionWorld.ts', 'missions.ts', 'persistence.ts', 'station.ts', 'view.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // deterministic rules: no DOM, wall clock, unseeded randomness, direct storage, network or payments
@@ -345,5 +345,39 @@ describe('mode separation (Free Roam Prompt 2)', () => {
     }
     // the shell is the only place panels are wired to the systems that apply results
     for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/'))) expect(importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/progression/')), rel(f)).toEqual([]);
+  });
+
+  it('keeps P04 Admin Access contained: pure rules, a DOM panel without timers or storage, entered only through the hidden activation', () => {
+    const dir = join(src, 'modes/freeroam/admin');
+    const names = readdirSync(dir).filter((f) => f.endsWith('.ts')).sort();
+    expect(names).toEqual(['activation.ts', 'adminPanel.ts', 'login.ts', 'loginScreen.ts', 'navigator.ts', 'session.ts']);
+    for (const f of ['activation.ts', 'login.ts', 'navigator.ts', 'session.ts']) {
+      const code = readFileSync(join(dir, f), 'utf8');
+      expect(code, f).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|sessionStorage|fetch)\b/);
+      // the rules never reach storage, the save format or the shell
+      for (const spec of importSpecs(join(dir, f))) expect(spec, `${f} imports ${spec}`).not.toMatch(/^(persistence|shared\/persistence)\/|^modes\/(crossMode|freeroam\/(profile|saveSlots|freeRoamMode))\.ts$/);
+    }
+    // the DOM parts (panel, login screen): no timers or frame loops of their own, no global listeners, no storage
+    for (const f of ['adminPanel.ts', 'loginScreen.ts']) {
+      const code = readFileSync(join(dir, f), 'utf8');
+      expect(code, f).not.toMatch(/\b(requestAnimationFrame|setTimeout|setInterval|localStorage|sessionStorage|fetch|saveSlot|recordOwned|console)\b/);
+      expect(code, f).not.toMatch(/(window|document)\.addEventListener/);
+    }
+    for (const spec of [...importSpecs(join(dir, 'adminPanel.ts')), ...importSpecs(join(dir, 'loginScreen.ts'))]) expect(spec).not.toMatch(/^(persistence|shared\/persistence)\/|^modes\/(crossMode|freeroam\/(profile|saveSlots|freeRoamMode))\.ts$/);
+    // outside Free Roam only the title host reaches it, and only the activation detectors
+    for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/'))) {
+      const specs = importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/admin/'));
+      expect(specs, rel(f)).toEqual(rel(f) === 'modes/host.ts' ? ['modes/freeroam/admin/activation.ts'] : []);
+    }
+    // inside Free Roam only the shell wires it
+    for (const f of all.filter((x) => rel(x).startsWith('modes/freeroam/') && !rel(x).startsWith('modes/freeroam/admin/') && rel(x) !== 'modes/freeroam/freeRoamMode.ts')) {
+      expect(importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/admin/')), rel(f)).toEqual([]);
+    }
+    // no query-parameter bypass and no global activation hook anywhere in the source
+    for (const f of all) {
+      const code = readFileSync(f, 'utf8');
+      expect(code, rel(f)).not.toMatch(/searchParams\.get\(\s*['"]admin['"]|[?&]admin=/);
+      expect(code, rel(f)).not.toMatch(/window\.[A-Za-z_$]*admin[A-Za-z_$]*\s*=/i);
+    }
   });
 });

@@ -947,16 +947,18 @@ describe('isolation and configuration', () => {
 });
 
 describe('Gravity lab with the Combat P03 missile', () => {
-  it('a scenario reset clears missiles in flight, a lock and the cooldown (nothing carries into the next start)', () => {
+  it('a scenario reset clears missiles in flight, a lock in progress and dilation zones (nothing carries into the next start)', () => {
     const { run, lab } = labRun('B');
-    run.missiles.push({ id: 1, x: run.ship.x, y: run.ship.y - 50, px: run.ship.x, py: run.ship.y - 40, vx: 0, vy: -400, speed: 400, life: 100, target: null });
-    run.missile.state = 'cooldown';
-    run.missile.cooldown = 500;
+    run.missiles.push({ id: 1, weapon: 'lock-missile', x: run.ship.x, y: run.ship.y - 50, px: run.ship.x, py: run.ship.y - 40, vx: 0, vy: -400, speed: 400, life: 100, target: null });
+    run.missile.state = 'acquiring';
+    run.missile.lock = 7;
     run.missile.target = 3;
+    run.dilation.push({ x: run.ship.x, y: run.ship.y, r: 300, scale: 0.5, ticksLeft: 60, duration: 120 });
     applyScenario(run, lab);
     expect(run.missiles).toHaveLength(0);
     expect(run.missile.state).toBe('ready');
-    expect(run.missile.cooldown).toBe(0);
+    expect(run.missile.lock).toBe(0);
     expect(run.missile.target).toBeNull();
+    expect(run.dilation).toHaveLength(0);
   });
 });

@@ -13,6 +13,7 @@
  */
 import type { UnlockRequirement } from '../catalogue/types.ts';
 import type { SavedFleet } from '../profile.ts';
+import { cleanSetup, setupsForSave, type WeaponSetup } from './armory.ts';
 import { deriveStats, isValidLoadout } from './equipment.ts';
 import { SHIP_BY_ID, SHIPS, STARTER_SHIP } from './roster.ts';
 import { SHIP_IDS, SLOT_TYPES, type Loadout, type ResourceCost, type ShipId, type StatKey } from './types.ts';
@@ -23,6 +24,8 @@ export interface FleetState {
   readonly owned: readonly ShipId[];
   /** Fitted modules per owned ship; absent = the stock loadout. */
   readonly loadouts: Readonly<Partial<Record<ShipId, Loadout>>>;
+  /** Combat P03B: weapon preferences per owned ship (armory.ts); absent = the ship's default setup. */
+  readonly weapons?: Readonly<Partial<Record<ShipId, WeaponSetup>>>;
 }
 
 /** The profile's stored shape (ids are only shape-checked there). */
@@ -48,13 +51,17 @@ export function fleetFromSaved(saved: SavedFleet | undefined): FleetState {
     for (const s of SLOT_TYPES) l[s] = Array.isArray(raw[s]) ? [...raw[s]!] : [];
     if (isValidLoadout(SHIP_BY_ID.get(id)!, l)) loadouts[id] = l;
   }
-  return { active, owned, loadouts };
+  // P03B: weapon setups of owned ships, re-validated against each ship's mounts (an unmountable weapon leaves the rotation)
+  const weapons: Partial<Record<ShipId, WeaponSetup>> = {};
+  for (const [id, raw] of Object.entries(saved.weapons ?? {})) if (isShipId(id) && owned.includes(id)) weapons[id] = cleanSetup(id, raw);
+  return Object.keys(weapons).length ? { active, owned, loadouts, weapons } : { active, owned, loadouts };
 }
 
 export function fleetToSaved(f: FleetState): SavedFleet {
   const loadouts: Record<string, Record<string, readonly string[]>> = {};
   for (const [id, l] of Object.entries(f.loadouts)) if (l) loadouts[id] = { ...l };
-  return { active: f.active, owned: [...f.owned], loadouts };
+  const weapons = setupsForSave(f);
+  return Object.keys(weapons).length ? { active: f.active, owned: [...f.owned], loadouts, weapons } : { active: f.active, owned: [...f.owned], loadouts };
 }
 
 export function loadoutOf(f: FleetState, id: ShipId): Loadout {
@@ -170,6 +177,13 @@ const BAR_RANGE: Readonly<Record<StatKey, readonly [number, number]>> = (() => {
   return r;
 })();
 
+/** 0..1 bar length of `v` on the roster's display range (fuller = better; for drive charge, fuller = cheaper). */
+export function barFill(k: StatKey, v: number): number {
+  const [lo, hi] = BAR_RANGE[k];
+  const t = hi > lo ? (STAT_INFO[k].higherIsBetter ? v - lo : hi - v) / (hi - lo) : 1;
+  return Math.min(1, Math.max(0.04, t));
+}
+
 /** Compare `id` (stock or fitted) with the ship currently flown. */
 export function compareStats(f: FleetState, id: ShipId): StatRow[] {
   const a = deriveStats(SHIP_BY_ID.get(id)!, loadoutOf(f, id));
@@ -179,8 +193,6 @@ export function compareStats(f: FleetState, id: ShipId): StatRow[] {
     const diff = a[k] - b[k];
     const eps = Math.abs(b[k]) * 1e-6 + 1e-9;
     const better = Math.abs(diff) <= eps ? 0 : (diff > 0) === info.higherIsBetter ? 1 : -1;
-    const [lo, hi] = BAR_RANGE[k];
-    const t = hi > lo ? (info.higherIsBetter ? a[k] - lo : hi - a[k]) / (hi - lo) : 1;
-    return { key: k, label: info.label, value: a[k], current: b[k], delta: better as -1 | 0 | 1, fill: Math.min(1, Math.max(0.04, t)) };
+    return { key: k, label: info.label, value: a[k], current: b[k], delta: better as -1 | 0 | 1, fill: barFill(k, a[k]) };
   });
 }

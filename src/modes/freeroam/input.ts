@@ -14,7 +14,7 @@ import { DEFAULT_BINDINGS, PANEL_KEYS, RESERVED_KEYS, ZOOM_KEYS, type Bindings, 
 import type { FlightInput } from './sim.ts';
 
 /** Gamepad standard-mapping indices used by Free Roam flight. */
-export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], missile: [11] as readonly number[], aimDeadZone: 0.3 });
+export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], weapon: [11] as readonly number[], aimDeadZone: 0.3 });
 
 const held = (keys: ReadonlySet<string>, b: Bindings, a: FlightAction): boolean => keys.has(b[a][0]) || (b[a][1] !== null && keys.has(b[a][1]));
 
@@ -35,8 +35,8 @@ export function keyboardBoost(keys: ReadonlySet<string>, b: Bindings = DEFAULT_B
   return held(keys, b, 'boost');
 }
 
-/** Missile key held (Q / K by default); the skill reacts to the press only. */
-export function keyboardMissile(keys: ReadonlySet<string>, b: Bindings = DEFAULT_BINDINGS): boolean {
+/** NEXT WEAPON key held (Q / K by default; the `missile` binding id kept from Combat P03 so saved bindings stay valid). The shell acts on the press only. */
+export function keyboardWeapon(keys: ReadonlySet<string>, b: Bindings = DEFAULT_BINDINGS): boolean {
   return held(keys, b, 'missile');
 }
 
@@ -76,9 +76,9 @@ export function padBoost(snap: PadSnapshot | null): boolean {
   return !!snap && PAD.boost.some((i) => snap.pressed[i] === true);
 }
 
-/** Right-stick click (R3) held: the missile (every face and shoulder button already has a flight role). */
-export function padMissile(snap: PadSnapshot | null): boolean {
-  return !!snap && PAD.missile.some((i) => snap.pressed[i] === true);
+/** Right-stick click (R3) held: NEXT WEAPON (every face and shoulder button already has a flight role). */
+export function padWeapon(snap: PadSnapshot | null): boolean {
+  return !!snap && PAD.weapon.some((i) => snap.pressed[i] === true);
 }
 
 /** Sum of all sources, clamped to the unit disc (two devices never exceed full thrust). */

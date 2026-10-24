@@ -43,10 +43,15 @@
  * record and the fuel bookkeeping (starter cells granted once, arrivals and
  * the arrival of the last free emergency top-up). Shapes only here;
  * progression/persistence.ts drops unknown missions, tracks and resources.
+ * Economy pass (additive, still v10): `progression.ledger` (a bounded history
+ * of marks changes and recent claim ids; the balance stays `progression.marks`)
+ * and `progression.bounty` (per-system bounty windows). Absent = empty, so
+ * older saves keep their exact balance and gain no starting bonus.
  */
 import type { KeyValueStore } from '../../persistence/storage.ts';
 import { STORAGE_KEYS } from '../../shared/persistence/namespaces.ts';
 import { intField, isObj, loadRecord, writeRecord, type Fix, type RecordLoad, type RecordSpec } from '../../shared/persistence/record.ts';
+import { cleanOrdnance, initialOrdnance } from '../../config/weapons.ts';
 import { DEFAULT_BINDINGS, sanitizeBindings, type Bindings } from './bindings.ts';
 
 export interface FreeRoamProfile {
@@ -87,6 +92,12 @@ export interface FreeRoamProfile {
   readonly milestones: readonly string[];
   /* v9: progression */
   readonly progression: SavedProgression;
+  /**
+   * Combat P03B (additive, still v10): saved ammunition per stocked weapon
+   * (config/weapons.ts STOCKED_WEAPONS), always whole numbers in 0..capacity.
+   * A save without it starts at the initial stock; docking refills it.
+   */
+  readonly ordnance: Readonly<Record<string, number>>;
   /* v10: save management */
   /** ms since epoch of the last successful save (0 = never saved by v10+). */
   readonly savedAt: number;
@@ -150,6 +161,22 @@ export interface SavedFuel {
   readonly aidAt: number;
 }
 
+/** Economy pass: one marks change in the bounded history (shapes only; progression/ledger.ts re-checks). */
+export interface SavedLedgerEntry {
+  readonly seq: number;
+  readonly kind: string;
+  readonly label: string;
+  readonly delta: number;
+  readonly balance: number;
+  readonly refunded?: boolean;
+}
+
+export interface SavedLedger {
+  readonly seq: number;
+  readonly history: readonly SavedLedgerEntry[];
+  readonly recent: readonly string[];
+}
+
 export interface SavedProgression {
   readonly marks: number;
   readonly missions: SavedMissions;
@@ -158,6 +185,10 @@ export interface SavedProgression {
   readonly licences: readonly string[];
   readonly log: SavedLog;
   readonly fuel: SavedFuel;
+  /** Economy pass (additive): marks history. Absent = none yet. */
+  readonly ledger?: SavedLedger;
+  /** Economy pass (additive): system id -> bounty paid in the current period and the jump count it opened at. */
+  readonly bounty?: Readonly<Record<string, { readonly paid: number; readonly since: number }>>;
 }
 
 export const EMPTY_PROGRESSION: SavedProgression = Object.freeze({
@@ -183,6 +214,12 @@ export interface SavedFleet {
   readonly owned: readonly string[];
   /** Non-stock loadouts: ship id -> slot type -> module ids. */
   readonly loadouts: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>>;
+  /**
+   * Combat P03B (additive, still v10): weapon preferences per owned ship, ship id ->
+   * start weapon and switching cycle. Shapes only here; ships/armory.ts cleanSetup
+   * re-checks every weapon against the ship's mounts on load. Absent = defaults.
+   */
+  readonly weapons?: Readonly<Record<string, { readonly start: string; readonly rotation: readonly string[] }>>;
 }
 
 /** The starter ship's id (tests check it matches ships/roster.ts STARTER_SHIP). */
@@ -257,6 +294,7 @@ export const EMPTY_PROFILE: FreeRoamProfile = Object.freeze({
   progression: EMPTY_PROGRESSION,
   savedAt: 0,
   resume: null,
+  ordnance: initialOrdnance(),
 });
 
 /** A system id, or '' (= the current galaxy's gateway). */
@@ -443,7 +481,28 @@ function fleetField(f: Fix, v: unknown): SavedFleet {
       loadouts[ship] = slots;
     }
   }
-  return { active, owned: ownedAll, loadouts };
+  // P03B: weapon setups (shape only; the Free Roam chunk validates the weapons per ship)
+  const weapons: Record<string, { start: string; rotation: string[] }> = {};
+  const rw = v['weapons'];
+  if (rw !== undefined && !isObj(rw)) f.repaired = true;
+  if (isObj(rw)) {
+    for (const [ship, w] of Object.entries(rw)) {
+      const rot = isObj(w) ? w['rotation'] : undefined;
+      const ok = ownedAll.includes(ship) && isObj(w) && typeof w['start'] === 'string' && WEAPON_REF.test(w['start']) && Array.isArray(rot) && rot.length <= MAX_WEAPONS && rot.every((x) => typeof x === 'string' && WEAPON_REF.test(x));
+      if (ok) weapons[ship] = { start: w['start'] as string, rotation: [...(rot as string[])] };
+      else f.repaired = true;
+    }
+  }
+  return Object.keys(weapons).length ? { active, owned: ownedAll, loadouts, weapons } : { active, owned: ownedAll, loadouts };
+}
+
+const WEAPON_REF = /^[a-z]+(?:-[a-z]+)*$/;
+const MAX_WEAPONS = 8;
+
+function ordnanceField(f: Fix, v: unknown): Readonly<Record<string, number>> {
+  const r = cleanOrdnance(v);
+  if (r.repaired) f.repaired = true;
+  return r.counts;
 }
 
 /* v9 progression (shapes only) */
@@ -458,6 +517,48 @@ const MAX_MARKS = 9_999_999;
 const MAX_LOG = 512;
 
 const int = (v: unknown, lo: number, hi: number): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi ? v : null);
+
+/* Economy pass: the marks history and bounty windows (bounded; shapes only) */
+const LEDGER_HISTORY = 24;
+const LEDGER_RECENT = 48;
+const LEDGER_KIND = /^[a-z]+$/;
+const LEDGER_ID = /^[a-z]+:[a-z0-9:#/.-]{1,90}$/;
+const MAX_BOUNTY_SYSTEMS = 128;
+const MAX_SEQ = 2 ** 52;
+
+function ledgerField(f: Fix, v: unknown): SavedLedger | undefined {
+  if (v === undefined) return undefined;
+  if (!isObj(v)) return ((f.repaired = true), undefined);
+  const seq = int(v['seq'], 0, MAX_SEQ) ?? ((f.repaired = true), 0);
+  const history: SavedLedgerEntry[] = [];
+  const rawH = Array.isArray(v['history']) ? v['history'] : ((f.repaired ||= v['history'] !== undefined), []);
+  for (const e of rawH.slice(-LEDGER_HISTORY)) {
+    const ok = isObj(e) && int(e['seq'], 1, MAX_SEQ) !== null && typeof e['kind'] === 'string' && LEDGER_KIND.test(e['kind']) && typeof e['label'] === 'string' && e['label'].length <= 64 && int(e['delta'], -MAX_MARKS, MAX_MARKS) !== null && int(e['balance'], 0, MAX_MARKS) !== null && (e['refunded'] === undefined || typeof e['refunded'] === 'boolean');
+    if (!ok) {
+      f.repaired = true;
+      continue;
+    }
+    const entry = { seq: e['seq'] as number, kind: e['kind'] as string, label: e['label'] as string, delta: e['delta'] as number, balance: e['balance'] as number };
+    history.push(e['refunded'] === true ? { ...entry, refunded: true } : entry);
+  }
+  if (rawH.length > LEDGER_HISTORY) f.repaired = true;
+  const rawR = Array.isArray(v['recent']) ? v['recent'] : ((f.repaired ||= v['recent'] !== undefined), []);
+  const recent = rawR.filter((x): x is string => typeof x === 'string' && LEDGER_ID.test(x)).slice(-LEDGER_RECENT);
+  if (recent.length !== rawR.length) f.repaired = true;
+  return { seq: Math.max(seq, ...history.map((e) => e.seq)), history, recent };
+}
+
+function bountyField(f: Fix, v: unknown, jumps: number): Readonly<Record<string, { readonly paid: number; readonly since: number }>> | undefined {
+  if (v === undefined) return undefined;
+  if (!isObj(v)) return ((f.repaired = true), undefined);
+  const out: Record<string, { paid: number; since: number }> = {};
+  for (const [id, w] of Object.entries(v)) {
+    const ok = SYSTEM_ID.test(id) && isObj(w) && int(w['paid'], 0, MAX_MARKS) !== null && int(w['since'], 0, jumps) !== null && Object.keys(out).length < MAX_BOUNTY_SYSTEMS;
+    if (ok) out[id] = { paid: w['paid'] as number, since: w['since'] as number };
+    else f.repaired = true;
+  }
+  return out;
+}
 
 function contractField(f: Fix, v: unknown): SavedContract | null {
   if (!isObj(v)) return ((f.repaired = true), null);
@@ -552,13 +653,18 @@ function progressionField(f: Fix, v: unknown): SavedProgression {
   const fuel = v['fuel'];
   const fuelOk = isObj(fuel) && typeof fuel['starter'] === 'boolean' && int(fuel['arrivals'], 0, MAX_COUNT) !== null && int(fuel['aidAt'], -1, MAX_COUNT) !== null;
   if (fuel !== undefined && !fuelOk) f.repaired = true;
+  const missions = missionsField(f, v['missions']);
+  const ledger = ledgerField(f, v['ledger']);
+  const bounty = bountyField(f, v['bounty'], missions.jumps);
   return {
     marks: int(v['marks'], 0, MAX_MARKS) ?? ((f.repaired ||= v['marks'] !== undefined), 0),
-    missions: missionsField(f, v['missions']),
+    missions,
     upgrades: upgradesField(f, v['upgrades']),
     licences: idList(f, v['licences'], WORD_ID, 16, []),
     log: logField(f, v['log']),
     fuel: fuelOk ? { starter: fuel['starter'] as boolean, arrivals: fuel['arrivals'] as number, aidAt: Math.min(fuel['aidAt'] as number, fuel['arrivals'] as number) } : D.fuel,
+    ...(ledger ? { ledger } : {}),
+    ...(bounty ? { bounty } : {}),
   };
 }
 
@@ -591,6 +697,7 @@ export const FREEROAM_SPEC: RecordSpec<FreeRoamProfile> = Object.freeze({
       progression: progressionField(f, doc['progression']),
       savedAt: intField(f, doc['savedAt'], 0, MAX_TIME),
       resume: resumeField(f, doc['resume']),
+      ordnance: ordnanceField(f, doc['ordnance']),
     };
     return { data, repaired: f.repaired };
   },
@@ -804,6 +911,11 @@ export function profileSummary(p: FreeRoamProfile): string {
   if (p.sessions === 0) return 'NEW PILOT · FLIGHT TEST';
   const best = p.bestSurveyTicks > 0 ? ` · BEST ${formatTicks(p.bestSurveyTicks)}` : '';
   return `SURVEYS ${p.surveysCompleted}${best}`;
+}
+
+/** Store the saved ammunition counts (P03B); invalid entries are cleaned, never raised above capacity. */
+export function withOrdnance(p: FreeRoamProfile, ordnance: Readonly<Record<string, number>>): FreeRoamProfile {
+  return { ...p, ordnance: cleanOrdnance(ordnance).counts };
 }
 
 /** Store progression (v9; progression/persistence.ts builds it). */

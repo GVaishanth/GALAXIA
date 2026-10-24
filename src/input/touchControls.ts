@@ -2,7 +2,9 @@
  * Touch controls DOM adapter (Pointer Events) -> TouchPadModel -> InputHub.
  *
  * Layout: a slide move pad (◀ knob ▶), a pause button and a large FIRE
- * button. The pad lives outside the playfield (below it in portrait, in the
+ * button. Combat P03C: with a post-Wave-20 roster ship a weapon button sits
+ * directly above FIRE (hidden otherwise, so the legacy layout is unchanged);
+ * every touch on it is one NEXT WEAPON step and it never fires. The pad lives outside the playfield (below it in portrait, in the
  * side columns in landscape), so fingers never cover the action.
  *
  * Robustness:
@@ -40,7 +42,13 @@ export class TouchControls {
   readonly info: HTMLElement;
   /** Called when the ⓘ button is tapped. */
   onInfo: (() => void) | null = null;
+  /** P03C weapon button (above FIRE): hidden unless the flown ship has a weapon rotation. */
+  readonly weapon: HTMLElement;
+  private readonly weaponName: HTMLElement;
+  private readonly weaponState: HTMLElement;
+  private weaponKey = '';
   private heatKey = '';
+  private weaponTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(hub: InputHub, host: Pick<Window, 'addEventListener' | 'removeEventListener'> = window) {
     this.model = new TouchPadModel(hub);
@@ -60,8 +68,15 @@ export class TouchControls {
     this.info = el('div', 'touch-zone touch-btn touch-info', 'i');
     const system = el('div', 'touch-system');
     system.append(pause, this.info);
+    this.weapon = el('div', 'touch-btn touch-wpn');
+    this.weapon.hidden = true;
+    this.weaponName = el('span', 'touch-wpn-name', 'GUN');
+    this.weaponState = el('span', 'touch-wpn-state', '∞');
+    this.weapon.append(this.weaponName, this.weaponState);
+    const fireCol = el('div', 'touch-fire-col');
+    fireCol.append(this.weapon, fire);
     const fireGroup = el('div', 'touch-group touch-group-action');
-    fireGroup.append(system, fire);
+    fireGroup.append(system, fireCol);
     const moveGroup = el('div', 'touch-group touch-group-move');
     moveGroup.append(move);
     this.root.append(moveGroup, fireGroup);
@@ -99,6 +114,17 @@ export class TouchControls {
       const r = this.info.getBoundingClientRect();
       if (e.type === 'pointerup' && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) this.onInfo?.();
     };
+    // weapon button: one step per touch-down (several fingers = several steps, each once); never a fire zone
+    const weaponDown = (e: PointerEvent): void => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation(); // not a [data-zone]: the pad model never sees it
+      hub.press('next', 'touch');
+      this.weapon.classList.add('is-pressed');
+      clearTimeout(this.weaponTimer);
+      this.weaponTimer = setTimeout(() => this.weapon.classList.remove('is-pressed'), TOUCH_PAD.minFeedbackMs);
+    };
+    this.weapon.addEventListener('pointerdown', weaponDown);
     this.info.addEventListener('pointerdown', infoDown);
     host.addEventListener('pointerup', infoUp as EventListener);
     host.addEventListener('pointercancel', infoUp as EventListener);
@@ -114,6 +140,7 @@ export class TouchControls {
       this.root.removeEventListener('lostpointercapture', up as EventListener);
       this.root.removeEventListener('contextmenu', noMenu);
       this.info.removeEventListener('pointerdown', infoDown);
+      this.weapon.removeEventListener('pointerdown', weaponDown);
       host.removeEventListener('pointerup', infoUp as EventListener);
       host.removeEventListener('pointercancel', infoUp as EventListener);
       host.removeEventListener('pointermove', moveH as EventListener);
@@ -135,6 +162,23 @@ export class TouchControls {
     if (fire.textContent !== label) fire.textContent = label;
   }
 
+  /**
+   * P03C weapon button: null hides it (legacy fighter); otherwise the selected
+   * weapon's short name and its state (ammo, ∞, a cooldown or LOCK %).
+   * `ready` false dims it (empty / cooling). DOM only on change.
+   */
+  setWeapon(view: { readonly name: string; readonly state: string; readonly ready: boolean; readonly label: string } | null): void {
+    const key = view ? `${view.name}|${view.state}|${view.ready}` : 'off';
+    if (key === this.weaponKey) return;
+    this.weaponKey = key;
+    this.weapon.hidden = view === null;
+    if (!view) return;
+    this.weaponName.textContent = view.name;
+    this.weaponState.textContent = view.state;
+    this.weapon.classList.toggle('is-unready', !view.ready);
+    this.weapon.setAttribute('aria-label', view.label);
+  }
+
   /** Drop all pointers (blur, hidden page, layout switch). */
   reset(): void {
     this.model.reset();
@@ -145,6 +189,7 @@ export class TouchControls {
     this.detach();
     // pending press-feedback timers must not outlive the pad (mode switch)
     for (const zone of ['move', 'fire', 'pause'] as const) clearTimeout(this.timers[zone]);
+    clearTimeout(this.weaponTimer);
     this.root.remove();
   }
 

@@ -17,8 +17,9 @@
  * missiles and mines. Enemy ships, their AI, projectiles, encounters and
  * hazards live in ../combat/ (factions, families, weapons, difficulty, ai,
  * projectiles, encounters, hazards, world); this module owns the tick order
- * and the run state. Ordinary kills pay nothing (nothing to farm); an
- * encounter pays its fixed loot once on completion. After arriving (and after
+ * and the run state. Ordinary kills drop no fixed loot (at most a
+ * capped salvage pod, FR-TD-59); the Guild's capped marks bounty
+ * (progression/marksRewards.ts, a per-system pool) is paid outside the run. An encounter pays its fixed loot once on completion. After arriving (and after
  * a recall) the region's grace period keeps every enemy from firing and every
  * encounter from starting.
  *
@@ -47,7 +48,12 @@ import type { FamilyId } from '../combat/families.ts';
 import { inInterference, stepEruptions } from '../combat/hazards.ts';
 import { layFieldMines, stepEnemyShots, stepMines, triggerMine } from '../combat/projectiles.ts';
 import { freshGravity, pullOn, wellsOf, type GravityState, type Well } from './gravityWells.ts';
-import { freshMissileSkill, resetMissiles, stepMissiles, stepMissileSkill, type MissileSkill, type PlayerMissile } from '../combat/playerMissile.ts';
+import { freshMissileSkill, resetMissiles, stepMissiles, stepMissileSkill, switchWeapon, type MissileSkill, type PlayerMissile, type RefusalReason } from '../combat/playerMissile.ts';
+import { stepDilation, type DilationZone } from '../combat/dilation.ts';
+import { clearShipLock, cycleShipLock, endShipLock, freshShipLock, stepShipLock, toggleShipLock, type ShipLock, type ShipLockEnd } from '../combat/shipLock.ts';
+import { cleanOrdnance, initialOrdnance, type WeaponId as PilotWeaponId } from '../../../config/weapons.ts';
+import { createArsenal, type Arsenal, type ArsenalSpec } from '../../../core/weapons/arsenal.ts';
+import { compatibleWeapons, defaultSetup } from '../ships/armory.ts';
 import type { Agent, CombatLevel, EncounterRuntime, EnemyShot, Mine, Pending } from '../combat/state.ts';
 import type { WeaponId } from '../combat/weapons.ts';
 import { damageAgent, damagePlayer, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
@@ -134,8 +140,24 @@ export interface SectorInput extends FlightInput {
   readonly fire?: boolean | undefined;
   /** Boost held (Shift, LB / LT, the BOOST button). */
   readonly boost?: boolean | undefined;
-  /** Missile key held (Q / K by default, R3, the MSL button); the skill acts on the press edge only (combat/playerMissile.ts). */
-  readonly missile?: boolean | undefined;
+  /**
+   * Combat P03C: switch the selected weapon this tick, one step (1 next, -1
+   * previous; the NEXT WEAPON key Q / R3 and the WPN button; since P04.1 the
+   * wheel zooms instead). An edge command: the shell sends it for exactly one
+   * tick per gesture.
+   */
+  readonly cycle?: 1 | -1 | 0 | undefined;
+  /**
+   * P04.1: toggle the ship target lock this tick (X / the LOCK button;
+   * combat/shipLock.ts). An edge command like `cycle`. The lock only aims the
+   * nose; it never moves, thrusts or fires.
+   */
+  readonly lockToggle?: boolean | undefined;
+  /**
+   * P04.1 polish: move the ship lock to the next eligible target this tick
+   * (C / the NEXT TARGET button). An edge command; only while a lock holds.
+   */
+  readonly targetCycle?: boolean | undefined;
   /** Rotate-and-thrust controls; read only by a flight hook (the Gravity Flight test sector, FR-TD-83). */
   readonly vector?: VectorControls | undefined;
 }
@@ -224,11 +246,22 @@ export type SectorEvent =
   /* pilot missile skill (Combat P03, combat/playerMissile.ts) */
   | { readonly type: 'missileLock'; readonly hostile: number; readonly x: number; readonly y: number }
   | { readonly type: 'missileLockLost' }
-  | { readonly type: 'missileRefused'; readonly reason: 'noTarget' | 'lowEnergy' | 'cooling' }
-  | { readonly type: 'missileLaunched'; readonly hostile: number; readonly x: number; readonly y: number }
-  | { readonly type: 'missileHit'; readonly hostile: number; readonly x: number; readonly y: number; readonly damage: number; readonly killed: boolean }
-  | { readonly type: 'missileExpired'; readonly x: number; readonly y: number }
-  | { readonly type: 'missileReady' }
+  /* ship target lock (P04.1, combat/shipLock.ts): facing only */
+  | { readonly type: 'shipLocked'; readonly hostile: number; readonly family: FamilyId; readonly x: number; readonly y: number; readonly from?: number }
+  | { readonly type: 'shipLockRefused'; readonly why: 'noTarget' | 'unavailable' | 'noLock' | 'onlyTarget' }
+  | { readonly type: 'shipLockEnded'; readonly hostile: number; readonly why: ShipLockEnd }
+  | { readonly type: 'missileRefused'; readonly reason: RefusalReason; readonly weapon: PilotWeaponId }
+  | { readonly type: 'missileLaunched'; readonly weapon: PilotWeaponId; readonly hostile: number | null; readonly x: number; readonly y: number }
+  | { readonly type: 'missileHit'; readonly weapon: PilotWeaponId; readonly hostile: number; readonly x: number; readonly y: number; readonly damage: number; readonly killed: boolean }
+  /** A missile that ended with no blast: a lock-on fizzling (rock, end of flight) or any missile leaving the sector. */
+  | { readonly type: 'missileExpired'; readonly weapon: PilotWeaponId; readonly x: number; readonly y: number }
+  | { readonly type: 'missileReady'; readonly weapon: PilotWeaponId }
+  /* pilot ordnance (Combat P03C) */
+  | { readonly type: 'weaponSwitched'; readonly weapon: PilotWeaponId }
+  /** A stocked weapon spent one round (the shell writes the count to the profile and saves). */
+  | { readonly type: 'ordnanceSpent'; readonly weapon: PilotWeaponId; readonly left: number }
+  | { readonly type: 'detonation'; readonly weapon: PilotWeaponId; readonly x: number; readonly y: number; readonly r: number; readonly hits: number; readonly kills: number }
+  | { readonly type: 'dilation'; readonly state: 'start' | 'end'; readonly x: number; readonly y: number; readonly r: number; readonly ticks: number }
   | { readonly type: 'combat'; readonly level: CombatLevel }
   | { readonly type: 'recovered'; readonly units: number; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] };
 
@@ -322,10 +355,29 @@ export interface SectorRun {
   /** Weapon heat 0..1 (FR-TD-79), and whether it is locked until it cools. */
   heat: number;
   overheated: boolean;
-  /** Pilot missile skill (Combat P03): its state machine and the missiles in flight (temporary). */
+  /** Pilot ordnance (Combat P03 / P03C): the lock-on acquisition and notices, and the missiles in flight (temporary). */
   missile: MissileSkill;
+  /** P04.1: the ship target lock (X / LOCK): which hostile the nose faces, and its HUD notice (temporary). */
+  shipLock: ShipLock;
   readonly missiles: PlayerMissile[];
   nextMissile: number;
+  /** Combat P03C: the flown ship's weapons (rotation, selection, per-weapon cooldowns; core/weapons/arsenal.ts). */
+  arsenal: Arsenal;
+  /**
+   * Stocked ammunition (heavy missile, nuke): the profile's `ordnance`
+   * counts, handed in at entry; every launch reports `ordnanceSpent` so the
+   * shell writes the same count back to the profile (one count, no second
+   * inventory). Docking refills it through the shell (`setRunOrdnance`).
+   */
+  readonly ammo: Record<string, number>;
+  /**
+   * P04 Admin Access sandbox: launches spend no magazine round and no energy
+   * (cooldowns, recovery and mounts unchanged). Set by the shell only during
+   * an admin session; never saved.
+   */
+  unlimitedAmmo: boolean;
+  /** Nuke time-dilation zones (combat/dilation.ts; temporary). */
+  readonly dilation: DilationZone[];
   shotsFired: number;
   kills: number;
   /** The nearest usable button interaction in range, or null. */
@@ -358,11 +410,17 @@ export interface RunOptions {
   readonly ship?: DerivedShip | undefined;
   /** Free cargo space at entry (default unlimited). */
   readonly cargoSpace?: number | undefined;
+  /** Combat P03C: the flown ship's weapons (ships/armory.ts armedLoadout; default: the ship's default setup). */
+  readonly loadout?: ArsenalSpec | undefined;
+  /** Combat P03C: the profile's stocked ammunition (default: a new pilot's). */
+  readonly ordnance?: Readonly<Record<string, number>> | undefined;
   /** The pilot's cargo wreck in this sector, if any. */
   readonly cargoWreck?: CargoWreck | null | undefined;
   /** Prompt 13: start here instead of the spawn point (a saved resume point; checked with
    *  sector/resume.ts safeResumePoint, an unsafe point is ignored). */
   readonly at?: ResumeAt | null | undefined;
+  /** P04 Admin Access sandbox: launches spend no ammunition (SectorRun.unlimitedAmmo). */
+  readonly unlimitedAmmo?: boolean | undefined;
 }
 
 /** POIs every pilot knows on arrival: the station, the gates and the exit beacon (navigation beacons). */
@@ -432,8 +490,13 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     heat: 0,
     overheated: false,
     missile: freshMissileSkill(),
+    shipLock: freshShipLock(),
     missiles: [],
     nextMissile: 1,
+    arsenal: createArsenal(o.loadout ?? { compatible: compatibleWeapons(craft.ship), ...defaultSetup(craft.ship) }),
+    ammo: { ...(o.ordnance ? cleanOrdnance(o.ordnance).counts : initialOrdnance()) },
+    unlimitedAmmo: o.unlimitedAmmo === true,
+    dilation: [],
     shotsFired: 0,
     kills: 0,
     focus: null,
@@ -639,6 +702,12 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     run.boost = Math.max(0, run.boost - RUN.boostFall);
   }
   const tune = run.boost > 0 ? { ...run.tune, accel: run.tune.accel * (1 + (RUN.boostAccelMul - 1) * run.boost), maxSpeed: run.tune.maxSpeed * (1 + (RUN.boostSpeedMul - 1) * run.boost) } : run.tune;
+  /* P04.1 ship lock: the toggle, then a re-check; a held lock becomes the aim of the one orientation rule
+     (sim.ts stepShip), replacing mouse aim / right stick. Position, velocity and thrust are never touched. */
+  if (input.lockToggle === true) toggleShipLock(run, events);
+  if (input.targetCycle === true) cycleShipLock(run, events);
+  const lockAim = stepShipLock(run, events);
+  if (lockAim && !run.flight) input = { ...input, aimX: lockAim.x, aimY: lockAim.y };
   let moved: { distance: number; pushed: boolean };
   if (run.flight) {
     // the gravity lab owns the physics (its own planet and pull): no landmark pull on top
@@ -677,13 +746,16 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   sh.x = Math.min(L.width, Math.max(0, sh.x));
   sh.y = Math.min(L.height, Math.max(0, sh.y));
 
-  /* weapon: fire from the new pose, then move every bolt */
+  /* weapons (Combat P03C): one switch step, then FIRE drives the selected weapon only */
+  if (input.cycle === 1 || input.cycle === -1) switchWeapon(run, input.cycle, events);
+  const gun = run.arsenal.selected === 'plasma';
+  const firing = input.fire === true;
   if (run.fireCooldown > 0) run.fireCooldown -= 1;
-  coolWeapon(run, input.fire === true, events);
-  if (input.fire === true && !run.overheated) fire(run, events);
+  coolWeapon(run, gun && firing, events);
+  if (gun && firing && !run.overheated) fire(run, events);
   stepShots(run, events);
-  /* missile skill: press edge, lock, launch, cooldown; then move every missile (one impact each) */
-  stepMissileSkill(run, input, events);
+  /* ordnance: cooldowns, the FIRE press edge, the lock; then move every missile (one impact each) */
+  stepMissileSkill(run, firing, events);
   stepMissiles(run, events);
 
   /* fly-through interactions: survey marks and salvage (a find that does not fit opens the full-hold offer) */
@@ -713,6 +785,13 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   stepEnemyShots(run, events);
   stepMines(run, events);
   stepEruptions(run, events);
+  stepDilation(run, events);
+  /* the locked ship was destroyed or escaped this tick (it is already out of the list): end the lock with that reason */
+  if (run.shipLock.target !== null) {
+    const id = run.shipLock.target;
+    const gone = events.find((e) => (e.type === 'destroyed' || e.type === 'escaped') && e.hostile === id);
+    if (gone) endShipLock(run, gone.type === 'destroyed' ? 'destroyed' : 'gone', events);
+  }
   /* collection: salvage pods from ships the pilot destroyed (once per ship, capped), floating pickups, the offer */
   for (let i = 0; i < events.length; i++) {
     const e = events[i]!;
@@ -747,6 +826,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     run.completeTick = run.tick;
     run.phase = 'complete';
     sh.thrusting = false;
+    clearShipLock(run); // the survey-complete panel covers the flight view
     events.push({ type: 'surveyComplete', ticks: run.tick }, { type: 'phase', phase: 'complete' });
   }
   return events;
@@ -800,6 +880,7 @@ function recall(run: SectorRun): void {
   run.heat = 0;
   run.overheated = false;
   resetMissiles(run);
+  clearShipLock(run);
   Object.assign(run.gravity, freshGravity());
   for (const st of run.patrols.values()) {
     st.awake = false;
@@ -829,6 +910,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     run.ship.vx = 0;
     run.ship.vy = 0;
     run.docked = p.id;
+    clearShipLock(run); // docked: no combat lock
     return [{ type: 'docked', id: p.id, first }];
   }
   if (p.kind === 'gate') return [{ type: 'gate', id: p.id, target: p.target!, gate: run.gates[p.id] ?? { state: 'dormant', label: 'Dormant gate', detail: 'No signal.' } }];
@@ -872,6 +954,7 @@ export function disposeSectorRun(run: SectorRun): void {
   run.shots.length = 0;
   run.enemyShots.length = 0;
   resetMissiles(run);
+  clearShipLock(run);
   run.mines.length = 0;
   run.pending.length = 0;
   run.encounters.length = 0;
@@ -898,4 +981,48 @@ export function objectiveOf(run: SectorRun): Poi | null {
     }
   }
   return best ?? run.layout.pois.find((p) => p.kind === 'exit') ?? null;
+}
+
+/**
+ * Combat P03C: re-arm after a change in the hangar or the armory (ship, start
+ * weapon, rotation) and set the stocked counts (docking restock). Cooldowns
+ * carry over; the selection is validated against the new rotation (an
+ * illegal weapon can never stay selected); a lock in progress is dropped.
+ */
+export function setRunLoadout(run: SectorRun, loadout: ArsenalSpec, shipChanged: boolean): void {
+  const keep = run.arsenal;
+  const next = createArsenal(loadout, keep);
+  // a new ship starts on its own start weapon; the same ship keeps the selection while it stays legal
+  if (!shipChanged && next.rotation.includes(keep.selected)) next.selected = keep.selected;
+  run.arsenal = next;
+  if (run.missile.state === 'acquiring') {
+    run.missile.state = 'ready';
+    run.missile.target = null;
+    run.missile.lock = 0;
+  }
+}
+
+/** P04: switch the admin sandbox's unlimited ammunition on or off for a running sector. */
+export function setRunUnlimitedAmmo(run: SectorRun, on: boolean): void {
+  run.unlimitedAmmo = on;
+}
+
+/**
+ * P04: dock at once when the ship already sits inside a station's docking
+ * range (an admin arrival beside the station). The same check and the same
+ * docking as an INTERACT press; nothing happens anywhere else.
+ */
+export function dockIfInRange(run: SectorRun): SectorEvent[] {
+  if (run.phase !== 'flight' || run.disposed || run.docked) return [];
+  const focus = focusOf(run);
+  const p = focus ? poiById(run.layout, focus) : undefined;
+  if (p?.kind !== 'station') return [];
+  run.focus = focus;
+  return interact(run);
+}
+
+export function setRunOrdnance(run: SectorRun, counts: Readonly<Record<string, number>>): void {
+  const c = cleanOrdnance(counts).counts;
+  for (const k of Object.keys(run.ammo)) delete run.ammo[k];
+  Object.assign(run.ammo, c);
 }

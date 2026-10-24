@@ -25,6 +25,7 @@ import { ECONOMY, MODULE_PRICES, moduleFits, moduleStock, quoteBuyCells, quoteBu
 import { burnCells, emergencyCells, emergencyJumpTarget, FUEL, galaxyJumpCells, homeJumpDue, hopCells, routeCells } from '../src/modes/freeroam/progression/fuel.ts';
 import { discoveryEntries, EMPTY_LOG, explorationStats, recordEvent } from '../src/modes/freeroam/progression/discovery.ts';
 import { progressionFromSaved, progressionToSaved, type ProgressionState } from '../src/modes/freeroam/progression/persistence.ts';
+import { formatMarks } from '../src/modes/freeroam/progression/ledger.ts';
 import { claimReward, deliver, grantCells, quoteShip, quoteUpgrade, rewardChartTargets } from '../src/modes/freeroam/progression/station.ts';
 import { missionsModel, missionTargets, trackedObjective } from '../src/modes/freeroam/progression/view.ts';
 import { deriveShip, STAT_BOUNDS } from '../src/modes/freeroam/ships/equipment.ts';
@@ -371,7 +372,7 @@ describe('resource exchange', () => {
     if (!q.ok) return;
     expect(q.result.marks).toBe(price * 2);
     expect(q.result.hold).toEqual({ scrap: 3, fuel: 3 });
-    expect(q.lines.find((l) => l.label === 'Marks')).toEqual({ label: 'Marks', before: '0', after: String(price * 2) });
+    expect(q.lines.find((l) => l.label === 'Marks')).toEqual({ label: 'Marks', before: '◈ 0 MARKS', after: formatMarks(price * 2) });
     expect(w.hold).toEqual({ scrap: 5, fuel: 3 }); // the quote never mutates
     expect(quoteSell(w, SOL, 'scrap', 6).ok).toBe(false);
     expect(quoteSell(w, SOL, 'scrap', -1).ok).toBe(false);

@@ -12,7 +12,7 @@ import { deriveSystemView } from '../galaxy/systems.ts';
 import { addLoot, removeLoot, storeModule, storedTotal, MAX_STORED_MODULES } from '../inventory/inventory.ts';
 import { resourceName } from '../inventory/resources.ts';
 import { EQUIPMENT_BY_ID } from '../ships/equipment.ts';
-import { acquireShip, compareStats, formatStat, STAT_INFO, COMPARE_KEYS, type FleetState, type LicenceCheck } from '../ships/hangar.ts';
+import { acquireShip, compareStats, missingFor, formatStat, STAT_INFO, COMPARE_KEYS, type FleetState, type LicenceCheck } from '../ships/hangar.ts';
 import { SHIP_BY_ID } from '../ships/roster.ts';
 import type { Loadout, ShipId } from '../ships/types.ts';
 import { checkUpgrade, LEVEL_NAME, UPGRADE_BY_TRACK, upgradedShip, type UpgradeLevels } from '../ships/upgrades.ts';
@@ -22,6 +22,7 @@ import { deliveryNeed, markClaimed, missionDef } from './missions.ts';
 import type { MissionReward } from './missionTypes.ts';
 import type { ProgressionState } from './persistence.ts';
 import { FUEL } from './fuel.ts';
+import { formatMarks, insufficientText } from './ledger.ts';
 
 /* ------------------------------------------------------------------ charts */
 
@@ -39,13 +40,13 @@ export function rewardChartTargets(graph: NavGraph, progress: ExplorationProgres
 /* ------------------------------------------------------------------ claims */
 
 export type ClaimResult =
-  | { readonly ok: true; readonly progression: ProgressionState; readonly wallet: Wallet; readonly charted: readonly string[]; readonly reward: MissionReward; readonly lines: readonly string[] }
+  | { readonly ok: true; readonly progression: ProgressionState; readonly wallet: Wallet; readonly charted: readonly string[]; readonly reward: MissionReward; readonly lines: readonly string[]; readonly title: string }
   | { readonly ok: false; readonly reason: 'not-ready' | 'hold' | 'storage'; readonly text: string };
 
 /** What a reward pays, as display lines. */
 export function rewardLines(r: MissionReward): string[] {
   const out: string[] = [];
-  if (r.marks > 0) out.push(`${r.marks} marks`);
+  if (r.marks > 0) out.push(formatMarks(r.marks));
   for (const e of r.resources) out.push(`${e.amount} ${resourceName(e.resource)}`);
   for (const m of r.modules) out.push(`${EQUIPMENT_BY_ID.get(m)?.name ?? m} (to storage)`);
   if (r.charts > 0) out.push(`Navigation data: charts ${r.charts} system${r.charts === 1 ? '' : 's'}`);
@@ -82,6 +83,7 @@ export function claimReward(p: ProgressionState, id: string, w: Wallet, chartPic
     charted,
     reward: r,
     lines: rewardLines(r),
+    title: def.title,
   };
 }
 
@@ -111,8 +113,12 @@ export interface UpgradeQuote {
 }
 
 /** Quote the next level of an upgrade track: cost, licence and the stat changes it makes. */
-export function quoteUpgrade(w: Wallet, ship: ShipId, loadout: Loadout | undefined, levels: UpgradeLevels, track: string, licences: readonly string[]): UpgradeQuote {
-  const check = checkUpgrade(ship, levels, track, { marks: w.marks, hold: w.hold }, licences);
+export function quoteUpgrade(w: Wallet, ship: ShipId, loadout: Loadout | undefined, levels: UpgradeLevels, track: string, licences: readonly string[], free = false): UpgradeQuote {
+  const raw = checkUpgrade(ship, levels, track, { marks: w.marks, hold: w.hold }, licences);
+  // Admin Access: the marks price resolves to 0 (the materials, licence and order rules still apply)
+  const freeMissing = free && raw.reason === 'marks' && raw.cost ? missingFor(raw.cost.materials, w.hold) : [];
+  const check = free && raw.reason === 'marks' && raw.cost ? (freeMissing.length ? { ...raw, reason: 'materials' as const, missing: freeMissing } : { ...raw, ok: true }) : raw;
+  const marksCost = free ? 0 : (check.cost?.marks ?? 0);
   const def = check.track ? UPGRADE_BY_TRACK.get(check.track) : undefined;
   if (!def || check.to === 0) {
     const why = check.reason === 'incompatible' ? `${SHIP_BY_ID.get(ship)?.name ?? 'This ship'} cannot take ${def?.name.toLowerCase() ?? 'it'}.` : check.reason === 'max' ? 'Fully upgraded for this ship.' : 'Unknown upgrade.';
@@ -121,7 +127,7 @@ export function quoteUpgrade(w: Wallet, ship: ShipId, loadout: Loadout | undefin
   const next: UpgradeLevels = { ...levels, [def.id]: check.to };
   const a = upgradedShip(ship, loadout, levels);
   const b = upgradedShip(ship, loadout, next);
-  const lines: QuoteLine[] = [{ label: 'Marks', before: String(w.marks), after: String(w.marks - check.cost!.marks) }];
+  const lines: QuoteLine[] = [{ label: 'Marks', before: formatMarks(w.marks), after: free ? `${formatMarks(w.marks)} · ADMIN ACCESS — FREE` : formatMarks(w.marks - marksCost) }];
   for (const m of check.cost!.materials) lines.push({ label: resourceName(m.resource), before: String(w.hold[m.resource] ?? 0), after: String((w.hold[m.resource] ?? 0) - m.amount) });
   for (const k of COMPARE_KEYS) if (Math.abs(a.stats[k] - b.stats[k]) > 1e-9) lines.push({ label: STAT_INFO[k].label, before: formatStat(k, a.stats[k]), after: formatStat(k, b.stats[k]) });
   if (a.weapon.cooldownTicks !== b.weapon.cooldownTicks) lines.push({ label: 'Fire interval', before: `${(a.weapon.cooldownTicks / 60).toFixed(2)} s`, after: `${(b.weapon.cooldownTicks / 60).toFixed(2)} s` });
@@ -132,13 +138,13 @@ export function quoteUpgrade(w: Wallet, ship: ShipId, loadout: Loadout | undefin
       check.reason === 'licence'
         ? `Needs the ${check.licence === 'mk2' ? 'Mk II' : 'Mk III'} upgrade licence (story missions).`
         : check.reason === 'marks'
-          ? `Needs ${check.cost!.marks} marks; you have ${w.marks}.`
+          ? insufficientText(check.cost!.marks, w.marks)
           : `Missing ${check.missing.map((m) => `${m.amount} ${resourceName(m.resource)}`).join(', ')}.`;
     return { quote: { ok: false, lines, reason }, levels: null };
   }
   const hold = removeLoot(w.hold, check.cost!.materials);
   if (!hold) return { quote: { ok: false, lines, reason: 'Missing materials.' }, levels: null };
-  return { quote: { ok: true, lines, result: { ...w, marks: w.marks - check.cost!.marks, hold }, summary: `Install ${title} on the ${SHIP_BY_ID.get(ship)!.name}.` }, levels: next };
+  return { quote: { ok: true, lines, result: { ...w, marks: w.marks - marksCost, hold }, summary: `Install ${title} on the ${SHIP_BY_ID.get(ship)!.name} for ${free ? 'no marks (admin access)' : formatMarks(marksCost)}${check.cost!.materials.length ? ` + ${check.cost!.materials.map((m) => `${m.amount} ${resourceName(m.resource)}`).join(' + ')}` : ''}.` }, levels: next };
 }
 
 /* ------------------------------------------------------------------- ships */
@@ -151,7 +157,8 @@ export function quoteShip(w: Wallet, fleet: FleetState, id: ShipId, licenceMet: 
   for (const row of compareStats(fleet, id).filter((r) => r.delta !== 0).slice(0, 4)) lines.push({ label: row.label, before: formatStat(row.key, row.current), after: formatStat(row.key, row.value) });
   const res = acquireShip(fleet, w.hold, id, licenceMet);
   if (!res.ok) {
-    const reason = res.reason === 'owned' ? 'Already in your fleet.' : res.reason === 'locked' ? 'Licence not earned yet (see the hangar).' : res.reason === 'unaffordable' ? 'Not enough cargo to pay for it.' : 'Unknown ship.';
+    const missing = res.reason === 'unaffordable' ? missingFor(ship.cost, w.hold).map((c) => `${c.amount} ${resourceName(c.resource)}`).join(', ') : '';
+    const reason = res.reason === 'owned' ? 'Already in your fleet.' : res.reason === 'locked' ? 'Licence not earned yet (see the hangar).' : res.reason === 'unaffordable' ? `INSUFFICIENT CARGO · ships cost materials, not marks · missing ${missing}.` : 'Unknown ship.';
     return { quote: { ok: false, lines, reason }, fleet: null };
   }
   return { quote: { ok: true, lines, result: { ...w, hold: res.cargo }, summary: `Acquire the ${ship.name}; switch to it from the hangar.` }, fleet: res.fleet };

@@ -2,7 +2,8 @@
  * Keyboard adapter -> InputHub (source 'keyboard').
  *
  * Keys: Left/Right or A/D move; Space (also Z or X) fires; P or Escape
- * pause/resume; Enter confirms (starts from the title). Menus handle their
+ * pause/resume; Q = next weapon (Combat P03C: only does anything with a
+ * post-Wave-20 roster ship); Enter confirms (starts from the title). Menus handle their
  * own Up/Down navigation (ui/screens.ts); a focused button keeps Enter/Space.
  *
  * Guards:
@@ -25,6 +26,7 @@ const KEYMAP: Readonly<Record<string, Action>> = {
   Space: 'fire',
   KeyZ: 'fire',
   KeyX: 'fire',
+  KeyQ: 'next',
   KeyP: 'pause',
   Escape: 'pause',
   Enter: 'start',

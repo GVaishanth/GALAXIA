@@ -20,6 +20,7 @@ import { destroyEnemy, updateEffects } from '../systems/damage.ts';
 import { sweepEnemies, updateEnemies } from '../systems/enemies.ts';
 import { updateEntry } from '../systems/entry.ts';
 import { buildSlots, newFormationState, updateFormation } from '../systems/formation.ts';
+import { createClassicOrdnance, refillOrdnance, updateOrdnance, type ClassicLoadout } from '../systems/ordnance.ts';
 import { newPlayer, spawnPlayer, updatePlayer } from '../systems/player.ts';
 import { isStageCleared, setupStage } from '../systems/progression.ts';
 import { updateProjectiles } from '../systems/projectiles.ts';
@@ -39,6 +40,11 @@ export interface GameEngineOptions {
   readonly startStage?: number;
   /** Called at each new game for that game's RNG seed (default: always `seed`). */
   readonly seedProvider?: () => number;
+  /**
+   * Combat P03C: the ship flown after the Wave 20 milestone (its weapons, from
+   * the shared catalogue). null / absent = the legacy fighter, unchanged.
+   */
+  readonly loadout?: ClassicLoadout | null;
 }
 
 export interface RejectedFact {
@@ -68,6 +74,7 @@ export class GameEngine {
   private stageIntro = false;
   private clearDelayMs = 0;
   private playerLost = false;
+  private loadout: ClassicLoadout | null;
 
   constructor(options: GameEngineOptions) {
     this.cfg = options.config ?? ENGINE;
@@ -76,6 +83,7 @@ export class GameEngine {
     this.seedProvider = options.seedProvider ?? null;
     this.instantFormation = options.instantFormation ?? false;
     this.startStage = options.startStage ?? 1;
+    this.loadout = options.loadout ?? null;
     this.stepMs = 1000 / this.cfg.tickHz;
     this.paths = new PathCache(this.cfg.world.width);
     this.machine = new PhaseMachine((from, to) => this.events.push({ type: 'phaseChanged', from, to }));
@@ -102,6 +110,15 @@ export class GameEngine {
 
   get phase(): GamePhase {
     return this.machine.phase;
+  }
+
+  /** Combat P03C: the ship for the next game (title screen selector); the game in progress keeps its own. */
+  setLoadout(loadout: ClassicLoadout | null): void {
+    this.loadout = loadout;
+  }
+
+  get currentLoadout(): ClassicLoadout | null {
+    return this.loadout;
   }
 
   /** Seed of the current (or last) game. */
@@ -189,6 +206,8 @@ export class GameEngine {
     this.machine.tick(dt);
     const ctx = this.context;
     updatePlayer(ctx, input, CONTROLLABLE.has(phase), dt);
+    // Combat P03C: the post-Wave-20 ship's missiles (absent for the legacy fighter); hits count while the field is live
+    if (w.ordnance) updateOrdnance(ctx, input, CONTROLLABLE.has(phase), dt, phase === 'playing' || phase === 'challenge' || phase === 'playerHit');
 
     switch (phase) {
       case 'ready':
@@ -259,6 +278,7 @@ export class GameEngine {
       fireHoldUntilMs: 0,
       heat: { level: 0, overheated: false, heldMs: 0, autoMs: 0 },
       pendingRebound: null,
+      ordnance: this.loadout ? createClassicOrdnance(this.loadout) : null,
       nextId: 0,
       rng: createRng(this.seed),
     };
@@ -266,6 +286,7 @@ export class GameEngine {
 
   private beginStage(stage: number): void {
     setupStage(this.context, stage, this.rewards.mode.schedule, this.instantFormation);
+    if (this.world.ordnance) refillOrdnance(this.world.ordnance);
     if (this.world.player.state !== 'alive') spawnPlayer(this.context);
     this.world.player.y = this.cfg.player.y;
     this.fact({ type: 'stageStarted', stage });
@@ -375,6 +396,11 @@ export class GameEngine {
     for (const e of w.enemies) parts.push(e.id, e.state, r(e.x), r(e.y), String(e.hp));
     for (const s of w.playerShots) parts.push('p', r(s.x), r(s.y));
     for (const s of w.enemyShots) parts.push('e', r(s.x), r(s.y));
+    // P03C: only a game with a post-Wave-20 loadout adds anything (legacy digests are unchanged)
+    if (w.ordnance) {
+      parts.push('o', w.ordnance.arsenal.selected, JSON.stringify(w.ordnance.ammo), w.ordnance.lock?.target ?? '-');
+      for (const m of w.ordnance.missiles) parts.push('m', m.weapon, r(m.x), r(m.y));
+    }
     let h = 0x811c9dc5;
     const str = parts.join('|');
     for (let i = 0; i < str.length; i++) {
