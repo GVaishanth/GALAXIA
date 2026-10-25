@@ -26,6 +26,18 @@ import { mkdirSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { chromium, firefox, webkit } from 'playwright';
 
+// Pause menu refinement: the pause actions sit in three groups; open the group (if closed), wait past the
+// 350 ms double-click guard as a person would, then use the action.
+const PAUSE_GROUP = { MISSIONS: 'progress', RECORD: 'progress', SAVES: 'progress', CONTROLS: 'settings', 'HOW TO PLAY': 'settings', SOUND: 'settings', 'GALAXY MAP': 'navigation', 'MAIN MENU': 'navigation' };
+async function pauseAction(page, label, how = 'click') {
+  const head = `#fr-pause-${PAUSE_GROUP[label]}`;
+  await page.waitForSelector(head);
+  if ((await page.getAttribute(head, 'aria-expanded')) !== 'true') { await page[how](head); await page.waitForTimeout(400); }
+  // GALAXY MAP names where it returns to: it reads SYSTEM MAP after entering from the system map
+  const sel = label === 'GALAXY MAP' ? '.fr-panel-pause .fr-pause-item:text-matches("^(GALAXY|SYSTEM) MAP$")' : `.fr-panel-pause .fr-pause-item:text-is("${label}")`;
+  await page[how](sel);
+}
+
 const DIST = process.argv[2] ?? 'dist';
 const BASE = process.argv[3] ?? '/galaxia/';
 const ENGINES = (process.argv[4] ?? 'chromium,firefox,webkit').split(',');
@@ -217,7 +229,7 @@ async function desktop(bname) {
     await shot(p, `${bname}-freeroam-flight`);
     await p.keyboard.press('KeyP');
     await waitFr(p, (x) => x.panel === 'pause');
-    await p.click('.fr-panel-pause >> text=SAVES');
+    await pauseAction(p, 'SAVES');
     await waitFr(p, (x) => x.saves.open);
     await p.click('.fr-saves [data-key="save"]');
     s = await waitFr(p, (x) => /Saved to slot 1\./.test(x.saves.message ?? ''), 4000);

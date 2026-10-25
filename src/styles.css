@@ -2090,20 +2090,8 @@ html.game-mode body {
     grid-auto-columns: minmax(0, 1fr);
   }
 
-  /* Prompt 14 audit: the pause menu has 9 entries; one row of 58 px columns overlapped the labels.
-     Three rows of three in a wider panel keep every label on one line and the 44 px targets. */
-  .fr-panel.fr-panel-pause {
-    width: min(100%, 620px);
-  }
-
-  .fr-panel-pause .fr-menu {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .fr-panel-pause .fr-btn {
-    padding: 4px 12px 4px 22px;
-  }
+  /* The pause menu (grouped, pause menu refinement) has its own short-landscape layout: see the
+     "pause menu groups" block (RESUME / RESTART side by side, the three group rows side by side). */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3143,6 +3131,44 @@ html.game-mode body {
 .fr-controls-status {
   min-height: 2.8em;
   font-size: 12px;
+}
+
+/* P04.3 FLIGHT MODE selector (CONTROLS): the zoom row's grid, two segments; the selected one is marked by
+   colour AND a check mark (never colour alone) and by aria-pressed */
+.fr-controls-mode {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 104px;
+  align-items: center;
+  gap: 6px;
+}
+
+.fr-controls-mode .fr-btn {
+  min-height: 40px;
+  padding: 2px 6px;
+  border-color: var(--panel-edge);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.fr-controls-mode .fr-btn::before {
+  display: none;
+}
+
+.fr-controls-mode .fr-btn.is-selected {
+  color: var(--highlight);
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.1);
+}
+
+.fr-controls-mode .fr-btn.is-selected::after {
+  content: ' \2713';
+}
+
+.fr-controls-mode-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
 }
 
 @media (max-width: 360px) {
@@ -9280,4 +9306,473 @@ html.game-mode body {
   .title-guide:hover {
     border-color: var(--highlight);
   }
+}
+
+/* ---- P04.3: REALISTIC flight's mode tag and STOP control (hidden in NORMAL flight and behind panels) ----
+   Desktop: the empty bottom-right corner, above the key hint line. Touch: the right-hand column directly
+   above WPN (FIRE, BOOST, WPN and INTERACT stay where they are; LOCK and NEXT TARGET are on the left;
+   the stick lands on the open lower left). A STOP finger has its own pointer role (pointers.ts). */
+.fr-flightctl {
+  position: absolute;
+  right: max(14px, var(--safe-right));
+  bottom: calc(max(14px, var(--safe-bottom)) + 40px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.fr-flightctl[hidden],
+.freeroam-app:not([data-panel='none']) .fr-flightctl {
+  display: none;
+}
+
+.fr-flightmode-tag {
+  padding: 1px 6px;
+  border: 1px solid rgba(255, 210, 63, 0.45);
+  background: rgba(6, 7, 15, 0.55);
+  color: #ffd23f;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+}
+
+.fr-stop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 112px;
+  min-height: 46px;
+  padding: 4px 10px;
+  border: 2px solid rgba(251, 248, 238, 0.55);
+  border-radius: 23px;
+  background: rgba(6, 7, 15, 0.6);
+  color: #fbf8ee;
+  font: inherit;
+  line-height: 1.1;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fr-stop-state {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+.fr-stop-hint {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+/* the hint names the release only while engaged; the key or the tap depending on the input in use */
+.fr-stop-on {
+  display: none;
+}
+
+.fr-stop:not([data-state='off']) .fr-stop-on {
+  display: inline;
+}
+
+.fr-stop:not([data-state='off']) .fr-stop-off {
+  display: none;
+}
+
+.fr-stop[data-state='stopping'] {
+  border-color: #ffd23f;
+  color: #ffd23f;
+  background: rgba(255, 210, 63, 0.14);
+}
+
+.fr-stop[data-state='holding'] {
+  border-color: #2ec4e6;
+  color: var(--highlight);
+  background: rgba(46, 196, 230, 0.2);
+}
+
+.fr-stop[data-state='cannot'] {
+  border-color: #ff6b5b;
+  border-style: dashed;
+  color: #ff8c7f;
+  background: rgba(255, 107, 91, 0.14);
+}
+
+.fr-stop.is-active {
+  background: rgba(251, 248, 238, 0.2);
+}
+
+.fr-stop:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .fr-flightctl {
+    bottom: calc(max(14px, var(--safe-bottom)) + 274px);
+  }
+}
+
+.freeroam-app[data-input='touch'] .fr-flightctl {
+  bottom: calc(max(14px, var(--safe-bottom)) + 274px);
+}
+
+/* short landscape: WPN sits lower (bottom + 150 px), STOP follows it */
+@media (max-height: 420px) and (pointer: coarse) {
+  .fr-flightctl {
+    bottom: calc(max(14px, var(--safe-bottom)) + 216px);
+  }
+}
+
+@media (max-height: 420px) {
+  .freeroam-app[data-input='touch'] .fr-flightctl {
+    bottom: calc(max(14px, var(--safe-bottom)) + 216px);
+  }
+}
+
+/* ---- pause menu groups (pause menu refinement) ----
+   Hierarchy: where you are + PAUSED + survey/time (header) > RESUME (primary) > RESTART FLIGHT
+   (secondary) > three disclosure rows > their compact actions. One group open at a time. */
+.fr-panel.fr-panel-pause {
+  width: min(100%, 400px);
+  gap: 6px;
+  /* Anchored at the top, not centred: opening a group grows the card downward, so nothing above it moves
+     (a centred card re-centred and shifted the rows under a double click). The offset centres the
+     tallest open state (~500 px); short screens start at the top and the card scrolls if it must. */
+  align-self: start;
+  margin-top: max(0px, calc((100vh - 24px - 500px) / 2));
+  margin-top: max(0px, calc((100dvh - 24px - 500px) / 2));
+}
+
+.fr-panel-pause .fr-title {
+  margin-top: -2px;
+}
+
+.fr-menu.fr-pause-menu {
+  display: grid;
+  grid-auto-flow: row;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.fr-pause-top {
+  display: grid;
+  gap: 6px;
+}
+
+.fr-pause-menu .fr-btn {
+  padding: 4px 14px;
+}
+
+.fr-pause-menu .fr-btn::before {
+  display: none; /* the arrow marker would sit on the icons; focus shows by border, colour and outline */
+}
+
+.fr-btn.fr-pause-resume {
+  min-height: 48px;
+  border-color: rgba(92, 239, 255, 0.55);
+  background: rgba(92, 239, 255, 0.1);
+  color: var(--highlight);
+  font-size: 15px;
+  letter-spacing: 0.16em;
+}
+
+.fr-btn.fr-pause-resume:focus {
+  border-color: var(--highlight);
+  background: rgba(92, 239, 255, 0.16);
+}
+
+.fr-btn.fr-pause-restart {
+  border-color: rgba(255, 255, 255, 0.12);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.fr-pause-ask {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border: 1px solid rgba(255, 210, 90, 0.45);
+  background: rgba(255, 210, 90, 0.05);
+  animation: fr-pause-reveal 140ms var(--ease-out);
+}
+
+.fr-pause-ask[hidden] {
+  display: none;
+}
+
+.fr-pause-ask-text {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.fr-pause-ask-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.fr-pause-ask-row .fr-btn {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.fr-btn.fr-pause-ask-yes {
+  border-color: rgba(255, 210, 90, 0.6);
+  color: var(--fr-warn, #ffd25a);
+}
+
+.fr-pause-groups {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(92, 239, 255, 0.12);
+}
+
+.fr-pause-group {
+  display: grid;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.015);
+  transition: border-color 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+
+.fr-pause-group.is-open {
+  border-color: rgba(92, 239, 255, 0.3);
+  background: rgba(92, 239, 255, 0.04);
+}
+
+.fr-btn.fr-pause-head {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 5px 12px;
+  text-align: left;
+}
+
+.fr-pause-icon {
+  width: 18px;
+  height: 18px;
+  color: rgba(92, 239, 255, 0.75);
+}
+
+.fr-pause-head-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fr-pause-head-label {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fr-pause-head-sum {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fr-pause-chev {
+  width: 14px;
+  height: 14px;
+  color: var(--text-dim);
+  transition: transform 160ms var(--ease-out);
+}
+
+.fr-pause-group.is-open .fr-pause-head {
+  color: var(--highlight);
+}
+
+.fr-pause-group.is-open .fr-pause-chev {
+  transform: rotate(90deg);
+  color: var(--highlight);
+}
+
+.fr-pause-group.is-open .fr-pause-head-sum {
+  display: none; /* the actions themselves are on show; the row's min-height keeps it from jumping */
+}
+
+.fr-pause-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 6px;
+  padding: 2px 10px 10px;
+  animation: fr-pause-reveal 140ms var(--ease-out);
+}
+
+.fr-pause-items[hidden] {
+  display: none;
+}
+
+.fr-btn.fr-pause-item {
+  min-height: 44px;
+  padding: 4px 8px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(6, 7, 15, 0.6);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+}
+
+.fr-btn.fr-pause-item:focus {
+  border-color: rgba(92, 239, 255, 0.6);
+}
+
+@keyframes fr-pause-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* short landscape: RESUME / RESTART side by side; the group rows side by side, the open group's actions below them */
+@media (max-height: 420px) {
+  .fr-panel.fr-panel-pause {
+    width: min(100%, 640px);
+    gap: 4px;
+    margin-top: max(0px, calc((100vh - 24px - 250px) / 2));
+    margin-top: max(0px, calc((100dvh - 24px - 250px) / 2));
+  }
+
+  .fr-menu.fr-pause-menu {
+    gap: 8px;
+    margin-top: 2px;
+  }
+
+  .fr-pause-top {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fr-btn.fr-pause-resume,
+  .fr-btn.fr-pause-restart {
+    min-height: 44px;
+  }
+
+  .fr-pause-ask {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 6px 8px;
+  }
+
+  .fr-pause-ask-row {
+    grid-template-columns: auto auto;
+  }
+
+  .fr-pause-groups {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding-top: 8px;
+  }
+
+  .fr-pause-group {
+    display: contents;
+  }
+
+  .fr-btn.fr-pause-head {
+    grid-row: 1;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.015);
+  }
+
+  .fr-pause-group.is-open .fr-pause-head {
+    border-color: rgba(92, 239, 255, 0.4);
+    background: rgba(92, 239, 255, 0.06);
+  }
+
+  .fr-pause-head-sum {
+    display: none;
+  }
+
+  /* three rows side by side: a long label wraps to two lines rather than being cut off */
+  .fr-pause-head-label {
+    white-space: normal;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    line-height: 1.25;
+  }
+
+  .fr-pause-items {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    padding: 0;
+  }
+
+  .fr-pause-group.is-open .fr-pause-chev {
+    transform: rotate(90deg);
+  }
+}
+
+/* narrow phones: the contents line under each group label is never cut off (tighter, and it may wrap) */
+@media (max-width: 400px) {
+  .fr-pause-head-sum {
+    letter-spacing: 0.05em;
+    white-space: normal;
+    line-height: 1.3;
+  }
+
+  /* three actions across from 360 px: CONTROLS must fit its column without being clipped */
+  .fr-btn.fr-pause-item {
+    padding: 4px;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* very narrow phones: the group rows keep the icon, label and chevron on one line */
+@media (max-width: 340px) {
+  .fr-panel.fr-panel-pause {
+    padding: 14px 12px;
+  }
+
+  .fr-pause-head-label {
+    letter-spacing: 0.1em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-pause-ask,
+  .fr-pause-items {
+    animation: none;
+  }
+
+  .fr-pause-group,
+  .fr-pause-chev {
+    transition: none;
+  }
+}
+
+.freeroam-app[data-motion='reduced'] .fr-pause-ask,
+.freeroam-app[data-motion='reduced'] .fr-pause-items {
+  animation: none;
+}
+
+.freeroam-app[data-motion='reduced'] .fr-pause-group,
+.freeroam-app[data-motion='reduced'] .fr-pause-chev {
+  transition: none;
 }

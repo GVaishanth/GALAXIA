@@ -115,6 +115,7 @@ export function freeRoamKeyboard(b: Bindings, mouseAim: boolean): ControlRow[] {
     { id: 'weapon', keys: alts(b, 'missile'), action: ACTION_LABEL.missile.toUpperCase(), text: 'Switch to the next weapon in your cycle. The ship card shows the one selected.' },
     { id: 'lock', keys: alts(b, 'lock'), action: 'LOCK TARGET', text: 'Lock the hostile nearest your nose that is in range and in sight. Your nose turns to face it; you still steer, thrust and fire yourself. Press again to release.' },
     { id: 'target', keys: alts(b, 'target'), action: ACTION_LABEL.target.toUpperCase(), text: 'Only while locked: move the lock to the next target.' },
+    { id: 'stop', keys: alts(b, 'stop'), action: 'STOP · REALISTIC', text: 'Realistic flight only: brake, then hold position against momentum and gravity. Active thrust, not paused physics. Press again, thrust or brake to release.' },
     { id: 'zoom', keys: [['WHEEL'], ['+', '−']], action: 'ZOOM', text: 'Zoom the camera in or out. The mouse wheel only zooms; it never switches weapons.' },
     { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect or use a gate when a prompt shows.' },
     { id: 'map', keys: alts(b, 'map'), action: 'SECTOR MAP', text: 'The map of this sector.' },
@@ -144,6 +145,7 @@ export function freeRoamTouch(): ControlRow[] {
     { id: 'weapon', keys: [['WPN']], action: 'NEXT WEAPON', text: 'The button above FIRE shows your weapon. Tap it to select the next one; it never fires.' },
     { id: 'lock', keys: [['LOCK']], action: 'LOCK TARGET', text: 'On the left. Tap to lock the hostile nearest your nose, tap again to cancel. Your nose faces the target; you still fly and fire.' },
     { id: 'target', keys: [['»']], action: 'NEXT TARGET', text: 'Appears beside LOCK while locked: tap for the next target.' },
+    { id: 'stop', keys: [['STOP']], action: 'STOP · REALISTIC', text: 'Realistic flight only, above the weapon button: brake, then hold position. Tap again, or steer, to release.' },
     { id: 'interact', keys: [['PROMPT']], action: 'INTERACT', text: 'A button appears near things you can use, for example DOCK · or USE GATE ·. Tap it.' },
     { id: 'hud', keys: [['MAP'], ['CARGO'], ['II']], action: 'TOP RIGHT', text: 'Sector map, cargo hold and pause.' },
     { id: 'zoom', keys: [['II', 'CONTROLS']], action: 'ZOOM', text: 'Pause, then CONTROLS: ZOOM − and ZOOM +.' },
@@ -274,7 +276,7 @@ function controls(ctx: GuideContext): GuideBlock[] {
   if (ctx.input === 'touch') out.push({ kind: 'diagram', layout: ctx.mode, gate: ctx.classicGate });
   out.push({ kind: 'controls', rows: controlRows(ctx) });
   if (ctx.mode === 'freeroam' && ctx.input === 'keyboard') {
-    out.push({ kind: 'note', text: `${customBindings(ctx.bindings) ? 'These are your keys. ' : ''}Change keys in PAUSE → CONTROLS. Mouse aim (off by default) is there too: the cursor aims and the left button fires.` });
+    out.push({ kind: 'note', text: `${customBindings(ctx.bindings) ? 'These are your keys. ' : ''}Change keys in PAUSE → SETTINGS & HELP → CONTROLS. Mouse aim (off by default) is there too: the cursor aims and the left button fires. FLIGHT MODE there switches NORMAL (the standard controls) and REALISTIC (momentum flight: left / right rotate, up thrusts, down reverses, plus STOP).` });
   } else if (ctx.mode === 'freeroam' && ctx.input === 'controller') {
     out.push({ kind: 'note', text: 'Target lock and next target are on the keyboard (X, C) and the touch LOCK button.' });
   } else if (ctx.mode === 'classic') {

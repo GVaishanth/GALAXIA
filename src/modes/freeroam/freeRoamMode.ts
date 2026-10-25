@@ -75,7 +75,8 @@ import { shipLockLine } from './combat/shipLock.ts';
 import { EMPTY_SECTOR_SAVE, POI_RULES, RARE_RESOURCES, type LootEntry, type SectorLayout } from './sector/model.ts';
 import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Shockwave, type Wreck } from './sector/render.ts';
 import type { LabShell, LabStatus } from './gravity/labShell.ts';
-import { applyShip, canSwitchShip, createSectorRun, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
+import { applyShip, canSwitchShip, createSectorRun, setRunFlightMode, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
+import { FLIGHT_MODE_TEXT, realisticInput, stopDisplay, type FlightMode, type StopDisplay } from './sector/realisticFlight.ts';
 import { upgradedShip, cleanLevels, LEVEL_NAME, UPGRADE_BY_TRACK, type UpgradeLevels, type UpgradeTrack } from './ships/upgrades.ts';
 import { createEventBus, type GameEvent } from './progression/events.ts';
 import { sectorGameEvents } from './progression/fromSector.ts';
@@ -130,6 +131,8 @@ import { createAdminLogin, type AdminLogin, type AdminLoginStatus } from './admi
 import { navigatorGalaxies, navigatorSystems } from './admin/navigator.ts';
 import { ADMIN_HOME, adminArrive, adminFleet, adminOnlyShips, adminSelectShip, beginAdmin, DESTINATION_TEXT, isAdmin, mayPersist, resolveDestination, stationApproach, travelCost, unlimitedAmmo, type AdminSession, type DestinationRef } from './admin/session.ts';
 
+/** Pause menu groups (pause menu refinement). */
+type PauseGroup = 'progress' | 'settings' | 'navigation';
 type Panel = 'briefing' | 'pause' | 'complete' | 'gate' | 'sectormap' | 'cargo' | 'controls' | 'hangar' | 'armory' | 'fabricator' | 'missions' | 'exchange' | 'upgrades' | 'record' | 'station' | 'equipment' | 'sound' | 'recovery' | null;
 /** Prompt 11 panels opened from the hangar (docked) or the pause menu (log only). */
 type Screen = 'map' | 'systems' | 'flight';
@@ -491,6 +494,16 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let soundReturn: Panel = 'pause';
   let pauseInfo: HTMLElement;
   let pauseKicker: HTMLElement;
+  /* Pause menu groups: RESUME / RESTART FLIGHT on top, the rest in three disclosure groups (one open at a time). */
+  let pauseOpen: PauseGroup | null = null;
+  /** When the open group opened (performance.now): a pointer click on its actions this soon is the tail of a double click. */
+  let pauseOpenedAt = -Infinity;
+  /** The group action that opened a submenu: focus returns to it when the submenu closes. */
+  let pauseReturn: HTMLButtonElement | null = null;
+  let pauseGroups: readonly { readonly id: PauseGroup; readonly box: HTMLElement; readonly head: HTMLButtonElement; readonly body: HTMLElement }[] = [];
+  let restartBtn: HTMLButtonElement;
+  let restartAsk: HTMLElement;
+  let restartNo: HTMLButtonElement;
   /** Frame-clock ms of the last arrival (canvas ring), or null. */
   let arrivalMs: number | null = null;
   /** Docking facts for the station overview (what docking just did). */
@@ -550,6 +563,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** P04.1 polish: NEXT TARGET (C / the touch button beside LOCK), one step per press, only while locked. */
   let targetBtn: HTMLButtonElement;
   let targetPending = false;
+  /** P04.3: REALISTIC flight's STOP control (HUD button + mode tag) and its latched press (B / the button). */
+  let flightCtl: HTMLElement;
+  let stopBtn: HTMLButtonElement;
+  let stopState: HTMLElement;
+  let stopRelease: HTMLElement;
+  let stopPending = false;
   let cyclePending: 1 | -1 | 0 = 0;
   let firePending = false;
   let padWeaponWas = false;
@@ -596,6 +615,33 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (targetBtn.dataset['state'] !== state) targetBtn.dataset['state'] = state;
     targetBtn.classList.toggle('is-active', touches > 0);
   };
+  /** P04.3: the STOP control mirrors the simulation (STOP / STOPPING / HOLDING POSITION / CAN'T HOLD); shown in REALISTIC flight only. */
+  const STOP_TEXT: Readonly<Record<StopDisplay, string>> = { off: 'STOP', stopping: 'STOPPING', holding: 'HOLDING POSITION', cannot: "CAN'T HOLD" };
+  const paintStopCtl = (r: SectorRun, touches: number): void => {
+    const show = r.flightMode === 'realistic' && r.flight === null;
+    if (flightCtl.hidden === show) flightCtl.hidden = !show;
+    if (!show) return;
+    const d = stopDisplay(r.stop);
+    if (stopBtn.dataset['state'] !== d) {
+      stopBtn.dataset['state'] = d;
+      stopState.textContent = STOP_TEXT[d];
+      stopBtn.setAttribute('aria-pressed', d === 'off' ? 'false' : 'true');
+      const key = keyLabel(controls.bindings.stop[0]);
+      stopBtn.setAttribute(
+        'aria-label',
+        d === 'off'
+          ? `Stop (${key}): brake, then hold position`
+          : d === 'cannot'
+            ? `Stop is on but cannot hold: the pull is stronger than the ship's thrust. Press to release (${key})`
+            : `${STOP_TEXT[d].toLowerCase()}. Press to release (${key})`,
+      );
+    }
+    if (d !== 'off') {
+      const rel = container.dataset['input'] === 'touch' ? 'TAP TO RELEASE' : `${keyLabel(controls.bindings.stop[0])} OR CLICK TO RELEASE`;
+      if (stopRelease.textContent !== rel) stopRelease.textContent = rel;
+    }
+    stopBtn.classList.toggle('is-active', touches > 0);
+  };
   let hangar: HangarPanel;
   let armory: ArmoryPanel;
   let inventory: InventoryPanel;
@@ -620,6 +666,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let controlsGrid: HTMLElement;
   let controlsStatus: HTMLElement;
   let mouseAimBtn: HTMLButtonElement;
+  /** P04.3: the FLIGHT MODE selector (CONTROLS panel). */
+  let modeBtns: Record<FlightMode, HTMLButtonElement>;
+  let modeDesc: HTMLElement;
   let zoomLabel: HTMLElement;
 
   const reducedMotion = (): boolean => {
@@ -1041,7 +1090,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     // P04: an admin arrival may start beside the station (a point checked like a resume point)
     const at = place ? place(layout) : pendingResume && pendingResume.systemId === systemId && spawn === undefined ? pendingResume : null;
     pendingResume = null;
-    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin) });
+    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode });
     resumedAt = !place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     besideStation = !!place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     if (!resumedAt) profile = withResume(profile, null);
@@ -1241,6 +1290,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (!(p && run?.docked && stationReturn === 'hangar' && isStationTab(p))) stationHub.tabs.remove();
     container.dataset['panel'] = p ?? 'none';
     capture = null;
+    if (p !== 'pause') closeRestartAsk(false); // a restart question never survives leaving the pause menu
     if (p) {
       // a notice card under the panel steps aside to the log (it would expire unseen)
       const nf = flushNotices(notices);
@@ -1248,7 +1298,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       toLog(nf.toLog);
       keys.clear(); // a key that opened the panel must not also steer or activate
       pointers.reset();
-      menus[p].focus(0);
+      // back from a submenu opened from a pause group: focus the action that opened it (its group is still open)
+      if (p === 'pause' && pauseReturn && pauseReturn.isConnected && !pauseReturn.closest('[hidden]')) pauseReturn.focus({ preventScroll: true });
+      else menus[p].focus(0);
     } else if (document.activeElement instanceof HTMLElement && container.contains(document.activeElement)) {
       document.activeElement.blur(); // flight: no focused button may swallow Space / Enter
     }
@@ -1306,6 +1358,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     briefingNote.hidden = !real && !resumed && !adminNote;
     const back = mapReturn === 'system' ? 'SYSTEM MAP' : 'GALAXY MAP';
     for (const b of returnButtons) b.textContent = back;
+    // the NAVIGATION group row lists its actions: keep it in step with the relabelled map button
+    for (const g of pauseGroups) if (g.id === 'navigation') g.head.querySelector('.fr-pause-head-sum')!.textContent = `${back} · MAIN MENU`;
     briefingStats.textContent = `FLIGHTS ${profile.sessions} · SURVEYS ${profile.surveysCompleted} · ${best} · MARKS ${profile.beaconsCharted}`;
     hereName = here ? here.name.toUpperCase() : g.shortName.toUpperCase();
     galaxyShort = g.shortName.toUpperCase();
@@ -1320,6 +1374,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (__GALAXIA_GRAVITY_LAB__ && lab) {
       // FR-TD-83: the gravity test flies rotate-and-thrust with the same keys
       hintKeys.textContent = `${keyLabel(b.left[0])}/${keyLabel(b.right[0])} ROTATE · ${keyLabel(b.up[0])} THRUST · ${keyLabel(b.down[0])} BRAKE · ${actionKeys(b, 'fire')} FIRE · G ASSIST · T LAB · ESC PAUSE`;
+      container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
+      return;
+    }
+    if (controls.flightMode === 'realistic') {
+      // P04.3: REALISTIC flies rotate-and-thrust with the same keys, plus STOP
+      hintKeys.textContent = `${keyLabel(b.left[0])}/${keyLabel(b.right[0])} ROTATE · ${keyLabel(b.up[0])} THRUST · ${keyLabel(b.down[0])} REVERSE · ${keyLabel(b.stop[0])} STOP · ${actionKeys(b, 'fire')} FIRE · ${keyLabel(b.boost[0])} BOOST · ${keyLabel(b.missile[0])} WEAPON · ${keyLabel(b.lock[0])} LOCK · ${keyLabel(b.target[0])} NEXT TARGET${controls.mouseAim ? ' · MOUSE AIM' : ''} · ${actionKeys(b, 'interact')} INTERACT · ${keyLabel(b.map[0])} MAP · ESC PAUSE`;
       container.dataset['aim'] = controls.mouseAim ? 'mouse' : 'travel';
       return;
     }
@@ -1569,6 +1629,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         cue(e);
         const line = shipLockLine(e);
         if (line) notify(line.text, undefined, line.tone);
+      } else if (e.type === 'stop') {
+        // P04.3: one short corner-log line where the button alone would not explain it (never a card over the play area)
+        if (e.change === 'unavailable') notify('STOP · REALISTIC FLIGHT ONLY (PAUSE · CONTROLS)', undefined, 'info');
+        else if (e.change === 'cancelled') notify('STOP RELEASED · MANUAL CONTROL', undefined, 'info');
       } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady' || e.type === 'weaponSwitched') {
         cue(e); // the HUD weapon row and the WPN button carry the text (NO TARGET, LOCK LOST, EMPTY...)
       } else if (e.type === 'ordnanceSpent') {
@@ -1721,6 +1785,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       // the pause card names where you are and carries the survey clock (no longer always on the HUD)
       pauseKicker.textContent = `${hereName} · ${galaxyShort}`;
       pauseInfo.textContent = __GALAXIA_GRAVITY_LAB__ && lab ? `EXPERIMENTAL · NOTHING IS SAVED · TIME ${formatTicks(run.tick)}` : `${surveyText(run)} · TIME ${formatTicks(run.tick)}`;
+      // every pause starts compact: groups closed, focus on RESUME
+      pauseOpen = null;
+      pauseReturn = null;
+      paintPauseGroups();
       showPanel('pause');
     },
     resume: (): void => {
@@ -2321,6 +2389,123 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     ctx.requestRestart(); // the fresh instance re-reads the slot: normal ship, place, ownership and rules
   };
 
+  /* ---------------------------- pause menu groups --------------------------- */
+  const PAUSE_REVEAL_GUARD_MS = 350;
+  const PAUSE_ICON: Record<PauseGroup, string> = {
+    progress: '<path d="M6 21V4M6 4h11l-2.5 4L17 12H6"/>',
+    settings: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+    navigation: '<circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2.2 4.8-4.8 2.2 2.2-4.8z"/>',
+  };
+  const svgIcon = (cls: string, paths: string): string =>
+    `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  const paintPauseGroups = (): void => {
+    for (const g of pauseGroups) {
+      const open = g.id === pauseOpen;
+      g.head.setAttribute('aria-expanded', String(open));
+      g.box.classList.toggle('is-open', open);
+      g.body.hidden = !open;
+    }
+  };
+  /** Open a group (closing the others) or close it again; focus stays on the group row. */
+  const togglePauseGroup = (id: PauseGroup): void => {
+    if (panel !== 'pause') return;
+    closeRestartAsk(false);
+    pauseOpen = pauseOpen === id ? null : id;
+    pauseOpenedAt = pauseOpen ? performance.now() : -Infinity;
+    paintPauseGroups();
+    services.sound.play(pauseOpen ? 'uiSelect' : 'uiMove');
+    const g = pauseGroups.find((x) => x.id === pauseOpen);
+    // a short screen: bring the opened actions into the panel's scroll view (no-op when they already fit)
+    if (g) g.box.scrollIntoView({ block: 'nearest' });
+  };
+  function openRestartAsk(): void {
+    if (panel !== 'pause' || !run) return;
+    services.sound.play('uiSelect');
+    restartBtn.hidden = true;
+    restartAsk.hidden = false;
+    restartNo.focus({ preventScroll: true }); // the safe choice is under the cursor
+  }
+  function closeRestartAsk(refocus: boolean): void {
+    if (!restartAsk || restartAsk.hidden) return;
+    restartAsk.hidden = true;
+    restartBtn.hidden = false;
+    if (refocus) {
+      services.sound.play('uiMove');
+      restartBtn.focus({ preventScroll: true });
+    }
+  }
+  function confirmRestart(): void {
+    if (panel !== 'pause' || restartAsk.hidden) return;
+    closeRestartAsk(false);
+    actions.restart(); // the existing restart path, unchanged
+  }
+  const pauseButton = (cls: string, label: string, fn: () => void): HTMLButtonElement => {
+    const b = el('button', `fr-btn ${cls}`, label);
+    b.type = 'button';
+    b.addEventListener('click', fn);
+    return b;
+  };
+  /** Fill the pause panel's menu list (its MenuList already roves over every visible button inside). */
+  const fillPauseMenu = (list: HTMLElement): void => {
+    list.classList.add('fr-pause-menu');
+    const top = el('div', 'fr-pause-top');
+    const resume = pauseButton('fr-pause-resume', 'RESUME', actions.resume);
+    restartBtn = pauseButton('fr-pause-restart', 'RESTART FLIGHT', openRestartAsk);
+    restartAsk = el('div', 'fr-pause-ask');
+    restartAsk.setAttribute('role', 'group');
+    restartAsk.hidden = true;
+    const askText = el('p', 'fr-pause-ask-text', 'Restart from the arrival zone? Shields and hull are restored; the flight clock and this sector\'s hostiles reset. Cargo and completed work are kept.');
+    askText.id = 'fr-pause-ask-text';
+    restartAsk.setAttribute('aria-labelledby', askText.id);
+    const askRow = el('div', 'fr-pause-ask-row');
+    restartNo = pauseButton('fr-pause-ask-no', 'CANCEL', () => closeRestartAsk(true));
+    askRow.append(pauseButton('fr-pause-ask-yes', 'RESTART', confirmRestart), restartNo);
+    restartAsk.append(askText, askRow);
+    top.append(resume, restartBtn, restartAsk);
+    const groupsBox = el('div', 'fr-pause-groups');
+    const defs: readonly { id: PauseGroup; label: string; items: readonly [string, () => void][] }[] = [
+      { id: 'progress', label: 'MISSIONS & PROGRESS', items: [['MISSIONS', () => actions.log('missions')], ['RECORD', () => actions.log('record')], ['SAVES', openSaves]] },
+      { id: 'settings', label: 'SETTINGS & HELP', items: [['CONTROLS', actions.controls], ['HOW TO PLAY', actions.howTo], ['SOUND', actions.sound]] },
+      { id: 'navigation', label: 'NAVIGATION', items: [['GALAXY MAP', actions.openMap], ['MAIN MENU', actions.exit]] },
+    ];
+    const built: { id: PauseGroup; box: HTMLElement; head: HTMLButtonElement; body: HTMLElement }[] = [];
+    for (const d of defs) {
+      const box = el('div', 'fr-pause-group');
+      box.dataset['group'] = d.id;
+      const head = el('button', 'fr-btn fr-pause-head');
+      head.type = 'button';
+      head.id = `fr-pause-${d.id}`;
+      head.setAttribute('aria-expanded', 'false');
+      head.setAttribute('aria-controls', `fr-pause-${d.id}-items`);
+      head.innerHTML = `${svgIcon('fr-pause-icon', PAUSE_ICON[d.id])}<span class="fr-pause-head-text"><span class="fr-pause-head-label"></span><span class="fr-pause-head-sum"></span></span>${svgIcon('fr-pause-chev', '<path d="M9 6l6 6-6 6"/>')}`;
+      head.querySelector('.fr-pause-head-label')!.textContent = d.label;
+      head.querySelector('.fr-pause-head-sum')!.textContent = d.items.map(([l]) => l).join(' · ');
+      head.addEventListener('click', () => togglePauseGroup(d.id));
+      const body = el('div', 'fr-pause-items');
+      body.id = `fr-pause-${d.id}-items`;
+      body.setAttribute('role', 'group');
+      body.setAttribute('aria-labelledby', head.id);
+      body.hidden = true;
+      for (const [label, fn] of d.items) {
+        const b = el('button', 'fr-btn fr-pause-item', label);
+        b.type = 'button';
+        b.addEventListener('click', (e) => {
+          // the second click of a double click on the group row must not land on an action it just revealed
+          // (pointer clicks only: keyboard / pad activation has detail 0 and is never delayed)
+          if (e.detail > 0 && performance.now() - pauseOpenedAt < PAUSE_REVEAL_GUARD_MS) return;
+          pauseReturn = b;
+          fn();
+        });
+        body.append(b);
+      }
+      box.append(head, body);
+      groupsBox.append(box);
+      built.push({ id: d.id, box, head, body });
+    }
+    pauseGroups = built;
+    list.append(top, groupsBox);
+  };
+
   const buildPanel = (id: Exclude<Panel, null>, kicker: string, title: string, body: readonly HTMLElement[], buttons: readonly [string, () => void][]): HTMLElement => {
     const p = el('section', `fr-panel fr-panel-${id}`);
     p.setAttribute('role', 'dialog');
@@ -2370,13 +2555,18 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       else if (panel === 'exchange') exchangePanel.back();
       else if (panel === 'upgrades') upgradesPanel.back();
       else if (panel === 'record') recordPanel.back();
+      else if (panel === 'pause' && !restartAsk.hidden) closeRestartAsk(true);
       else if (panel === 'pause' || panel === 'sectormap' || panel === 'cargo') actions.resume();
       else if (panel === 'gate') actions.stay();
       else if (panel === 'controls') actions.closeControls();
       else if (panel === 'briefing' && c === 'back') actions.openMap();
     } else if (c === 'map' && panel === 'sectormap') actions.resume();
     else if (c === 'cargo' && panel === 'cargo') actions.resume();
-    else if (c === 'restart' && (panel === 'pause' || panel === 'complete')) actions.restart();
+    else if (c === 'restart' && panel === 'pause') {
+      // R in the pause menu asks first (as the button does); R again, or RESTART, confirms
+      if (restartAsk.hidden) openRestartAsk();
+      else confirmRestart();
+    } else if (c === 'restart' && panel === 'complete') actions.restart();
   };
   const flightCommand = (c: FlightCommand): void => {
     if (panel || run?.phase !== 'flight') return;
@@ -2397,6 +2587,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /* ------------------------------- controls -------------------------------- */
   const setControls = (c: Partial<FlightControls>): void => {
     controls = { ...controls, ...c };
+    // P04.3: a mode change applies to the run at once (pose, velocity, lock and weapons carry over; STOP is cleared)
+    if (c.flightMode !== undefined && run) {
+      setRunFlightMode(run, controls.flightMode);
+      stopPending = false;
+      refreshHint();
+    }
     if (c.bindings) keys.setCodes(allCodes(controls.bindings));
     if (prefsWritable && !saveFreeRoamPrefs(services.store, { controls })) services.reportStorageProblem('write-failed');
     if (c.zoom !== undefined) {
@@ -2419,6 +2615,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     mouseAimBtn.textContent = `MOUSE AIM: ${controls.mouseAim ? 'ON' : 'OFF'}`;
     mouseAimBtn.setAttribute('aria-pressed', String(controls.mouseAim));
     zoomLabel.textContent = `ZOOM ${Math.round(controls.zoom * 100)}%`;
+    for (const m of ['normal', 'realistic'] as const) {
+      const on = controls.flightMode === m;
+      modeBtns[m].setAttribute('aria-pressed', String(on));
+      modeBtns[m].classList.toggle('is-selected', on);
+    }
+    modeDesc.textContent = controls.flightMode === 'realistic' ? `${FLIGHT_MODE_TEXT.realistic} ${FLIGHT_MODE_TEXT.stop} (${keyLabel(controls.bindings.stop[0])} or the STOP button.)` : `${FLIGHT_MODE_TEXT.normal} ${FLIGHT_MODE_TEXT.stopNormal}`;
     controlsStatus.textContent = message || 'Select a key to change it. ESC cancels; BACKSPACE clears a second key. Menus always use the arrows, ENTER and ESC.';
   };
   /** Capture-phase keydown while a binding slot waits: the key never reaches flight or menus. */
@@ -2651,6 +2853,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         if (run?.phase === 'flight' && (binds.lock[0] === code || binds.lock[1] === code)) lockPending = !lockPending;
         // P04.1 polish: NEXT TARGET (C) is one step per press (key repeat never reaches takePresses; two presses in one frame = one step)
         if (run?.phase === 'flight' && (binds.target[0] === code || binds.target[1] === code)) targetPending = true;
+        // P04.3: STOP is one toggle per press (REALISTIC flight; in NORMAL the run only reports it unavailable)
+        if (run?.phase === 'flight' && (binds.stop[0] === code || binds.stop[1] === code)) stopPending = !stopPending;
         if (run?.phase === 'flight' && (binds.fire[0] === code || binds.fire[1] === code)) firePending = true;
       }
     }
@@ -2694,6 +2898,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (pointers.takeWeaponPress() && live) cyclePending = 1;
     if (pointers.takeLockPress() && live) lockPending = !lockPending;
     if (pointers.takeTargetPress() && live) targetPending = true;
+    if (pointers.takeStopPress() && live) stopPending = !stopPending;
     if (padW && !padWeaponWas && live) cyclePending = 1;
     padWeaponWas = padW;
     const padF = padFire(snapshot);
@@ -2704,9 +2909,19 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       firePending = false;
       lockPending = false;
       targetPending = false;
+      stopPending = false;
     }
     const weaponKey = live && (keyboardWeapon(keys.heldCodes, binds) || padW || pointers.weaponHeld);
     let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost } : { ...move, fire, boost };
+    if (r.flightMode === 'realistic' && r.flight === null && live) {
+      // P04.3 REALISTIC: rotate-and-thrust from the same keys, pad and joystick (sector/realisticFlight.ts realisticInput)
+      const pv2 = padVector(snapshot);
+      const tv = pv.stick;
+      const sx = pv2.x + tv.x;
+      const sy = pv2.y + tv.y;
+      const sl = Math.hypot(sx, sy);
+      flight = { ...realisticInput(keyboardVector(keys.heldCodes, binds), sl > 1 ? { x: sx / sl, y: sy / sl } : { x: sx, y: sy }, aim), fire, boost };
+    }
     if (__GALAXIA_GRAVITY_LAB__ && lab) {
       // FR-TD-83: rotate-and-thrust in the gravity test only (the same keys, pad and joystick, mapped there)
       const kv = keyboardVector(keys.heldCodes, binds);
@@ -2724,6 +2939,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     paintMissileBtn(r, pv.weaponTouches);
     paintLockBtn(r, pv.lockTouches);
     paintTargetBtn(r, pv.targetTouches);
+    paintStopCtl(r, pv.stopTouches);
     let events: SectorEvent[] = [];
     batchShield = r.shield;
     const alpha = clock.advance(ts, () => {
@@ -2733,6 +2949,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       if (firePending && !f.fire) f = { ...f, fire: true };
       if (lockPending) f = { ...f, lockToggle: true };
       if (targetPending) f = { ...f, targetCycle: true };
+      if (stopPending) f = { ...f, stopToggle: true };
+      stopPending = false;
       cyclePending = 0;
       firePending = false;
       lockPending = false;
@@ -2936,6 +3154,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       targetBtn.setAttribute('aria-label', 'Next target');
       targetBtn.dataset['state'] = 'off';
       targetBtn.innerHTML = '<svg class="fr-target-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5l7 7-7 7M13 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      // P04.3: REALISTIC flight's mode tag and STOP button (hidden in NORMAL); the button names its state and how to release it
+      flightCtl = el('div', 'fr-flightctl');
+      flightCtl.hidden = true;
+      stopBtn = el('button', 'fr-stop');
+      stopBtn.type = 'button';
+      stopBtn.dataset['state'] = 'off';
+      stopBtn.setAttribute('aria-pressed', 'false');
+      stopBtn.setAttribute('aria-label', 'Stop: brake, then hold position');
+      stopState = el('span', 'fr-stop-state', 'STOP');
+      const stopHint = el('span', 'fr-stop-hint');
+      stopRelease = el('span', 'fr-stop-on', 'TAP TO RELEASE');
+      stopHint.append(stopRelease, el('span', 'fr-stop-off', 'BRAKE · HOLD'));
+      stopBtn.append(stopState, stopHint);
+      flightCtl.append(el('span', 'fr-flightmode-tag', 'REALISTIC FLIGHT'), stopBtn);
       interactBtn = el('button', 'fr-interact');
       interactBtn.type = 'button';
       interactBtn.hidden = true;
@@ -3219,18 +3451,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
             ['GALAXY MAP', actions.openMap],
           ],
         ),
-        pause: buildPanel('pause', 'FREE ROAM', 'PAUSED', [(pauseInfo = el('p', 'fr-stats fr-pause-info'))], [
-          ['RESUME', actions.resume],
-          ['RESTART FLIGHT', actions.restart],
-          ['MISSIONS', () => actions.log('missions')],
-          ['RECORD', () => actions.log('record')],
-          ['SAVES', openSaves],
-          ['CONTROLS', actions.controls],
-          ['HOW TO PLAY', actions.howTo],
-          ['SOUND', actions.sound],
-          ['GALAXY MAP', actions.openMap],
-          ['MAIN MENU', actions.exit],
-        ]),
+        pause: buildPanel('pause', 'FREE ROAM', 'PAUSED', [(pauseInfo = el('p', 'fr-stats fr-pause-info'))], []),
         sectormap: buildPanel('sectormap', 'LOCAL SECTOR', 'SECTOR MAP', [mapCanvas, el('p', 'fr-text fr-text-dim fr-map-legend', 'Arrow: your ship · dashed ring: sensor range · red: hostiles in range · coloured: points of interest found so far (all once surveyed) · grey: done. Paused while open.')], [
           ['RESUME', actions.resume],
           ['GALAXY MAP', actions.openMap],
@@ -3290,12 +3511,33 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       menus.sound = soundPanel.menu;
       menus.recovery = recovery.menu;
       pauseKicker = panels.pause.querySelector('.fr-kicker')!;
+      fillPauseMenu(panels.pause.querySelector('.fr-menu')!);
       mouseAimBtn = [...panels.controls.querySelectorAll<HTMLButtonElement>('.fr-menu > .fr-btn')].find((x) => x.textContent?.startsWith('MOUSE AIM'))!;
       const zoomRow = el('div', 'fr-controls-zoom');
       zoomLabel = el('span', 'fr-controls-action', 'ZOOM 100%');
       const zoomBtns = [...panels.controls.querySelectorAll<HTMLButtonElement>('.fr-menu > .fr-btn')].filter((x) => x.textContent?.startsWith('ZOOM'));
       zoomRow.append(zoomLabel, ...zoomBtns);
       mouseAimBtn.after(zoomRow);
+      // P04.3: FLIGHT MODE (NORMAL / REALISTIC): a saved preference, applied at once (never touches loadouts, marks or progress)
+      const modeRow = el('div', 'fr-controls-mode');
+      modeRow.setAttribute('role', 'group');
+      modeRow.setAttribute('aria-label', 'Flight mode');
+      const pickMode = (m: FlightMode): void => {
+        if (controls.flightMode !== m) setControls({ flightMode: m });
+        refreshControls(m === 'realistic' ? 'Realistic flight: the ship keeps drifting; use STOP to brake and hold.' : 'Normal flight: GALAXIA\'s standard controls.');
+      };
+      const modeBtn = (m: FlightMode, text: string): HTMLButtonElement => {
+        const b = el('button', 'fr-btn fr-mode-btn', text);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => pickMode(m));
+        return b;
+      };
+      modeBtns = { normal: modeBtn('normal', 'NORMAL'), realistic: modeBtn('realistic', 'REALISTIC') };
+      modeRow.append(el('span', 'fr-controls-action', 'FLIGHT MODE'), modeBtns.normal, modeBtns.realistic);
+      modeDesc = el('p', 'fr-text fr-text-dim fr-controls-mode-desc', '');
+      modeDesc.setAttribute('aria-live', 'polite');
+      zoomRow.after(modeRow, modeDesc);
       gateTitle = panels.gate.querySelector('.fr-title')!;
       gateJump = panels.gate.querySelector('.fr-btn')!;
       briefingKicker = panels.briefing.querySelector('.fr-kicker')!;
@@ -3306,7 +3548,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.armory, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery);
       flightRoot.append(hud);
       flightHud = createFlightHud(flightRoot, motion);
-      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, lockBtn, targetBtn, feed.root, offerView.root);
+      flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, lockBtn, targetBtn, flightCtl, feed.root, offerView.root);
       combatView = createCombatHud(flightRoot);
       // measured HUD stacking under the ship card (FR-TD-80; ui/hudStack.ts)
       stackFlightHud(scope, flightRoot, flightHud.card, feed.root);
@@ -3507,6 +3749,26 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       });
       scope.on<PointerEvent>(targetBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
       scope.on<Event>(targetBtn, 'contextmenu', (e) => e.preventDefault());
+      // P04.3 STOP: its own pointer role (never the stick, FIRE, BOOST, WPN or LOCK); mouse clicks use the same path
+      scope.on<PointerEvent>(stopBtn, 'pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (panel || run?.phase !== 'flight') return;
+        try {
+          stopBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* synthetic pointers cannot be captured; window pointerup still releases them */
+        }
+        pointers.stopDown(e.pointerId);
+        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+      });
+      scope.on<PointerEvent>(stopBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+      scope.on<Event>(stopBtn, 'contextmenu', (e) => e.preventDefault());
+      // keyboard activation of the focused button (assistive tech; a pointer press already toggled on pointerdown)
+      scope.on<MouseEvent>(stopBtn, 'click', (e) => {
+        if (e.detail === 0 && !panel && run?.phase === 'flight') stopPending = !stopPending;
+        stopBtn.blur(); // keep Space / Enter for flight
+      });
       scope.on<PointerEvent>(container, 'pointerdown', (e) => {
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
@@ -3574,6 +3836,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           equipment: equipment.status(),
           recovery: recovery.status(),
           panelReady: arming.ready(performance.now()),
+          pauseMenu: { open: pauseOpen, restartAsk: !!restartAsk && !restartAsk.hidden },
           panelDropped: arming.droppedCount,
           sound: services.sound.stats(),
           engine: services.sound.loopLevel(ENGINE_LOOP),

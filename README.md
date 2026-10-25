@@ -5,6 +5,7 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
+- **Last updated:** 2026-10-25. See [What's new since the 2026-10-23 archive](#whats-new-since-the-2026-10-23-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
 - **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory and Guild marks. The same help is in the game under **HOW TO PLAY**.
@@ -17,7 +18,7 @@ Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-since-the-2026-10-23-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -81,10 +82,12 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Navigation:** a Galaxy Map of 10 galaxies and a System Map for each (170 systems in total), with route planning and locked destinations. Every jump is confirmed.
 - **Sectors:** every system has a generated sector with stars, planets, asteroid fields, wrecks, caches, anomalies, ore veins, stations and gates.
 - **Flight:** any direction with assisted inertia, boost, a follow camera with zoom, optional mouse aim, and planet and star gravity that pulls only your ship.
+- **Two flight modes:** **NORMAL** (the default, unchanged assisted flight) and an opt-in **REALISTIC** mode with momentum, rotate-and-thrust steering and gravity that bends your path, plus **STOP**, which brakes and then holds position by station-keeping.
 - **Combat:** four original factions with eight enemy families, met in patrols, outposts, ambushes, elite duels and capital-ship fights. Target lock turns your nose toward a chosen hostile (facing only).
 - **Ships and weapons:** six ships, bought with cargo once you hold their licence, in a station **Hangar**; four weapons configured per ship in the **Armory**.
 - **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules and upgrades.
 - **Progress:** a ten-mission story chain, contract boards, cargo and crafting, three save slots, and recovery that never strands you.
+- **Pause menu:** RESUME and RESTART FLIGHT (with a confirmation) on top, then three groups that open on demand: MISSIONS & PROGRESS, SETTINGS & HELP and NAVIGATION.
 
 ### For every player
 
@@ -135,7 +138,7 @@ Classic has no boost, camera zoom or target lock.
 
 ### Free Roam
 
-Keyboard keys are defaults and can be rebound under pause → **CONTROLS**.
+Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP** → **CONTROLS**.
 
 | Action | Keyboard and mouse | Touch | Controller |
 |---|---|---|---|
@@ -145,7 +148,8 @@ Keyboard keys are defaults and can be rebound under pause → **CONTROLS**.
 | Next weapon (never fires) | Q or K | Weapon button above **FIRE** | R3 |
 | Target lock on / off | X | **LOCK** (left side) | — |
 | Next target (only while locked) | C | **»** beside LOCK | — |
-| Camera zoom | Mouse wheel, or = and − | Pause → CONTROLS → ZOOM | — |
+| STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
+| Camera zoom | Mouse wheel, or = and − | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
 | Interact (dock, open, inspect, gate) | E or Enter | Button that appears in range | A |
 | Sector map / cargo | M / I | **MAP** / **CARGO** | Select / Y |
 | Pause | Esc or P | **II** | Start |
@@ -153,7 +157,25 @@ Keyboard keys are defaults and can be rebound under pause → **CONTROLS**.
 - **The mouse wheel only zooms** the camera, centred on your ship. It never switches weapons.
 - **Target lock is facing only.** X locks the hostile nearest your nose that is in range and in sight, and your ship's nose turns to face it. It never moves the ship, chases, dodges or fires; you still steer, boost and shoot yourself. Press X again to release it at once.
 - **C** moves the lock to the next hostile in range (clockwise, wrapping round); it does nothing without a lock and never fires.
-- Mouse aim is optional (CONTROLS → MOUSE AIM, off by default). Target lock and next target are not available on a controller.
+- Mouse aim is optional (CONTROLS → MOUSE AIM, off by default). Target lock, next target and STOP are not available on a controller.
+
+#### Flight mode and STOP
+
+Choose under pause → **SETTINGS & HELP** → **CONTROLS** → **FLIGHT MODE**. You can switch at any time, even in flight; your position, speed, heading, weapon and target are kept, and the choice is remembered. Ships, weapons, cargo, Guild marks and progress are not affected.
+
+- **NORMAL** (default): the standard assisted flight described above, unchanged.
+- **REALISTIC**: the ship keeps drifting when you release thrust. On a keyboard, A and D rotate, W fires the main engine along the nose and S the weaker reverse thrusters; a touch or controller stick turns the nose toward the stick and thrusts harder the further you push. Engines cannot exceed the ship's normal top speed, but falling toward a planet or star can. A **REALISTIC FLIGHT** tag and the **STOP** button appear on the HUD.
+- **STOP** (REALISTIC only, B or the STOP button) brakes the ship (**STOPPING**), then holds that spot against momentum and gravity (**HOLDING POSITION**), or shows **CAN'T HOLD** if a pull is too strong. Press it again, or thrust or steer, to take back control. It never aims or fires, gravity and damage still apply, and it is never saved. In NORMAL flight, B only shows a reminder.
+
+#### Pause menu
+
+Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIGHT** sit at the top; RESTART asks for confirmation first (CANCEL is focused, so a repeated key never restarts by accident). Below them are three groups that expand when chosen:
+
+| Group | Contents |
+|---|---|
+| MISSIONS & PROGRESS | Missions, Record (recent Guild mark changes), Saves |
+| SETTINGS & HELP | Controls (bindings, mouse aim, zoom, flight mode), How to Play, Sound |
+| NAVIGATION | Galaxy Map (or System Map, when you came from one), Main Menu |
 
 ---
 
@@ -191,14 +213,14 @@ Free Roam's only currency is **Guild marks**, shown as `◈ 1,240 MARKS` on the 
 - **Spend:** reactor cells, equipment modules and ship upgrades.
 - **Not paid in marks:** ships (cargo plus a licence), travel (reactor cells, with free emergency options), repairs and restocking (free on docking).
 - **Purchases are confirmed:** the first press shows the price and your balance before and after; **CONFIRM** pays and **BACK** cancels. If you cannot afford something, the button shows `INSUFFICIENT MARKS` with the amount required, available and short.
-- Recent balance changes are listed under pause → **RECORD**.
+- Recent balance changes are listed under pause → **MISSIONS & PROGRESS** → **RECORD**.
 
 ## First-run tutorial and HOW TO PLAY
 
 - **When it appears:** automatically, the first time you reach the title screen. It has six steps (Welcome, Ships, Weapons, Controls, Guild marks, Start), with a step counter and progress bar. The Controls step switches between **CLASSIC / FREE ROAM** and **KEYBOARD / TOUCH / CONTROLLER**, and shows your own Free Roam key bindings.
 - **Skip or finish:** **SKIP TUTORIAL** or Esc closes it; **FINISH**, **PLAY CLASSIC** or **PLAY FREE ROAM** completes it. Either way it is remembered on this device and does not reappear on every visit or every run. If a later update changes the core controls, it appears once more.
 - **It changes nothing else:** opening, skipping or finishing it never touches saves, ships, weapons, Guild marks or unlocks, and nothing you press while it is open reaches the game.
-- **Reopen it** (this never resets it): the **HOW TO PLAY** button on the title screen (or H, or Y on a controller), or pause → **HOW TO PLAY** during a Free Roam flight. Classic's **HOW TO PLAY** (title and pause menus) shows Classic's own controls and scoring card.
+- **Reopen it** (this never resets it): the **HOW TO PLAY** button on the title screen (or H, or Y on a controller), or pause → **SETTINGS & HELP** → **HOW TO PLAY** during a Free Roam flight. Classic's **HOW TO PLAY** (title and pause menus) shows Classic's own controls and scoring card.
 
 ## Classic progression and the Wave 20 gate
 
@@ -397,13 +419,24 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
+## What's new since the 2026-10-23 archive
+
+These changes were made after the `GALAXIA-Game-Release-OpenTest-2026-10-23.zip` open-testing archive and are included in the 2026-10-25 archive. Classic Mode is unchanged.
+
+- **Free Roam flight modes:** an opt-in **REALISTIC** flight mode (momentum, rotate-and-thrust steering, gravity that bends your trajectory) beside the unchanged **NORMAL** default, chosen under CONTROLS → FLIGHT MODE and switchable in flight. See [Flight mode and STOP](#flight-mode-and-stop).
+- **STOP** (B or the STOP button, REALISTIC only): brakes, then holds position by station-keeping against momentum and gravity, with STOPPING / HOLDING POSITION / CAN'T HOLD states. It is never saved.
+- **Pause menu reorganised:** RESUME and RESTART FLIGHT on top, RESTART now asks for confirmation, and the other actions sit in three expandable groups (MISSIONS & PROGRESS, SETTINGS & HELP, NAVIGATION). Every earlier action is still there. The panel is anchored to the top of the screen, and clicks in the first moments after a group opens are ignored so a double click cannot trigger an item by accident. See [Pause menu](#pause-menu).
+- **Documentation:** this README, the [Player Guide](docs/PLAYER_GUIDE.md) and the in-game HOW TO PLAY now describe the flight modes, STOP and the new pause paths.
+
+Neither change has been playtested by a person or tried on a physical device; see below.
+
 ## What has been verified
 
-**Automated, on the current code (2026-10-23):**
+**Automated, on the current code (2026-10-25):**
 
-- `npm run check` passes: typecheck, the Vitest suite (1,911 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.4 kB gzip of a 110 kB budget; Free Roam 194.4 kB of 225 kB, loaded only when chosen).
-- Browser scripts in headless Chromium: the release smoke test (both modes and the first visit), the GitHub Pages-like server check, Arcade Display across sizes, pause and resume, plus QA-build scripts for the tutorial (desktop and 320–390 px touch layouts), controls, Hangar, economy and Classic weapons. The Armory script passes 44 of 46 checks; its 2 failures (the Nuke card's disabled actions on the Petrel, and the Lock-On detail text) predate this release and are unresolved.
-- The release archive: built, verified, extracted into a fresh folder outside the repository, installed with `npm ci`, and checked there with typecheck, tests, a production build and `verify:dist`.
+- `npm run check` passes: typecheck, the Vitest suite (1,953 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.4 kB gzip of a 110 kB budget; Free Roam 200.1 kB of 225 kB, loaded only when chosen).
+- Browser scripts in headless Chromium, last run on 2026-10-24 against the same game code: the release smoke test (both modes and the first visit), the GitHub Pages-like server check, pause and resume, the new pause-menu groups (desktop and 320 px touch layouts, restart confirmation, double-click protection), NORMAL and REALISTIC flight with STOP (QA and production builds), Free Roam controls, the tutorial and HOW TO PLAY, and the economy. Arcade Display, the Hangar and Classic weapons were last run for the 2026-10-23 archive. The Armory script passed 44 of 46 checks there; its 2 failures (the Nuke card's disabled actions on the Petrel, and the Lock-On detail text) predate that release and are unresolved.
+- The release archive is built with the repository's own builder and checked by its verifier (see [Release archive](#release-archive)).
 
 **Not performed:**
 
@@ -415,7 +448,8 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 ## Known limitations and open-testing notes
 
 - **Open testing:** expect balance and feel issues. Combat tuning, gravity strength, marks rewards and prices come from simulations and automated checks, not from players.
-- **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock and next target are not mapped on a controller.
+- **REALISTIC flight and STOP** are tuned from automated measurements only; expect the feel (turn rate, thrust, how STOP brakes near planets) to change after player feedback.
+- **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.
 - **Classic:** a single high score (no name entry or table); the score caps at 9,999,990; a few original arcade rules that could not be confirmed are configurable.
 - **General:** sound effects and short jingles only (no music); English only; saves are local to one browser.
 - **Before any public release:** the copyright holder in `LICENSE` must be filled in, and the open owner decisions on the name and the Classic presentation remain (see below).

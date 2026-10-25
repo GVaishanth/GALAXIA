@@ -229,7 +229,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps the local sector world model and runtime pure; only the sector renderer touches the DOM (Prompt 6)', () => {
     const dir = join(src, 'modes/freeroam/sector');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'render.ts', 'resume.ts', 'run.ts', 'validate.ts']);
+    expect(files.sort()).toEqual(['collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'realisticFlight.ts', 'render.ts', 'resume.ts', 'run.ts', 'validate.ts', 'vectorFlight.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // no storage access: persistent changes leave the sector code only as events

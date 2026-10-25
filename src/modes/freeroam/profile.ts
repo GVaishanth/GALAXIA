@@ -233,9 +233,15 @@ export interface FlightControls {
   readonly mouseAim: boolean;
   /** Player camera zoom multiplier (the camera clamps it to its own bounds). */
   readonly zoom: number;
+  /**
+   * P04.3: the flight model. 'normal' = GALAXIA's standard controls (the
+   * default); 'realistic' = momentum flight with STOP (sector/realisticFlight.ts).
+   * A missing (older save) or unknown value means 'normal'.
+   */
+  readonly flightMode: 'normal' | 'realistic';
 }
 
-export const DEFAULT_CONTROLS: FlightControls = Object.freeze({ bindings: DEFAULT_BINDINGS, mouseAim: false, zoom: 1 });
+export const DEFAULT_CONTROLS: FlightControls = Object.freeze({ bindings: DEFAULT_BINDINGS, mouseAim: false, zoom: 1, flightMode: 'normal' });
 
 /** Persistent gameplay changes of one sector (same shape as sector/model.ts SectorSave). */
 export interface SectorRecord {
@@ -450,7 +456,10 @@ function controlsField(f: Fix, v: unknown): FlightControls {
   const z = v['zoom'];
   const zoomOk = typeof z === 'number' && Number.isFinite(z) && z >= 0.5 && z <= 2;
   if (z !== undefined && !zoomOk) f.repaired = true;
-  return { bindings: b.bindings, mouseAim, zoom: zoomOk ? (z as number) : 1 };
+  // P04.3: anything but exactly 'realistic' flies NORMAL (a missing field is an older save, not a repair)
+  const m = v['flightMode'];
+  if (m !== undefined && m !== 'normal' && m !== 'realistic') f.repaired = true;
+  return { bindings: b.bindings, mouseAim, zoom: zoomOk ? (z as number) : 1, flightMode: m === 'realistic' ? 'realistic' : 'normal' };
 }
 
 function fleetField(f: Fix, v: unknown): SavedFleet {

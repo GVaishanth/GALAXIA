@@ -62,7 +62,8 @@ import { dist } from './grid.ts';
 import { safeResumePoint, type ResumeAt } from './resume.ts';
 import { initialDropBudget, interactContainer, killDrop, leftFromSave, lootStream, mineShot, persistentIds, spawnSavedCaches, stepOffer, stepPickups, touchPoi, touchWreck, type LootOffer, type Pickup, type PickupKind } from './collect.ts';
 import type { AgentRole } from '../combat/state.ts';
-import type { VectorControls } from '../gravity/physics.ts';
+import { NO_CONTROLS, type VectorControls } from './vectorFlight.ts';
+import { clearStationKeeping, createRealisticFlight, freshStationKeeping, stepRealistic, updateStationKeeping, vectorMoving, type FlightMode, type RealisticFlight, type StationKeeping } from './realisticFlight.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
 
 export const RUN = Object.freeze({
@@ -158,8 +159,13 @@ export interface SectorInput extends FlightInput {
    * (C / the NEXT TARGET button). An edge command; only while a lock holds.
    */
   readonly targetCycle?: boolean | undefined;
-  /** Rotate-and-thrust controls; read only by a flight hook (the Gravity Flight test sector, FR-TD-83). */
+  /** Rotate-and-thrust controls; read by a flight hook (the Gravity Flight test sector, FR-TD-83) and by REALISTIC flight (P04.3). */
   readonly vector?: VectorControls | undefined;
+  /**
+   * P04.3: toggle STOP this tick (B / the STOP button). An edge command like
+   * `lockToggle`. REALISTIC flight only; in NORMAL it changes nothing.
+   */
+  readonly stopToggle?: boolean | undefined;
 }
 
 /**
@@ -184,6 +190,8 @@ export interface FlightHook {
 
 export type SectorEvent =
   | { readonly type: 'phase'; readonly phase: FreeRoamPhase }
+  /** P04.3 STOP: engaged, released (toggle), cancelled (movement input), or unavailable (NORMAL flight). */
+  | { readonly type: 'stop'; readonly change: 'engaged' | 'released' | 'cancelled' | 'unavailable' }
   | { readonly type: 'recorded'; readonly id: string; readonly remaining: number }
   /** Salvage taken (`left` = what stays in the node; empty when it is done). */
   | { readonly type: 'collected'; readonly id: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] }
@@ -397,6 +405,16 @@ export interface SectorRun {
   readonly wells: readonly Well[];
   /** FR-TD-86: the pull on the ship this tick (zero while a flight hook owns the physics). */
   readonly gravity: GravityState;
+  /**
+   * P04.3: the pilot's flight mode (a preference, set by the shell). NORMAL =
+   * sim.ts stepShip, exactly as before; REALISTIC = sector/realisticFlight.ts.
+   * Ignored while a flight hook (the gravity lab) owns the physics.
+   */
+  flightMode: FlightMode;
+  /** P04.3: STOP (REALISTIC only); never saved, cleared on every reset. */
+  readonly stop: StationKeeping;
+  /** P04.3: REALISTIC step scratch (built once). */
+  readonly realistic: RealisticFlight;
 }
 
 export interface RunOptions {
@@ -421,6 +439,8 @@ export interface RunOptions {
   readonly at?: ResumeAt | null | undefined;
   /** P04 Admin Access sandbox: launches spend no ammunition (SectorRun.unlimitedAmmo). */
   readonly unlimitedAmmo?: boolean | undefined;
+  /** P04.3: the pilot's flight mode preference (default NORMAL). */
+  readonly flightMode?: FlightMode | undefined;
 }
 
 /** POIs every pilot knows on arrival: the station, the gates and the exit beacon (navigation beacons). */
@@ -510,6 +530,9 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     flight: null,
     wells: wellsOf(layout.landmarks),
     gravity: freshGravity(),
+    flightMode: o.flightMode === 'realistic' ? 'realistic' : 'normal',
+    stop: freshStationKeeping(),
+    realistic: createRealisticFlight(),
   };
   layFieldMines(run);
   spawnSavedCaches(run);
@@ -530,7 +553,20 @@ export function applyShip(run: SectorRun, craft: DerivedShip): void {
   run.fireCooldown = 0;
   run.heat = 0;
   run.overheated = false;
+  clearStationKeeping(run.stop); // P04.3: a new hull (new thrust): STOP starts over
   sense(run);
+}
+
+/**
+ * P04.3: switch the flight model mid-flight. Position, velocity, heading, the
+ * target lock and the weapons carry over untouched (no impulse, no jump); STOP
+ * and its hold point are cleared, so no controller force is left behind.
+ */
+export function setRunFlightMode(run: SectorRun, mode: FlightMode): void {
+  const next: FlightMode = mode === 'realistic' ? 'realistic' : 'normal';
+  if (run.flightMode === next) return;
+  run.flightMode = next;
+  clearStationKeeping(run.stop);
 }
 
 /** Reveal the POIs within sensor range of the ship (jammed inside sensor interference). */
@@ -688,9 +724,15 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     if (d < l.hazardR) drain += RUN.coronaDrain * Math.min(1, (l.hazardR - d) / (l.hazardR - l.r));
   }
   const mods: ShipModifiers = { speedMul, extraDrag, pullX, pullY };
+  /* P04.3 REALISTIC: STOP's toggle and hand-back come first (while STOP flies the ship, the engine and boost stay silent) */
+  const vec = run.flightMode === 'realistic' && !run.flight ? (input.vector ?? NO_CONTROLS) : null;
+  if (vec) {
+    const change = updateStationKeeping(run.stop, input.stopToggle === true, vectorMoving(vec));
+    if (change) events.push({ type: 'stop', change });
+  } else if (input.stopToggle === true) events.push({ type: 'stop', change: 'unavailable' });
   /* boost: spend energy while held with thrust; the level eases so the top speed never jumps */
   const st = run.craft.stats;
-  const thrustIn = Math.hypot(Number.isFinite(input.moveX) ? input.moveX : 0, Number.isFinite(input.moveY) ? input.moveY : 0) > 0.05;
+  const thrustIn = Math.hypot(Number.isFinite(input.moveX) ? input.moveX : 0, Number.isFinite(input.moveY) ? input.moveY : 0) > 0.05 && !(vec && run.stop.phase !== 'off');
   run.boosting = input.boost === true && thrustIn && (run.boosting ? run.energy > 0 : run.energy >= RUN.boostMinStart);
   if (run.boosting) {
     run.energy = Math.max(0, run.energy - RUN.boostDrain / 60);
@@ -713,6 +755,9 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     // the gravity lab owns the physics (its own planet and pull): no landmark pull on top
     if (run.gravity.g !== 0) Object.assign(run.gravity, freshGravity());
     moved = run.flight.stepShip(run, input, mods, tune, events);
+  } else if (vec) {
+    // P04.3 REALISTIC: vector flight in the sector's real wells (the same capped field as below), STOP inside the substeps
+    moved = stepRealistic(run.realistic, { ship: sh, controls: vec, base: run.tune, tune, mods, wells: run.wells, lockAim, stop: run.stop, width: L.width, height: L.height, gravityOut: run.gravity });
   } else {
     // FR-TD-86: planets and stars pull the ship through the same modifier as gravity-shear clouds
     const g = pullOn(run.wells, sh.x, sh.y, run.tune.accel, run.gravity);
@@ -827,6 +872,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     run.phase = 'complete';
     sh.thrusting = false;
     clearShipLock(run); // the survey-complete panel covers the flight view
+    clearStationKeeping(run.stop);
     events.push({ type: 'surveyComplete', ticks: run.tick }, { type: 'phase', phase: 'complete' });
   }
   return events;
@@ -881,6 +927,7 @@ function recall(run: SectorRun): void {
   run.overheated = false;
   resetMissiles(run);
   clearShipLock(run);
+  clearStationKeeping(run.stop); // P04.3: no STOP or hold point survives a recall / restart
   Object.assign(run.gravity, freshGravity());
   for (const st of run.patrols.values()) {
     st.awake = false;
@@ -911,6 +958,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     run.ship.vy = 0;
     run.docked = p.id;
     clearShipLock(run); // docked: no combat lock
+    clearStationKeeping(run.stop); // docked: the station holds the ship
     return [{ type: 'docked', id: p.id, first }];
   }
   if (p.kind === 'gate') return [{ type: 'gate', id: p.id, target: p.target!, gate: run.gates[p.id] ?? { state: 'dormant', label: 'Dormant gate', detail: 'No signal.' } }];

@@ -436,11 +436,14 @@ describe('Free Roam pointers (pointers.ts, FR-TD-44)', () => {
     p.weaponDown(3);
     p.lockDown(4); // P04.1 LOCK
     p.targetDown(5); // P04.1 polish NEXT TARGET
+    p.stopDown(6); // P04.3 STOP (REALISTIC flight)
+    expect(p.snapshot().stopTouches).toBe(1);
     p.setCursor(30, 40);
     p.setMouseFire(true);
     p.reset();
-    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, weaponTouches: 0, lockTouches: 0, targetTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
+    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, weaponTouches: 0, lockTouches: 0, targetTouches: 0, stopTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
     expect(p.takeLockPress()).toBe(false); // a latched LOCK press does not survive a reset
+    expect(p.takeStopPress()).toBe(false); // nor a latched STOP press (STOP is never left engaged by a stale press)
     expect(p.takeTargetPress()).toBe(false); // nor a latched NEXT TARGET press
     expect(p.firing).toBe(false);
     expect(p.weaponHeld).toBe(false);
@@ -648,10 +651,10 @@ describe('Free Roam controls (v5 in the profile; v10: shared Free Roam prefs)', 
     const b = rebind(DEFAULT_BINDINGS, 'fire', 0, 'KeyK');
     expect(b.ok).toBe(true);
     if (!b.ok) return;
-    saveFreeRoamPrefs(store, { controls: { bindings: b.bindings, mouseAim: true, zoom: 1.3225 } });
+    saveFreeRoamPrefs(store, { controls: { bindings: b.bindings, mouseAim: true, zoom: 1.3225, flightMode: 'normal' } });
     const back = loadFreeRoamPrefs(store);
     expect(back.status).toBe('ok');
-    expect(back.data.controls).toEqual({ bindings: b.bindings, mouseAim: true, zoom: 1.3225 });
+    expect(back.data.controls).toEqual({ bindings: b.bindings, mouseAim: true, zoom: 1.3225, flightMode: 'normal' });
     store.write('galaxia:freeroam:prefs', JSON.stringify({ version: 1, controls: { bindings: { up: ['Escape'] }, mouseAim: 'yes', zoom: 99 } }));
     const bad = loadFreeRoamPrefs(store);
     expect(bad.status).toBe('repaired');
@@ -665,7 +668,7 @@ describe('Free Roam controls (v5 in the profile; v10: shared Free Roam prefs)', 
     store.write('galaxia:freeroam', JSON.stringify({ ...EMPTY_PROFILE, version: 9, sessions: 4, controls: { bindings: b.bindings, mouseAim: true, zoom: 1.5 } }));
     const fp = loadFreeRoamPrefs(store);
     expect(fp.seeded).toBe(true);
-    expect(fp.data.controls).toEqual({ bindings: b.bindings, mouseAim: true, zoom: 1.5 });
+    expect(fp.data.controls).toEqual({ bindings: b.bindings, mouseAim: true, zoom: 1.5, flightMode: 'normal' }); // P04.3: an older save flies NORMAL
     expect(JSON.parse(store.read('galaxia:freeroam:prefs')!).controls.zoom).toBe(1.5);
     const slot = loadProfile(store);
     expect(slot.status).toBe('migrated');

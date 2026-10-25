@@ -36,7 +36,7 @@ Reopening the guide never resets anything.
 | Where | How |
 |---|---|
 | Title screen | **HOW TO PLAY** button, H, or Y on a controller |
-| Free Roam flight | Pause → **HOW TO PLAY**. Opens on the controls for your input, with your current keys. The game stays paused until you close it. |
+| Free Roam flight | Pause → **SETTINGS & HELP** → **HOW TO PLAY**. Opens on the controls for your input, with your current keys. The game stays paused until you close it. |
 | Classic | **HOW TO PLAY** on the Classic title or the pause menu. This is Classic's own card: controls and scoring. |
 
 ---
@@ -87,7 +87,7 @@ An exploration game. You fly in any direction through generated star-system sect
 
 ### Flight controls
 
-Keyboard keys are the defaults; you can rebind them under pause → **CONTROLS** (Esc always pauses and cannot be rebound).
+Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS & HELP** → **CONTROLS** (Esc always pauses and cannot be rebound).
 
 | Action | Keyboard and mouse | Touch | Controller |
 |---|---|---|---|
@@ -98,7 +98,8 @@ Keyboard keys are the defaults; you can rebind them under pause → **CONTROLS**
 | Next weapon | Q or K | Weapon button above **FIRE** | Press the right stick (R3) |
 | Target lock on / off | X | **LOCK**, on the left | — |
 | Next target (only while locked) | C | **»** beside LOCK (shown while locked) | — |
-| Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → CONTROLS → ZOOM | — |
+| STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
+| Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
 | Interact (dock, open, inspect, use a gate) | E or Enter | The button that appears in range | A |
 | Sector map | M | **MAP** | Select / View |
 | Cargo hold | I | **CARGO** | Y |
@@ -109,7 +110,28 @@ Keyboard keys are the defaults; you can rebind them under pause → **CONTROLS**
 - **Target lock** picks the hostile nearest your nose that is in range and in sight, and marks it with brackets (an arrow at the screen edge if it goes off screen). While locked, your ship's **nose turns to face it. That is all it does:** it never thrusts, chases, dodges or fires. You still steer, boost and shoot yourself.
 - **Next target** moves the lock to the next hostile in range, clockwise around your ship, wrapping round. It never fires or uses ammunition.
 - **The lock ends** when you press X or LOCK again, or when the target is destroyed, leaves range or the sector, or when you dock, leave the sector or are recalled. It never jumps to a new target by itself.
-- On a controller, target lock and next target are not available; use the keyboard or touch.
+- On a controller, target lock, next target and STOP are not available; use the keyboard or touch.
+
+### Flight mode (NORMAL or REALISTIC)
+
+Choose under pause → **SETTINGS & HELP** → **CONTROLS** → **FLIGHT MODE**. You can switch at any time, even in flight: your ship keeps its position, speed, heading, weapon and target. The choice is remembered. Your ships, weapons, cargo, Guild marks and progress are not affected.
+
+- **NORMAL** (the default): standard flight behaviour, exactly as described above.
+- **REALISTIC**: momentum-based flight. Your ship keeps drifting when thrust is released, and gravity affects your trajectory.
+  - **Keyboard:** A and D rotate the ship, W fires the main engine along the nose, and S fires the weaker reverse thrusters. Turning changes where the nose points, not where you are drifting. To slow down, turn around and thrust, or use STOP.
+  - **Touch stick or controller stick:** the nose turns toward the stick, and the engine pushes harder the further you push the stick and the closer the nose is to that direction.
+  - Mouse aim, the right stick and target lock still only turn the nose.
+  - Your engines cannot push you past your ship's normal top speed, but falling toward a planet or star can.
+  - A small **REALISTIC FLIGHT** tag and the **STOP** button appear on the HUD.
+
+**STOP** (REALISTIC only) brakes your ship, then uses station-keeping to hold position against momentum and gravity. It is active control by your engines, not paused physics:
+
+1. Press **B**, or click or tap **STOP**. The button shows **STOPPING** while the ship brakes; this takes a moment at speed.
+2. When the ship is almost at rest, it shows **HOLDING POSITION** and the engines keep you on that spot, even close to a planet.
+3. If a pull is ever too strong for your engines, it shows **CAN'T HOLD** instead of pretending.
+4. Press B or STOP again, or simply thrust or steer, to take back control. You keep whatever speed you have at that moment.
+
+Switching weapons, zooming, locking or changing targets and opening the pause menu do not cancel STOP. STOP never aims or fires, and gravity, collisions and damage still apply while it holds. It turns off when you change flight mode, dock, change ships, restart or leave the sector, and it is never saved. In NORMAL flight, B does nothing except remind you that STOP is a REALISTIC feature.
 
 ### Maps, panels and stations
 
@@ -120,7 +142,17 @@ Keyboard keys are the defaults; you can rebind them under pause → **CONTROLS**
 | Back or cancel | Esc | CANCEL, ◀ MENU or ◀ GALAXIES | B |
 | Switch station tabs | `[` and `]`, or Page Up / Page Down | Tap a tab | X |
 
-The pause menu has RESUME, RESTART FLIGHT, MISSIONS, RECORD, SAVES, CONTROLS, HOW TO PLAY, SOUND, GALAXY MAP and MAIN MENU.
+The pause menu keeps **RESUME** and **RESTART FLIGHT** at the top. Everything else is in three groups; select a group to open it (only one is open at a time), and select it again to close it:
+
+| Group | Contains |
+|---|---|
+| **MISSIONS & PROGRESS** | MISSIONS, RECORD, SAVES |
+| **SETTINGS & HELP** | CONTROLS, HOW TO PLAY, SOUND |
+| **NAVIGATION** | GALAXY MAP (it reads SYSTEM MAP if you entered from the system map), MAIN MENU |
+
+- The flight stays paused the whole time. Each pause starts with the groups closed and RESUME selected; after CONTROLS, SOUND, SAVES and the others you come back to the same place in the menu.
+- **RESTART FLIGHT asks first:** choose RESTART to go back to the arrival zone (shields and hull restored, flight clock and hostiles reset; cargo and completed work kept), or CANCEL. R does the same: press R to ask, R again to confirm. Esc cancels the question.
+- Keyboard: arrow keys (or W / S) move through the menu, Enter or Space opens a group or picks an action, Esc resumes.
 
 ### Travel and staying safe
 
@@ -179,21 +211,21 @@ Free Roam has one currency, **Guild marks**. Your balance appears on the ship ca
 - **Not paid in marks:** ships (cargo and a licence), travel (reactor cells), and repairs and restocking (free when you dock).
 - **Buying safely:** the first press shows the price, your balance and your balance afterwards. **CONFIRM** pays; **BACK** cancels.
 - **Not enough?** The button stays visible but disabled and shows what is missing, for example `INSUFFICIENT MARKS · Required ◈ 40 MARKS · Available ◈ 3 MARKS · Shortfall ◈ 37 MARKS`.
-- Recent changes to your balance are listed under pause → **RECORD**.
+- Recent changes to your balance are listed under pause → **MISSIONS & PROGRESS** → **RECORD**.
 
 ---
 
 ## Settings and accessibility
 
 - **Classic SETTINGS:** sound, volume, effects and jingle levels, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
-- **Free Roam:** pause → **CONTROLS** (key bindings, mouse aim, zoom) and pause → **SOUND** (including fullscreen).
+- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode) and → **SOUND** (including fullscreen).
 - **Reduced motion** follows your system setting by default and can be changed in SETTINGS.
 - Menus work fully from the keyboard with visible focus; nothing depends on hover.
 - Sound starts only after your first click, tap or key press. The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.
 
 ## Saves
 
-- Everything is saved in this browser on this device only: the Classic high score, settings, the three Free Roam save slots (pause → **SAVES**) and whether you have seen the tutorial.
+- Everything is saved in this browser on this device only: the Classic high score, settings, the three Free Roam save slots (pause → **MISSIONS & PROGRESS** → **SAVES**) and whether you have seen the tutorial.
 - Free Roam saves at milestones and every minute of flight, and resumes where you were after a reload.
 - There are no accounts, cloud saves or online leaderboards. Clearing the site's data or using a private window removes your saves.
 - If the browser blocks storage, the game still plays but keeps progress only until the tab closes, and says so on screen.
