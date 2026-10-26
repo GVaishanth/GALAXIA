@@ -97,8 +97,10 @@ describe('file selection', () => {
     const sel = releaseFiles([
       'docs/freeroam/TECHNICAL_DECISIONS.md', 'docs/development/ADMIN_ACCESS.md', 'docs/development/playtest/admin-access-p04.mjs', 'docs/development/playtest/guide-p042.mjs',
       'docs/development/playtest/release-smoke.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md', 'docs/PLAYER_GUIDE.md', 'docs/RELEASE_CHECKLIST.md', 'skills-lock.json', 'notes.txt',
+      // P05.3: the crew harnesses ship (crew is a player feature); other development harnesses stay out
+      'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/freeroam-armory-p03b.mjs',
     ]);
-    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/release-smoke.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
+    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
   });
 
   it('rejects unsafe paths', () => {

@@ -380,4 +380,49 @@ describe('mode separation (Free Roam Prompt 2)', () => {
       expect(code, rel(f)).not.toMatch(/window\.[A-Za-z_$]*admin[A-Za-z_$]*\s*=/i);
     }
   });
+
+  it('keeps P05.1 crew contained: pure rules, one DOM section, wired only by the shell, the hangar and the save audit', () => {
+    const dir = join(src, 'modes/freeroam/crew');
+    const crewFiles = all.filter((f) => rel(f).startsWith('modes/freeroam/crew/'));
+    // P05.2 adds the advisory files: traits (attribute mapping), observation (types), advisor (rules), ui/advisorStrip (DOM)
+    expect(crewFiles.map(rel).sort()).toEqual(['advisor.ts', 'bridgeView.ts', 'data.ts', 'observation.ts', 'persistence.ts', 'recruit.ts', 'state.ts', 'traits.ts', 'types.ts', 'ui/advisorStrip.ts', 'ui/bridgeSection.ts', 'view.ts'].map((f) => `modes/freeroam/crew/${f}`));
+    for (const f of crewFiles.filter((x) => !rel(x).startsWith('modes/freeroam/crew/ui/'))) {
+      const code = readFileSync(f, 'utf8');
+      expect(code, rel(f)).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|sessionStorage|fetch)\b/);
+    }
+    for (const f of crewFiles) for (const spec of importSpecs(f)) expect(spec, `${rel(f)} imports ${spec}`).not.toMatch(/^(persistence|shared\/persistence|input|game|classic)\/|^modes\/freeroam\/(admin|sector|combat|gravity)\/|^modes\/freeroam\/(freeRoamMode|saveSlots)\.ts$/);
+    // the main bundle (everything outside Free Roam, plus profile.ts) never pulls crew in
+    for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/') || rel(x) === 'modes/freeroam/profile.ts')) expect(importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/crew/')), rel(f)).toEqual([]);
+    // inside Free Roam: the shell (rules and commits), the hangar (the Bridge section), the save audit, and (P05.2) the
+    // advisor observation builder and forecast, which only build the crew/observation.ts types
+    const users = all.filter((x) => !rel(x).startsWith('modes/freeroam/crew/') && importSpecs(x).some((s2) => s2.startsWith('modes/freeroam/crew/'))).map(rel).sort();
+    expect(users).toEqual(['modes/freeroam/advisor/forecast.ts', 'modes/freeroam/advisor/observe.ts', 'modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/ships/hangarPanel.ts']);
+    for (const f of all.filter((x) => rel(x).startsWith('modes/freeroam/advisor/'))) for (const spec of importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/crew/'))) expect(spec, rel(f)).toMatch(/^modes\/freeroam\/crew\/(observation|types)\.ts$/);
+    expect(readdirSync(dir).includes('ui')).toBe(true);
+  });
+
+  it('keeps P05.2 advice read-only: the observation reads the run, the advisor reads only the observation', () => {
+    const advisorFiles = all.filter((f) => rel(f).startsWith('modes/freeroam/advisor/'));
+    expect(advisorFiles.map(rel).sort()).toEqual(['modes/freeroam/advisor/forecast.ts', 'modes/freeroam/advisor/observe.ts']);
+    for (const f of advisorFiles) {
+      const code = readFileSync(f, 'utf8');
+      expect(code, rel(f)).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|sessionStorage|fetch|requestAnimationFrame|setTimeout|setInterval)\b/);
+      // never writes the run (or anything reached through it, or the forecast query's ship / STOP state)
+      expect(code, rel(f)).not.toMatch(/\b(run|r|sh|q\.ship|q\.stop|L|stats)(\.[\w$]+|\[[^\]]+\])+\s*(=(?!=)|\+=|-=|\*=|\/=|\+\+|--)/);
+      expect(code, rel(f)).not.toMatch(/\brun\.[\w.]+\.(push|pop|shift|unshift|splice|set|add|delete|clear|sort|fill)\(|Object\.assign\(\s*(run|q\.)/);
+      for (const spec of importSpecs(f)) {
+        expect(spec, `${rel(f)} imports ${spec}`).not.toMatch(/^(input|game|classic|render|audio|persistence|shared\/persistence)\//);
+        expect(spec, `${rel(f)} imports ${spec}`).not.toMatch(/^modes\/freeroam\/(input|camera|freeRoamMode|saveSlots|profile|combatHud)\.ts$|^modes\/freeroam\/(progression|admin|gravity|ships|galaxy)\//);
+      }
+    }
+    // the advisor rules see only crew files (the observation, the crew view and traits): no run, sector, combat or flight import
+    for (const f of ['advisor.ts', 'traits.ts', 'observation.ts'].map((x) => join(src, 'modes/freeroam/crew', x))) for (const spec of importSpecs(f)) expect(spec, `${rel(f)} imports ${spec}`).toMatch(/^modes\/freeroam\/crew\/(observation|traits|types|view)\.ts$/);
+    // the strip renders the advisor view only
+    for (const spec of importSpecs(join(src, 'modes/freeroam/crew/ui/advisorStrip.ts'))) expect(spec).toMatch(/^modes\/freeroam\/(progression\/ui\/common|crew\/advisor)\.ts$/);
+    // only the shell builds observations and runs the advisor
+    const users = all.filter((x) => !rel(x).startsWith('modes/freeroam/advisor/') && importSpecs(x).some((s2) => s2.startsWith('modes/freeroam/advisor/'))).map(rel);
+    expect(users).toEqual(['modes/freeroam/freeRoamMode.ts']);
+    // the lab's own prediction stays in the gravity lab (never reused by production advice)
+    for (const f of advisorFiles) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/predictBallistic|suggestEscape/);
+  });
 });

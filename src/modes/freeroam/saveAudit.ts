@@ -18,17 +18,21 @@
  *  - progression: unknown missions, licences, upgrade tracks and ships are
  *    removed, upgrade levels capped (progression/persistence.ts);
  *  - claimed milestones the game does not define are removed;
+ *  - P05.1 crew: unknown or duplicate crew ids are removed; seats on ships
+ *    the slot does not own, or beyond a ship's seats, are released and those
+ *    crew stay on the roster (crew/persistence.ts). Nobody is ever added;
  *  - cargo and stored modules with unknown (well-formed) ids are KEPT, inert
  *    and shown as unknown (Prompt 10: nothing in the hold vanishes).
  */
 import type { NavGraph } from './galaxy/graph.ts';
 import { progressFromSaved } from './galaxy/progress.ts';
 import { MILESTONE_BY_ID } from './inventory/milestones.ts';
-import { withNavigation, type FreeRoamProfile, type SectorRecord } from './profile.ts';
+import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
+import { withCrew, withNavigation, type FreeRoamProfile, type SectorRecord } from './profile.ts';
 import { progressionFromSaved, progressionToSaved } from './progression/persistence.ts';
 import { fleetFromSaved, fleetToSaved } from './ships/hangar.ts';
 
-export type AuditArea = 'navigation' | 'sectors' | 'fleet' | 'missions' | 'upgrades' | 'milestones' | 'wreck' | 'resume';
+export type AuditArea = 'navigation' | 'sectors' | 'fleet' | 'missions' | 'upgrades' | 'milestones' | 'wreck' | 'resume' | 'crew';
 
 export interface AuditIssue {
   readonly area: AuditArea;
@@ -76,9 +80,15 @@ export function auditProfile(graph: NavGraph, p: FreeRoamProfile): AuditResult {
   if (droppedSectors) out = { ...out, sectors };
 
   /* fleet */
-  const fleet = fleetToSaved(fleetFromSaved(p.fleet));
+  const fleetState = fleetFromSaved(p.fleet);
+  const fleet = fleetToSaved(fleetState);
   note('fleet', missing(p.fleet.owned, fleet.owned) + (p.fleet.active !== fleet.active ? 1 : 0) + missing(Object.keys(p.fleet.loadouts), Object.keys(fleet.loadouts)));
   out = { ...out, fleet };
+
+  /* crew (P05.1): checked against the crew roster and the fleet just audited */
+  const crew = crewFromSaved(p.crew, fleetState.owned);
+  note('crew', crew.changes);
+  if (crew.changes > 0) out = withCrew(out, crewToSaved(crew.state));
 
   /* progression */
   const prog = progressionToSaved(progressionFromSaved(p.progression));

@@ -21,6 +21,10 @@
  *    Reduced motion draws one still frame per change.
  *  - Filter, sort, comparison and the inspected ship are panel state and are
  *    never saved; opening the hangar starts from the ship flown.
+ *  - P05.1: the ship details have two views, SHIP (performance, armament,
+ *    fit, acquisition) and BRIDGE (crew seats, roster, recruitment; DOM in
+ *    crew/ui/bridgeSection.ts). The view is panel state; every hangar visit
+ *    opens on SHIP. Without `bridge` deps the switch is not shown.
  */
 import type { SpriteId } from '../../../assets/sprites/index.ts';
 import { FLEET_FLAME_ROWS } from '../../../assets/sprites/fleet.ts';
@@ -56,6 +60,7 @@ import {
 import { SHIP_BY_ID, SHIPS } from './roster.ts';
 import { SLOT_TYPES, type ShipId } from './types.ts';
 import type { UpgradeLevels } from './upgrades.ts';
+import { createBridgeSection, type BridgeDeps, type BridgeStatus } from '../crew/ui/bridgeSection.ts';
 
 export interface HangarDeps {
   readonly sprites: SpriteCache;
@@ -85,7 +90,12 @@ export interface HangarDeps {
   readonly adminOnly?: (() => ReadonlySet<ShipId>) | undefined;
   /** Economy pass: the Guild marks balance, already formatted by the wallet (e.g. "◈ 1,240 MARKS"). Ships cost cargo, never marks. */
   readonly balance?: (() => string) | undefined;
+  /** P05.1: the BRIDGE view of the ship details (crew); without it only the ship view exists. */
+  readonly bridge?: BridgeDeps | undefined;
 }
+
+/** P05.1: which ship-detail view is showing. */
+export type HangarView = 'ship' | 'bridge';
 
 export interface HangarStatus {
   readonly inspected: ShipId;
@@ -103,6 +113,9 @@ export interface HangarStatus {
   readonly visible: readonly ShipId[];
   /** Preview diagnostics: the ship drawn last, draws so far, whether a transition is running. */
   readonly preview: { readonly ship: ShipId | null; readonly draws: number; readonly transition: boolean };
+  /** P05.1: the ship-detail view and the Bridge state (null without bridge deps). */
+  readonly view: HangarView;
+  readonly bridge: BridgeStatus | null;
 }
 
 export interface HangarPanel {
@@ -256,6 +269,23 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
   /* info */
   const detail = el('section', 'fr-hangar-detail');
   detail.setAttribute('aria-label', 'Ship details');
+  // P05.1: SHIP / BRIDGE view switch (real tab buttons; arrows reach them through the panel's MenuList)
+  const viewTabs = el('div', 'fr-hangar-views');
+  viewTabs.setAttribute('role', 'tablist');
+  viewTabs.setAttribute('aria-label', 'Ship detail view');
+  viewTabs.hidden = !d.bridge;
+  const viewBtn = (v: HangarView, text: string): HTMLButtonElement => {
+    const b = el('button', `fr-hangar-view fr-hangar-view-${v}`, text);
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.dataset['view'] = v;
+    b.addEventListener('click', () => setView(v));
+    viewTabs.append(b);
+    return b;
+  };
+  const shipViewBtn = viewBtn('ship', 'SHIP');
+  const bridgeViewBtn = viewBtn('bridge', 'BRIDGE · CREW');
+  const shipInfo = el('div', 'fr-hangar-info');
   const desc = el('p', 'fr-text fr-text-dim fr-hangar-desc');
   const highs = el('ul', 'fr-hangar-highs');
   highs.setAttribute('aria-label', 'Strengths');
@@ -278,7 +308,8 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
   slotsBox.setAttribute('aria-label', 'Fitted equipment');
   const termsHead = el('h4', 'fr-hangar-sec', 'ACQUISITION');
   const terms = el('ul', 'fr-hangar-terms');
-  detail.append(desc, highs, perfHead, legend, stats, el('h4', 'fr-hangar-sec', 'ARMAMENT'), arms, fitHead, slotsBox, termsHead, terms);
+  shipInfo.append(desc, highs, perfHead, legend, stats, el('h4', 'fr-hangar-sec', 'ARMAMENT'), arms, fitHead, slotsBox, termsHead, terms);
+  detail.append(viewTabs, shipInfo);
 
   const body = el('div', 'fr-hangar');
   body.append(bay, cat, detail);
@@ -301,6 +332,15 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
   menu.append(actionBtn, cancelBtn, armoryBtn, launchBtn);
   foot.append(message, menu);
   root.append(head, body, foot);
+  const bridge = d.bridge ? createBridgeSection(d.bridge, (text) => {
+        message.textContent = text;
+        refreshList(); // the wallet and fleet lines follow a hire at once
+      }) : null;
+  if (bridge) {
+    bridge.root.hidden = true;
+    detail.append(bridge.root);
+  }
+  let view: HangarView = 'ship';
 
   /* cards */
   const cards = new Map<ShipId, { readonly btn: HTMLButtonElement; readonly thumb: HTMLCanvasElement; readonly state: HTMLElement }>();
@@ -671,9 +711,24 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     actionBtn.setAttribute('aria-label', actionBtn.textContent ?? '');
   };
 
+  const refreshView = (): void => {
+    const onBridge = view === 'bridge' && bridge !== null;
+    shipInfo.hidden = onBridge;
+    if (bridge) bridge.root.hidden = !onBridge;
+    for (const [b, v] of [[shipViewBtn, 'ship'], [bridgeViewBtn, 'bridge']] as const) {
+      b.setAttribute('aria-selected', String(view === v));
+      b.classList.toggle('is-current', view === v);
+    }
+    const ship = SHIP_BY_ID.get(inspected)!;
+    bridgeViewBtn.setAttribute('aria-label', `Bridge: crew seats of the ${ship.name} (${ship.crewSeats}), your roster and recruitment`);
+    detail.setAttribute('aria-label', onBridge ? `Bridge of the ${ship.name}` : 'Ship details');
+    if (onBridge) bridge.render(inspected);
+  };
+
   const refresh = (): void => {
     refreshList();
     refreshDetail();
+    refreshView();
     drawStrip(inspected);
     bayState.dirty = true;
     if (!root.hidden) drawBay(performance.now());
@@ -697,6 +752,14 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     // keep inspecting a ship the player can see (an empty group keeps the last one)
     if (shown.length > 0 && !shown.includes(inspected)) inspect(shown[0]!);
     else refresh();
+  }
+
+  function setView(v: HangarView): void {
+    if (v === view || (v === 'bridge' && !bridge)) return;
+    view = v;
+    d.sound('uiMove');
+    message.textContent = v === 'bridge' ? 'Bridge: crew seats, your roster and recruits. Crew are optional.' : '';
+    refreshView();
   }
 
   function setSort(s: HangarSort): void {
@@ -764,6 +827,8 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     open(station: string) {
       inspected = d.fleet().active;
       pending = null;
+      view = 'ship';
+      bridge?.reset();
       filter = 'all';
       sort = 'roster';
       compareChoice = undefined;
@@ -777,6 +842,7 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
       cards.get(inspected)?.btn.focus({ preventScroll: true });
     },
     back() {
+      if (bridge?.cancel()) return;
       if (pending) {
         pending = null;
         message.textContent = 'Cancelled.';
@@ -808,6 +874,8 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
         compare: resolveCompare(cx, inspected, compareChoice),
         visible: [...visible],
         preview: { ship: bayState.drawn, draws: bayState.draws, transition: bayState.from !== null },
+        view,
+        bridge: bridge ? bridge.status() : null,
       };
     },
   };

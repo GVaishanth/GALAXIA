@@ -44,7 +44,8 @@ export const MARKS = Object.freeze({
   labelMax: 64,
 });
 
-export const ENTRY_KINDS = ['mission', 'bounty', 'encounter', 'discovery', 'sale', 'purchase', 'upgrade', 'ship', 'travel', 'refund'] as const;
+/** P05.1: 'crew' = a one-time crew berth fee (never wages or upkeep). */
+export const ENTRY_KINDS = ['mission', 'bounty', 'encounter', 'discovery', 'sale', 'purchase', 'upgrade', 'ship', 'travel', 'refund', 'crew'] as const;
 export type EntryKind = (typeof ENTRY_KINDS)[number];
 
 export interface LedgerEntry {

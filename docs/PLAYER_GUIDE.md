@@ -1,10 +1,10 @@
 # GALAXIA Player Guide
 
-This guide covers how to play GALAXIA: both modes, every control, the Hangar, the Armory and Guild marks. The same information is in the game: open **HOW TO PLAY** on the title screen, or from the pause menu during a flight. The in-game version shows your own key bindings.
+This guide covers how to play GALAXIA: both modes, every control, the Hangar, the Armory, Guild marks and crew. Most of it is also in the game: open **HOW TO PLAY** on the title screen, or from the pause menu during a flight. The in-game version shows your own key bindings; crew and Ship Mind advice are covered only here for now.
 
 > **Open testing.** GALAXIA is being prepared for open testing. Automated checks pass, but nobody has playtested this build yet, and it has not been tried on real phones, tablets or game controllers. Please report anything that feels wrong (see [Reporting a problem](#reporting-a-problem)).
 
-**Contents:** [First launch](#first-launch) · [Classic Mode](#classic-mode) · [Free Roam](#free-roam) · [Hangar](#hangar-ships) · [Armory](#armory-weapons) · [Guild marks](#guild-marks-credits) · [Settings](#settings-and-accessibility) · [Saves](#saves) · [Reporting a problem](#reporting-a-problem)
+**Contents:** [First launch](#first-launch) · [Classic Mode](#classic-mode) · [Free Roam](#free-roam) · [Hangar](#hangar-ships) · [Armory](#armory-weapons) · [Guild marks](#guild-marks-credits) · [Crew](#crew-optional) · [Settings](#settings-and-accessibility) · [Saves](#saves) · [Reporting a problem](#reporting-a-problem)
 
 ---
 
@@ -207,25 +207,49 @@ The Lock-On Missile makes its own short lock when fired, separate from the X / L
 Free Roam has one currency, **Guild marks**. Your balance appears on the ship card in flight and on every station screen, like this: `◈ 1,240 MARKS`. A new pilot starts with 0. Classic has no currency, only score.
 
 - **Earn:** mission and contract rewards, selling cargo at a station **EXCHANGE**, clearing an encounter (once each), first discoveries, and small bounties for hostiles you destroy (a limited pool per system).
-- **Spend:** reactor cells, equipment modules and ship upgrades, at stations.
+- **Spend:** reactor cells, equipment modules and ship upgrades, at stations, and the one-time berth fee of a crew member recruited at a station (80, 130 or 220 by rank). There are no wages or upkeep.
 - **Not paid in marks:** ships (cargo and a licence), travel (reactor cells), and repairs and restocking (free when you dock).
 - **Buying safely:** the first press shows the price, your balance and your balance afterwards. **CONFIRM** pays; **BACK** cancels.
 - **Not enough?** The button stays visible but disabled and shows what is missing, for example `INSUFFICIENT MARKS · Required ◈ 40 MARKS · Available ◈ 3 MARKS · Shortfall ◈ 37 MARKS`.
 - Recent changes to your balance are listed under pause → **MISSIONS & PROGRESS** → **RECORD**.
+
+## Crew (optional)
+
+You never need crew: flying solo is fully supported and the game can be finished without anyone aboard.
+
+**Where:** dock, open **HANGAR**, select a ship card and choose **BRIDGE · CREW**. You see that ship's seats, the crew aboard, your unassigned crew and the recruits you can sign on.
+
+**Recruiting.** Seven named specialists can join. Four wait at their own station and ask a **one-time berth fee** (cadet 80, rated 130, veteran 220 marks); some also need progress first, such as a survey run or a story mission, and the Bridge shows how far you are. Two join free after story missions and one after you clear a distress beacon (a wreck defence); those three sign on at any station. **SIGN ON** shows the price first and pays once, like any purchase. If you **DISMISS** someone, they return to where they signed on, and you can sign them on again later without paying twice.
+
+**Seats.** Swift 1, Shrike 1, Petrel 2, Magpie 2, Condor 3, Albatross 3. Use **ASSIGN TO** (or **MOVE TO** for someone on another ship) and **UNASSIGN**. Changes happen only while docked with no hostiles engaged. Crew not seated on the ship you are flying do nothing.
+
+**Roles.** A **Navigator** and a **Surveyor** advise you in flight (the first of each seated on your ship). **Engineer, Defence and Quartermaster** can be recruited and seated, but their duties are **planned for a later update**; they do nothing in flight yet. Each crew card shows **COMPETENCE** (how good their own work is), **CAUTION** (how early they raise a risk) and **FOCUS** (how firmly they stick to their job), from 1 to 5. With a Navigator signed on you can also set the **NAVIGATOR DOCTRINE**: BALANCED or SAFETY-FIRST (earlier warnings, the widest-margin escape burns, no optional route notes).
+
+### Ship Mind and crew advice
+
+Short advice lines appear in flight, one at a time, each starting with an icon, a level and who is speaking: **◆ CRITICAL**, **▲ WARNING**, **● INFO** or **○ NOTE**. They take no input and never show over menus, maps or station screens.
+
+- The **Ship Mind** is always with you: low hull, shield down, a collision course, a star's corona, a strong pull, hostile contacts, targets on sensors and empty magazines.
+- A **Navigator** warns earlier about drifting into a planet or corona and names an escape burn, explains how strongly a body pulls and whether your engine beats it, tells you when STOP cannot hold, and notes the reactor cells the lanes out need.
+- A **Surveyor** reads the targets on your sensors and what they are worth, the survey marks still to chart, and tells you when interference blinds the sensors or a survey is complete.
+
+Advice uses only what your sensors can see. A condition is mentioned once, and again only if it gets worse; each target is named once per visit. After a pause, only the message that was showing comes back, and only if it is still true. **Advice never flies the ship:** nobody steers, brakes, toggles STOP, aims, fires, spends marks or travels for you.
+
+**Fewer messages:** pause → **SETTINGS & HELP** → **CONTROLS** → **SHIP MIND** → **CRITICAL ONLY** keeps only critical warnings (low hull and an imminent collision). Switching back to **ALL ADVICE** brings back at most one hazard that is still going on, not a backlog.
 
 ---
 
 ## Settings and accessibility
 
 - **Classic SETTINGS:** sound, volume, effects and jingle levels, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
-- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode) and → **SOUND** (including fullscreen).
+- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode, Ship Mind advice) and → **SOUND** (including fullscreen).
 - **Reduced motion** follows your system setting by default and can be changed in SETTINGS.
 - Menus work fully from the keyboard with visible focus; nothing depends on hover.
 - Sound starts only after your first click, tap or key press. The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.
 
 ## Saves
 
-- Everything is saved in this browser on this device only: the Classic high score, settings, the three Free Roam save slots (pause → **MISSIONS & PROGRESS** → **SAVES**) and whether you have seen the tutorial.
+- Everything is saved in this browser on this device only: the Classic high score, settings, the three Free Roam save slots (with your crew and seats) (pause → **MISSIONS & PROGRESS** → **SAVES**) and whether you have seen the tutorial.
 - Free Roam saves at milestones and every minute of flight, and resumes where you were after a reload.
 - There are no accounts, cloud saves or online leaderboards. Clearing the site's data or using a private window removes your saves.
 - If the browser blocks storage, the game still plays but keeps progress only until the tab closes, and says so on screen.

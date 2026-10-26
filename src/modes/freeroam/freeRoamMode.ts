@@ -49,7 +49,7 @@ import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMap
 import { applySystemTravel, deriveSystemView, HAZARD_LABEL, systemGraph, type SystemTravelResult } from './galaxy/systems.ts';
 import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
-import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
+import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
 import { auditProfile, auditText } from './saveAudit.ts';
 import { createSavesPanel, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
@@ -86,7 +86,7 @@ import type { ContractSpec, MissionDef } from './progression/missionTypes.ts';
 import { stationBoard } from './progression/contracts.ts';
 import { buildMissionWorld } from './progression/missionWorld.ts';
 import type { Wallet } from './progression/economy.ts';
-import { burnCells, cellsHeld, emergencyCells, emergencyJumpTarget, FUEL, galaxyJumpCells, homeJumpDue, hopCells, routeCells } from './progression/fuel.ts';
+import { burnCells, cellsHeld, emergencyCells, emergencyJumpTarget, FUEL, galaxyJumpCells, homeJumpDue, hopCells, hopRange, routeCells } from './progression/fuel.ts';
 import { discoveryEntries, explorationStats, recordEvent, type ExplorationLog } from './progression/discovery.ts';
 import { ledgerOf, progressionFromSaved, progressionToSaved, withLedger, type ProgressionState } from './progression/persistence.ts';
 import { award, formatDelta, formatMarks, groupDigits, MARKS, record, spokenMarks, tickerValue, type EntryKind } from './progression/ledger.ts';
@@ -103,6 +103,21 @@ import { GuideDialog } from '../guide/guideDialog.ts';
 import { parseRecord } from '../../shared/persistence/record.ts';
 import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, type FleetState } from './ships/hangar.ts';
 import { createHangarPanel, type HangarPanel, type HangarStatus } from './ships/hangarPanel.ts';
+import { bridgeModel, seatRefusalText, hireRefusalText, type BridgeContext } from './crew/bridgeView.ts';
+import { CREW_BY_ID } from './crew/data.ts';
+import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
+import { distressBeaconsCleared, feeDue, signOn } from './crew/recruit.ts';
+import { assign as assignCrew, dismiss as dismissCrew, EMPTY_CREW, reconcileCrew, setDoctrine, unassign as unassignCrew } from './crew/state.ts';
+import type { CrewState, CrewWorld } from './crew/types.ts';
+import type { BridgeAct } from './crew/ui/bridgeSection.ts';
+import { ADVISOR, advisorCrew, advisorView, EMPTY_ADVISOR, evaluateAdvice, parkAdvisor, quietAdvisor, type AdvisorCrew, type AdvisorState, type AdvisorView } from './crew/advisor.ts';
+import type { Observation } from './crew/observation.ts';
+import { SHIP_MIND } from './crew/traits.ts';
+import { createAdvisorStrip, type AdvisorStrip } from './crew/ui/advisorStrip.ts';
+import { DOCTRINE_LABEL } from './crew/bridgeView.ts';
+import { createForecaster } from './advisor/forecast.ts';
+import { observe } from './advisor/observe.ts';
+import { shipCrewView, type ShipCrewView } from './crew/view.ts';
 import { createArmoryPanel, type ArmoryPanel, type ArmoryStatus } from './ships/armoryPanel.ts';
 import { armedLoadout, compatibleWeapons, type ArmedLoadout } from './ships/armory.ts';
 import { restockOrdnance, WEAPON_BY_ID, type WeaponId as PilotWeaponId } from '../../config/weapons.ts';
@@ -281,6 +296,10 @@ export interface FreeRoamStatus {
   readonly hangar: () => HangarStatus;
   /* Combat P03B */
   readonly armory: () => ArmoryStatus;
+  /** P05.1: the crew state and the read-only crew view of the ship flown. */
+  readonly crew: () => { readonly state: CrewState; readonly view: ShipCrewView };
+  /** P05.2: the advisory state, what the strip shows and the last observation the advisors read. */
+  readonly advisor: () => { readonly state: AdvisorState; readonly view: AdvisorView | null; readonly strip: ReturnType<AdvisorStrip['status']> | null; readonly observation: Observation | null; readonly crew: AdvisorCrew };
   /** The flown ship's weapons as combat will read them (compatible, cycle, start). */
   readonly loadout: () => ArmedLoadout;
   /** Saved ammunition counts. */
@@ -449,6 +468,19 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** Owned ships and loadouts (validated against the roster), and the derived ship flown. */
   let fleet: FleetState;
   let craft: DerivedShip;
+  /** P05.1: crew (signed on, fees paid, seats per owned ship) and the frozen view of the flown ship's crew (rebuilt on change, never per frame). */
+  let crew: CrewState = EMPTY_CREW;
+  let crewView: ShipCrewView = shipCrewView(EMPTY_CREW, 'petrel');
+  /* P05.2: Ship Mind and crew advice (crew/advisor.ts). Reads the run, writes nothing but these. */
+  let advice: AdvisorState = EMPTY_ADVISOR;
+  let advisorStrip: AdvisorStrip | null = null;
+  let lastObservation: Observation | null = null;
+  let lastAdviceTick = -1;
+  let advisorCrewCache: { readonly key: string; readonly crew: AdvisorCrew } | null = null;
+  let routeCache: { readonly key: string; readonly route: { readonly cells: number; readonly cheapest: number; readonly dearest: number } | null } | null = null;
+  const forecaster = createForecaster();
+  const visitIds = new WeakMap<SectorRun, number>();
+  let visitCount = 0;
   let lastInput: InputStatus = NO_INPUT;
   /** Overheat rattle start (performance.now ms), or null; phone vibrations requested (FR-TD-79). */
   let shakeStart: number | null = null;
@@ -669,6 +701,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** P04.3: the FLIGHT MODE selector (CONTROLS panel). */
   let modeBtns: Record<FlightMode, HTMLButtonElement>;
   let modeDesc: HTMLElement;
+  /** P05.2: SHIP MIND advice (ALL / CRITICAL ONLY), CONTROLS panel. */
+  let adviceBtns: Record<'all' | 'critical', HTMLButtonElement>;
+  let adviceDesc: HTMLElement;
   let zoomLabel: HTMLElement;
 
   const reducedMotion = (): boolean => {
@@ -752,6 +787,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     fleet = f;
     craft = upgradedShip(f.active, loadoutOf(f, f.active), levelsOf(f.active));
     profile = withFleet(profile, fleetToSaved(f));
+    // P05.1: seats follow the fleet (a ship no longer flown by this save releases its crew to the roster, never deletes them)
+    const rc = reconcileCrew(crew, f.owned);
+    if (rc.changes > 0) {
+      crew = rc.state;
+      profile = withCrew(profile, crewToSaved(crew));
+    }
+    crewView = shipCrewView(crew, f.active);
     // P03C: the flown run follows every hangar / armory change at once (an illegal weapon never stays selectable)
     if (run) setRunLoadout(run, armedLoadout(f), shipChanged);
   };
@@ -795,6 +837,80 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (!applyMarks(award(ledgerOf(prog), c.amount, c.kind, c.label, c.id))) return false;
     missionNote(`${formatDelta(prog.ledger.history[prog.ledger.history.length - 1]?.delta ?? c.amount)} MARKS · ${c.label.toUpperCase()}`, 'gain');
     return true;
+  };
+  /* ---------------------------------- crew ---------------------------------- */
+  /** P05.1: what the crew rules read. Seats change only docked with no hostile engaged (the ship-switch rule). */
+  const crewWorld = (): CrewWorld => {
+    const view = deriveView(graph, progress);
+    return {
+      docked: dockedAt(),
+      safe: run !== null && dockedAt() !== null && canSwitchShip(run),
+      owned: fleet.owned,
+      requirementMet: (req) => view.requirementMet(req),
+      missionDone: (id) => prog.missions.completed.includes(id),
+      rescues: distressBeaconsCleared(profile.sectors),
+    };
+  };
+  /** Store a crew change (and the ledger of a paid hire) with one save. */
+  const commitCrew = (next: CrewState): void => {
+    crew = next;
+    crewView = shipCrewView(crew, fleet.active);
+    profile = withCrew(profile, crewToSaved(crew));
+    saveProg();
+    save();
+  };
+  /** Everything the Bridge shows about `ship` (read only: building it never changes state). */
+  const bridgeCtx = (ship: ShipId): BridgeContext => {
+    const view = deriveView(graph, progress);
+    return { ship, flown: fleet.active, crew, world: crewWorld(), balance: prog.marks, free: isAdmin(admin), describe: (req) => describeRequirement(view, req), stationName: (id) => graph.system(id)?.name ?? id };
+  };
+  const crewName = (id: string): string => CREW_BY_ID.get(id)?.name ?? id;
+  const crewShipName = (id: ShipId): string => SHIP_BY_ID.get(id)?.name ?? id;
+  /** One Bridge action: the crew rules decide, this commits and says what happened. */
+  const crewAct = (a: BridgeAct): { ok: boolean; text: string } => {
+    if (a.kind === 'doctrine') {
+      // P05.2: an advisory preference only (never seats, fees, flight or progress)
+      commitCrew(setDoctrine(crew, a.doctrine));
+      return { ok: true, text: `Navigator doctrine: ${DOCTRINE_LABEL[a.doctrine].toLowerCase()}. ${a.doctrine === 'safety' ? 'Earlier hazard warnings, widest-margin escape burns first, no optional route notes.' : 'Concise advice; momentum-keeping escape burns first.'}` };
+    }
+    const w = crewWorld();
+    const name = crewName(a.id);
+    if (a.kind === 'hire') {
+      const def = CREW_BY_ID.get(a.id);
+      const free = isAdmin(admin);
+      const fee = def ? feeDue(def, crew, free) : 0;
+      const r = signOn(crew, ledgerOf(prog), a.id, w, free);
+      if (!r.ok) {
+        if (r.refunded) {
+          prog = withLedger(prog, r.ledger); // the charge and its refund both stay in the history
+          commitCrew(crew);
+        }
+        return { ok: false, text: def ? hireRefusalText(r.reason, def, bridgeCtx(fleet.active), fee) : 'Unknown recruit.' };
+      }
+      if (r.charged > 0) {
+        prog = withLedger(prog, r.ledger);
+        marksFx = { serial: marksFx.serial + 1, delta: -r.charged, at: lastFrameTs };
+      }
+      commitCrew(r.state);
+      return { ok: true, text: `${name} signed on${r.charged > 0 ? ` for ${formatMarks(r.charged)}` : ''}${free && def && def.fee > 0 ? ' (Admin Access: no fee, not saved)' : ''}. They wait on your roster until you give them a seat.` };
+    }
+    if (a.kind === 'assign') {
+      const r = assignCrew(crew, a.id, a.ship, w);
+      if (!r.ok) return { ok: false, text: seatRefusalText(r.reason, a.ship) };
+      commitCrew(r.state);
+      return { ok: true, text: r.moved ? `${name} moved from the ${crewShipName(r.moved)} to the ${crewShipName(a.ship)}.` : `${name} takes a seat on the ${crewShipName(a.ship)}.` };
+    }
+    if (a.kind === 'unassign') {
+      const r = unassignCrew(crew, a.id, w);
+      if (!r.ok) return { ok: false, text: seatRefusalText(r.reason, fleet.active) };
+      commitCrew(r.state);
+      return { ok: true, text: `${name} left the ${r.moved ? crewShipName(r.moved) : 'ship'} and waits on your roster.` };
+    }
+    const r = dismissCrew(crew, a.id, w);
+    if (!r.ok) return { ok: false, text: r.reason === 'unsafe' ? 'Contracts end only while docked with no hostiles engaged.' : 'Not on your roster.' };
+    commitCrew(r.state);
+    const src = CREW_BY_ID.get(a.id)?.source;
+    return { ok: true, text: `${name}'s contract ended. ${src?.kind === 'station' ? `They return to ${graph.system(src.systemId)?.name ?? src.systemId} station` : 'They can sign on again at any station'}, with no second fee.` };
   };
   const galaxyName = (id: string): string => graph.node(id as GalaxyId)?.galaxy.shortName ?? id;
   const missionWorld = (): MissionWorld => {
@@ -2621,6 +2737,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       modeBtns[m].classList.toggle('is-selected', on);
     }
     modeDesc.textContent = controls.flightMode === 'realistic' ? `${FLIGHT_MODE_TEXT.realistic} ${FLIGHT_MODE_TEXT.stop} (${keyLabel(controls.bindings.stop[0])} or the STOP button.)` : `${FLIGHT_MODE_TEXT.normal} ${FLIGHT_MODE_TEXT.stopNormal}`;
+    const adv = controls.advice === 'critical' ? 'critical' : 'all';
+    for (const m of ['all', 'critical'] as const) {
+      adviceBtns[m].setAttribute('aria-pressed', String(adv === m));
+      adviceBtns[m].classList.toggle('is-selected', adv === m);
+    }
+    adviceDesc.textContent = adv === 'critical' ? 'Ship Mind and crew speak only for critical warnings (low hull, an imminent collision).' : 'Ship Mind and crew advise in flight: hazards, gravity, contacts and sensor finds. Critical warnings always show.';
     controlsStatus.textContent = message || 'Select a key to change it. ESC cancels; BACKSPACE clears a second key. Menus always use the arrows, ENTER and ESC.';
   };
   /** Capture-phase keydown while a binding slot waits: the key never reaches flight or menus. */
@@ -2687,6 +2809,68 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       cellsShortCache = { key, short: emergencyCells(held(), sv.graph, r.layout.systemId, craft.stats.travel, false) > 0 };
     }
     return cellsShortCache.short;
+  };
+  /* ---------------------------- P05.2 advisory ----------------------------- */
+  /** Identity of one sector visit (a new run is a new visit). */
+  const visitKey = (r: SectorRun): string => {
+    let n = visitIds.get(r);
+    if (n === undefined) {
+      n = ++visitCount;
+      visitIds.set(r, n);
+    }
+    return `${r.layout.systemId}#${n}`;
+  };
+  /** The specialists on duty: read from the frozen crew view of the flown ship (memoised). */
+  const advisorCrewNow = (): AdvisorCrew => {
+    const doctrine = crew.doctrine ?? 'balanced';
+    const key = `${crewView.ship}|${crewView.members.map((m) => m.id).join(',')}|${doctrine}`;
+    if (advisorCrewCache?.key !== key) advisorCrewCache = { key, crew: advisorCrew(crewView, doctrine) };
+    return advisorCrewCache.crew;
+  };
+  /** Reactor cells and the cheapest / dearest lane out of this system (memoised; none under Admin Access). */
+  const routeInfo = (r: SectorRun): { readonly cells: number; readonly cheapest: number; readonly dearest: number } | null => {
+    if (isAdmin(admin)) return null;
+    const key = `${held()}|${r.layout.systemId}|${craft.stats.travel}|${progress.charted.length}|${progress.visitedSystems.length}`;
+    if (routeCache?.key !== key) {
+      const sv = deriveSystemView(deriveView(graph, progress), galaxyOf(r.layout.systemId) as GalaxyId);
+      const h = hopRange(sv.graph, r.layout.systemId, craft.stats.travel);
+      routeCache = { key, route: h.max > 0 ? { cells: held(), cheapest: h.min, dearest: h.max } : null };
+    }
+    return routeCache.route;
+  };
+  /** One advisory pass on the simulation's cadence (every ADVISOR.everyTicks ticks of flight). Reads the run only. */
+  const adviseTick = (r: SectorRun): void => {
+    const visit = visitKey(r);
+    if (advice.sector === visit && r.tick >= lastAdviceTick && r.tick - lastAdviceTick < ADVISOR.everyTicks) return;
+    lastAdviceTick = r.tick;
+    const ac = advisorCrewNow();
+    const nav = ac.navigator?.traits ?? null;
+    lastObservation = observe(r, forecaster, {
+      visit,
+      horizonS: Math.max(SHIP_MIND.impactHorizonS, nav?.horizonS ?? 0),
+      escape: nav ? { candidates: nav.escapeCandidates, doctrine: nav.doctrine } : null,
+      route: routeInfo(r),
+    });
+    advice = evaluateAdvice(advice, lastObservation, ac, controls.advice === 'critical' ? 'critical' : 'all');
+  };
+  /**
+   * Show the advice. Nothing while paused or under a panel (map, controls): the message on screen is parked and
+   * re-evaluated once when flight resumes (parkAdvisor). Docked, wrecked or outside flight: cleared, and
+   * not repeated while its condition holds (quietAdvisor).
+   */
+  const renderAdvice = (r: SectorRun | null): void => {
+    if (!advisorStrip) return;
+    if (!r || (r.phase !== 'flight' && r.phase !== 'paused') || r.docked !== null) {
+      advice = quietAdvisor(advice); // unchanged (same object) when nothing is shown, queued or parked
+      advisorStrip.render(null);
+      return;
+    }
+    if (panel || r.phase === 'paused' || screen !== 'flight') {
+      advice = parkAdvisor(advice); // unchanged (same object) when nothing is shown or queued
+      advisorStrip.render(null);
+      return;
+    }
+    advisorStrip.render(advisorView(advice));
   };
   const weaponName = (): string => {
     const id = loadoutOf(fleet, fleet.active).weapon[0] ?? '';
@@ -2960,6 +3144,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     });
     if (events.length > 0) handleEvents(r, events);
     if (run !== r || !art) return; // an event left the sector (exit beacon)
+    // P05.2: Ship Mind and crew advice on the simulation's own cadence (reads the run, never writes it)
+    if (r.phase === 'flight' && !panel && r.docked === null) adviseTick(r);
     // Prompt 13: a timed autosave every AUTOSAVE_SECONDS of flight (with a safe resume point), so an
     // unexpected reload loses at most that much; milestones save on their own as before
     if (r.phase === 'flight' && r.tick - lastAutosaveTick >= AUTOSAVE_SECONDS * 60) {
@@ -3023,6 +3209,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (__GALAXIA_GRAVITY_LAB__ && lab) lab.frame(panel !== null);
     hudModel = combatHud(r);
     combatView.render(panel ? null : hudModel);
+    renderAdvice(r);
     renderHud(r, ts, live && !document.hidden, Math.hypot(move.moveX, move.moveY), fire);
     const focus = !panel && r.phase === 'flight' && r.focus ? r.layout.pois.find((p) => p.id === r.focus) : undefined;
     const prompt = focus ? `${POI_RULES[focus.kind].verb.toUpperCase()} · ${(focus.kind === 'gate' ? r.gates[focus.id]?.label ?? focus.label : focus.label).toUpperCase()}` : '';
@@ -3087,6 +3274,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       const savedFleet = fleetFromSaved(profile.fleet);
       const owned = mergeOwned(services.store, savedFleet.owned);
       setFleet(owned.length !== savedFleet.owned.length ? { ...savedFleet, owned: [...owned] } : savedFleet);
+      // P05.1: the saved crew against the roster and the fleet (absent = no crew; loading never adds anyone)
+      crew = crewFromSaved(profile.crew, fleet.owned).state;
+      profile = withCrew(profile, crewToSaved(crew));
+      crewView = shipCrewView(crew, fleet.active);
       // Prompt 11: one-time starter reactor cells (as many as fit)
       if (!prog.fuel.starter) {
         profile = withCargo(profile, grantCells(profile.cargo, holdCap(), FUEL.starterCells).hold);
@@ -3188,6 +3379,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         safe: () => run !== null && canSwitchShip(run),
         adminOnly: () => adminOnlyShips(admin),
         balance: () => formatMarks(prog.marks),
+        bridge: {
+          model: (ship) => bridgeModel(bridgeCtx(ship)),
+          act: crewAct,
+          sound: panelSound,
+        },
         commitAcquire: (f, cargo) => {
           setFleet(f);
           profile = withCargo(profile, cargo);
@@ -3538,6 +3734,28 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       modeDesc = el('p', 'fr-text fr-text-dim fr-controls-mode-desc', '');
       modeDesc.setAttribute('aria-live', 'polite');
       zoomRow.after(modeRow, modeDesc);
+      // P05.2: SHIP MIND advice: all, or critical only (critical warnings cannot be switched off)
+      const adviceRow = el('div', 'fr-controls-mode fr-controls-advice');
+      adviceRow.setAttribute('role', 'group');
+      adviceRow.setAttribute('aria-label', 'Ship Mind advice');
+      const pickAdvice = (m: 'all' | 'critical'): void => {
+        if ((controls.advice === 'critical' ? 'critical' : 'all') !== m) {
+          controls = m === 'critical' ? { ...controls, advice: 'critical' } : { bindings: controls.bindings, mouseAim: controls.mouseAim, zoom: controls.zoom, flightMode: controls.flightMode };
+          setControls({});
+        }
+        refreshControls(m === 'critical' ? 'Ship Mind: critical warnings only.' : 'Ship Mind: all advice.');
+      };
+      const adviceBtn = (m: 'all' | 'critical', text: string): HTMLButtonElement => {
+        const b = el('button', 'fr-btn fr-advice-btn', text); // not fr-mode-btn: that hook names the flight-mode pair
+        b.type = 'button';
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => pickAdvice(m));
+        return b;
+      };
+      adviceBtns = { all: adviceBtn('all', 'ALL ADVICE'), critical: adviceBtn('critical', 'CRITICAL ONLY') };
+      adviceRow.append(el('span', 'fr-controls-action', 'SHIP MIND'), adviceBtns.all, adviceBtns.critical);
+      adviceDesc = el('p', 'fr-text fr-text-dim fr-controls-mode-desc', '');
+      modeDesc.after(adviceRow, adviceDesc);
       gateTitle = panels.gate.querySelector('.fr-title')!;
       gateJump = panels.gate.querySelector('.fr-btn')!;
       briefingKicker = panels.briefing.querySelector('.fr-kicker')!;
@@ -3550,6 +3768,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       flightHud = createFlightHud(flightRoot, motion);
       flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, lockBtn, targetBtn, flightCtl, feed.root, offerView.root);
       combatView = createCombatHud(flightRoot);
+      advisorStrip = createAdvisorStrip(flightRoot);
       // measured HUD stacking under the ship card (FR-TD-80; ui/hudStack.ts)
       stackFlightHud(scope, flightRoot, flightHud.card, feed.root);
       flightRoot.append(panelLayer);
@@ -3817,6 +4036,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         craft: () => craft,
         hangar: () => hangar.status(),
         armory: () => armory.status(),
+        crew: () => ({ state: crew, view: crewView }),
+        advisor: () => ({ state: advice, view: advisorView(advice), strip: advisorStrip?.status() ?? null, observation: lastObservation, crew: advisorCrewNow() }),
         loadout: () => armedLoadout(fleet),
         ordnance: () => profile.ordnance,
         inventory: () => inventory.status(),

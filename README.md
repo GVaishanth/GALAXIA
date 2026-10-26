@@ -5,20 +5,20 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
-- **Last updated:** 2026-10-25. See [What's new since the 2026-10-23 archive](#whats-new-since-the-2026-10-23-archive).
+- **Last updated:** 2026-10-26. See [What's new since the 2026-10-25 archive](#whats-new-since-the-2026-10-25-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
-- **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory and Guild marks. The same help is in the game under **HOW TO PLAY**.
+- **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls, ships, weapons and Guild marks (not crew yet).
 
 ---
 
 ## Contents
 
-**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Guild marks](#guild-marks-credits) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
+**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Gravity and STOP](#gravity-stop-and-station-keeping) · [Guild marks](#guild-marks-credits) · [Crew and the Bridge](#crew-and-the-bridge) · [Ship Mind and crew advice](#ship-mind-navigator-and-surveyor-advice) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What's new](#whats-new-since-the-2026-10-23-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-since-the-2026-10-25-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -85,7 +85,8 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Two flight modes:** **NORMAL** (the default, unchanged assisted flight) and an opt-in **REALISTIC** mode with momentum, rotate-and-thrust steering and gravity that bends your path, plus **STOP**, which brakes and then holds position by station-keeping.
 - **Combat:** four original factions with eight enemy families, met in patrols, outposts, ambushes, elite duels and capital-ship fights. Target lock turns your nose toward a chosen hostile (facing only).
 - **Ships and weapons:** six ships, bought with cargo once you hold their licence, in a station **Hangar**; four weapons configured per ship in the **Armory**.
-- **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules and upgrades.
+- **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules, upgrades and one-time crew berth fees.
+- **Crew (optional):** seven named specialists to sign on and seat aboard your ships on a station's **BRIDGE**. A seated Navigator or Surveyor gives spoken-style text advice in flight; the built-in **Ship Mind** advises every pilot, crew or not. Advice only: crew never fly, fight, pay or travel for you. See [Crew and the Bridge](#crew-and-the-bridge).
 - **Progress:** a ten-mission story chain, contract boards, cargo and crafting, three save slots, and recovery that never strands you.
 - **Pause menu:** RESUME and RESTART FLIGHT (with a confirmation) on top, then three groups that open on demand: MISSIONS & PROGRESS, SETTINGS & HELP and NAVIGATION.
 
@@ -167,6 +168,15 @@ Choose under pause → **SETTINGS & HELP** → **CONTROLS** → **FLIGHT MODE**.
 - **REALISTIC**: the ship keeps drifting when you release thrust. On a keyboard, A and D rotate, W fires the main engine along the nose and S the weaker reverse thrusters; a touch or controller stick turns the nose toward the stick and thrusts harder the further you push. Engines cannot exceed the ship's normal top speed, but falling toward a planet or star can. A **REALISTIC FLIGHT** tag and the **STOP** button appear on the HUD.
 - **STOP** (REALISTIC only, B or the STOP button) brakes the ship (**STOPPING**), then holds that spot against momentum and gravity (**HOLDING POSITION**), or shows **CAN'T HOLD** if a pull is too strong. Press it again, or thrust or steer, to take back control. It never aims or fires, gravity and damage still apply, and it is never saved. In NORMAL flight, B only shows a reminder.
 
+#### Gravity, STOP and station-keeping
+
+Planets and stars pull **only your ship** (never shots, enemies or loot), and only inside their field, marked by a dotted ring; a chevron beside the ship points along the strongest pull. The pull is stronger close in and from larger bodies.
+
+- **NORMAL flight:** full thrust always out-pulls a field, so a pull drags you off course but never traps you.
+- **REALISTIC flight:** gravity bends your drifting path, and near a large body it can be stronger than the main engine, so burn away early. Falling can carry you past the ship's normal top speed.
+- **Hazards:** hitting a planet's surface hard damages the ship, and a star's **corona** burns the shield while you are inside it.
+- **STOP** (REALISTIC only) brakes and then station-keeps: it fires the thrusters for you to hold that spot against drift and gravity, and shows **CAN'T HOLD** when a pull is stronger than the engines. It is a holding aid only: it never aims, fires or flies anywhere, and steering or thrusting hands control straight back.
+
 #### Pause menu
 
 Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIGHT** sit at the top; RESTART asks for confirmation first (CANCEL is focused, so a repeated key never restarts by accident). Below them are three groups that expand when chosen:
@@ -174,7 +184,7 @@ Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIG
 | Group | Contents |
 |---|---|
 | MISSIONS & PROGRESS | Missions, Record (recent Guild mark changes), Saves |
-| SETTINGS & HELP | Controls (bindings, mouse aim, zoom, flight mode), How to Play, Sound |
+| SETTINGS & HELP | Controls (bindings, mouse aim, zoom, flight mode, Ship Mind advice), How to Play, Sound |
 | NAVIGATION | Galaxy Map (or System Map, when you came from one), Main Menu |
 
 ---
@@ -210,10 +220,67 @@ Open the **ARMORY** tab of a docked station (or **ARMORY ▸** in the Hangar) to
 Free Roam's only currency is **Guild marks**, shown as `◈ 1,240 MARKS` on the ship card in flight and on every station screen. A new pilot starts with 0 marks. Classic has no currency, only score.
 
 - **Earn:** mission and contract rewards, selling cargo at a station exchange, clearing an encounter (once each), first discoveries, and small bounties for hostiles you destroy (a limited pool per system).
-- **Spend:** reactor cells, equipment modules and ship upgrades.
+- **Spend:** reactor cells, equipment modules, ship upgrades and the **one-time berth fee** of crew recruited at a station (80, 130 or 220 marks by rank). There are no wages, upkeep or profit shares.
 - **Not paid in marks:** ships (cargo plus a licence), travel (reactor cells, with free emergency options), repairs and restocking (free on docking).
 - **Purchases are confirmed:** the first press shows the price and your balance before and after; **CONFIRM** pays and **BACK** cancels. If you cannot afford something, the button shows `INSUFFICIENT MARKS` with the amount required, available and short.
 - Recent balance changes are listed under pause → **MISSIONS & PROGRESS** → **RECORD**.
+
+## Crew and the Bridge
+
+Crew are optional: **flying solo is fully supported**, and no crew member is needed to finish the game. Dock at a station, open the **HANGAR** tab, select a ship card and switch to **BRIDGE · CREW**. The Bridge always shows the ship you selected: its seats, the crew aboard, your unassigned roster and the recruits you can sign on.
+
+**Recruiting.** Seven named specialists exist, each found in one way:
+
+| How they join | Fee | Where |
+|---|---|---|
+| **Station recruit** (four people) | One-time berth fee by rank: cadet 80, rated 130, veteran 220 marks | Only at their own station, once any requirement is met (for example a survey run or a story mission) |
+| **Story recruit** (two people) | Free, earned by completing a story mission | Any station |
+| **Rescue recruit** (one person) | Free, earned by clearing a distress beacon (a wreck defence) | Any station |
+
+- **SIGN ON** shows the fee (or **FREE**) and asks nothing you cannot see: a refused hire says why (the station, the requirement and your progress, or the marks you are short). The fee comes out of your Guild marks once, through the same ledger as every purchase, and appears under **RECORD**.
+- A fee is never charged twice. **DISMISS** ends a contract (the person returns to where they signed on) and they can sign on again later for free. Reloading, replaying a mission or reopening the Bridge never signs anyone on by itself or offers someone twice.
+
+**Seats and assignment.** Each ship has its own crew seats: **Swift 1, Shrike 1, Petrel 2, Magpie 2, Condor 3, Albatross 3.**
+
+- **ASSIGN TO \<SHIP\>** seats an unassigned crew member; **MOVE TO \<SHIP\>** moves someone from another of your ships (a person sits in one seat only); **UNASSIGN** returns them to the roster. A full ship refuses, and the Bridge says why.
+- Seats change only while docked with no hostiles engaged, and only on ships you own. Crew who are unassigned, or seated on a ship you are not flying, do nothing.
+- If a ship ends up with more crew than seats (for example an older save), the extra crew return to the unassigned roster; nobody is ever removed except by DISMISS.
+
+**Roles.** Each card shows the role, rank, background, three attributes and **DUTIES** (what works now, and what is planned).
+
+| Role | Status | What it does |
+|---|---|---|
+| **Navigator** | Active (advice) | Gravity watch, pull reading and route notes in flight |
+| **Surveyor** | Active (advice) | Signal reading and survey guidance in flight |
+| **Engineer** | **Planned** | Can be recruited and seated, but has no flight duty yet (shown as *NO FLIGHT DUTY YET*) |
+| **Defence** | **Planned** | As above |
+| **Quartermaster** | **Planned** | As above |
+
+Only the first Navigator and the first Surveyor seated on the ship you fly are on duty. Engineer, Defence and Quartermaster abilities, route planning and signal triangulation are not implemented; the Bridge labels them as planned.
+
+**Attributes** (1 to 5; rank changes none of them):
+
+- **Competence**, the quality of their own work: a Navigator checks more escape burns against the drift forecast before naming one; a Surveyor reads more from a contact (its kind and bearing, then its reach and survey value, then its main resource).
+- **Caution**, how early a risk is raised: a Navigator warns further ahead (2.5 to 4.5 s, always earlier than the Ship Mind) and explains weaker pulls; a cautious Surveyor (3 and up) flags targets inside minefields, eruption fields or interference.
+- **Focus**, sticking to the work: a new non-urgent topic waits until the last one has had 1.5 to 3.5 s; at 4 and up the core job comes first (no route notes during a gravity hazard; no salvage calls while survey marks remain).
+
+**NAVIGATOR DOCTRINE** (on the Bridge, once you have signed on a Navigator): **BALANCED** (concise advice; escape burns that keep momentum first) or **SAFETY-FIRST** (warnings a second earlier, gravity explained at lower pulls, the widest-margin burns first, no optional route notes).
+
+## Ship Mind, Navigator and Surveyor advice
+
+Advice appears as one short line at a time in flight, never over a menu, the map or a station screen. Each line starts with an icon, a level word and the speaker, so it never relies on colour: **◆ CRITICAL**, **▲ WARNING**, **● INFO** or **○ NOTE**. It takes no input and cannot be clicked. Advice uses only what your ship can sense (no hidden positions, nothing beyond sensor range, nothing through interference) and comes from fixed rules in the game: no online service or AI model is involved.
+
+- **Ship Mind** (always present, solo or crewed): low hull, shield down, a collision course a couple of seconds out, a star's corona, a strong pull, hostile contacts, targets on sensors and empty magazines. It says what is happening; it does not plan.
+- **Navigator:** earlier drift-impact and corona warnings with a named escape burn checked against the forecast, how strongly a body pulls and whether your engine out-pulls it, a note when STOP cannot hold, and reactor-cell notes for the lanes out of the system.
+- **Surveyor:** the targets on sensors with their bearing and (with competence) what they are worth, survey marks still to chart, when interference is blinding the sensors, and when a survey is complete.
+
+**How messages are chosen.** The most urgent message shows first; a higher level interrupts a lower one, equal levels wait their turn, and at most three wait in line (a waiting message is dropped if it stops being true). Each condition is said once, again only if it gets worse (a lower hull, more contacts), and each target is named once per visit. Nothing non-urgent is said in the first moments after arriving, during a fight or while a decision prompt is open. Where the Ship Mind and a crew member would say the same thing, only one speaks.
+
+**Pause and resume.** While paused or a panel is open, nothing shows. When you resume, the one message that was on screen comes back once if it is still true; anything that was waiting is dropped, so a pause never releases a flood. Docking clears advice completely.
+
+**ALL ADVICE or CRITICAL ONLY.** Pause → **SETTINGS & HELP** → **CONTROLS** → **SHIP MIND**. **ALL ADVICE** is the default. **CRITICAL ONLY** shows only critical warnings (low hull and an imminent collision), which cannot be switched off; everything else is skipped, not saved up. Switching back to ALL ADVICE announces at most one hazard that is still going on (the most urgent), never a backlog. The choice is saved with your controls.
+
+**What advice never does.** Neither the Ship Mind nor any crew member steers, thrusts, brakes, toggles STOP, aims, locks, fires, spends marks, changes cargo or progress, investigates anything or travels. Their words change nothing in the game: you decide.
 
 ## First-run tutorial and HOW TO PLAY
 
@@ -304,6 +371,8 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`pause-resume.mjs`](docs/development/playtest/pause-resume.mjs) | Pause and resume by button and key, mid-attack, with tab switches | `npm run preview:e2e` |
   | [`controller-sim.mjs`](docs/development/playtest/controller-sim.mjs) | A simulated gamepad: connect, play, pause, disconnect and reconnect | `npm run preview:e2e` |
   | [`arcade-display.mjs`](docs/development/playtest/arcade-display.mjs) | Responsive and Arcade Display across screen sizes, switching mid-game | `npm run preview:e2e` |
+  | [`crew-bridge-p05.mjs`](docs/development/playtest/crew-bridge-p05.mjs) | The Bridge: an old save loads without crew, recruitment and fees through the ledger, refusals with reasons, assign up to capacity, unassign, dismiss, switching ships, saves across a reload, planned duties labelled, the 360 px touch layout | `npm run preview:e2e` |
+  | [`crew-advisor-p05.mjs`](docs/development/playtest/crew-advisor-p05.mjs) | Ship Mind, Navigator and Surveyor advice in flight: levels, no repeats, pause and resume, ALL / CRITICAL ONLY, no steering, sensor limits, layout clear of the HUD, ship and touch stick | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview
@@ -364,6 +433,8 @@ A failing step stops the run before anything is published. After the first deplo
 │   │       ├── sector/        Sector generation, simulation and planet gravity
 │   │       ├── catalogue/     Galaxy and star-system data with cited sources
 │   │       ├── combat/        Factions, enemies, weapons, target lock, hazards, encounters
+│   │       ├── crew/          Crew roster, recruitment, seats, Bridge, traits and the advice rules
+│   │       ├── advisor/       Read-only flight observation and drift forecast for the advice
 │   │       ├── ships/         Ship roster, Hangar, Armory, equipment, upgrades
 │   │       ├── inventory/     Resources, loot, cargo hold, fabricator, milestones
 │   │       ├── progression/   Missions, contracts, Guild marks ledger, reactor cells, record
@@ -397,6 +468,7 @@ The source repository also contains internal design records, decision logs, QA r
 - **Simulation:** Classic's simulation (`src/core/`) is pure TypeScript with fixed 60 Hz steps, deterministic for a given seed; the renderer only reads it. Free Roam sectors are generated deterministically from each system's seed; only progress is saved.
 - **Input:** small adapters turn keyboard, touch and gamepad input into abstract actions. Free Roam reads its rebindable key map, the touch stick and the gamepad into one flight-control state.
 - **Display:** one viewport system handles CSS size, device pixel ratio, safe areas, resizing and rotation for both modes. An adaptive render-scale controller lowers the game canvases' resolution after sustained slow frames and restores it gradually.
+- **Crew and advice:** `crew/` is pure rules and data (recruitment, seats, save adapter, traits, the advice rules) plus two DOM views, the Bridge section and the advice line. Each advisory pass reads a frozen observation of the flight (`advisor/observe.ts`) on the simulation's 60 Hz clock and returns text only; nothing in it can reach input, physics, weapons, the wallet or progress, and the architecture test keeps `crew/` away from the sector, combat and gravity code.
 - **Boundaries:** `tests/architecture.test.ts` enforces layer rules (for example, Classic never imports Free Roam, and the simulation never touches the DOM). `vite.config.ts` turns developer tools, the Gravity Flight test sector and test hooks into compile-time flags that release builds switch off.
 
 ## Save data and browser support
@@ -407,8 +479,8 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 |---|---|
 | `galaxia:save` | Classic high score and best stage |
 | `galaxia:prefs` | Shared settings: sound and volumes, glow, pixel scaling, motion, Arcade Display |
-| `galaxia:freeroam:prefs` | Free Roam controls: key bindings, mouse aim, zoom |
-| `galaxia:freeroam`, `galaxia:freeroam:slot2`, `galaxia:freeroam:slot3` | The three Free Roam save slots |
+| `galaxia:freeroam:prefs` | Free Roam controls: key bindings, mouse aim, zoom, flight mode, Ship Mind advice (ALL / CRITICAL ONLY) |
+| `galaxia:freeroam`, `galaxia:freeroam:slot2`, `galaxia:freeroam:slot3` | The three Free Roam save slots (including crew signed on, fees paid, seats and Navigator doctrine) |
 | `galaxia:freeroam:slots` | Which Free Roam slot is in use |
 | `galaxia:fleet` | Whether Classic Wave 20 is complete, the ships shared with Classic, and the ship chosen there |
 | `galaxia:guide` | Whether the tutorial was finished or skipped, and for which guide version |
@@ -419,7 +491,19 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
-## What's new since the 2026-10-23 archive
+## What's new since the 2026-10-25 archive
+
+These changes were made after `GALAXIA-Game-Release-25-10-2026.zip` and are included in the 2026-10-26 crew archive. Classic Mode, ships, weapons, flight modes, STOP, prices and saves from earlier versions are unchanged; crew are optional.
+
+- **Crew and the Bridge:** a **BRIDGE · CREW** view in the station Hangar. Sign on seven named specialists (four for a one-time berth fee in Guild marks, three free through story missions or a rescue), seat them on your ships (1 to 3 seats each), move, unassign or dismiss them. See [Crew and the Bridge](#crew-and-the-bridge).
+- **Ship Mind, Navigator and Surveyor advice:** short in-flight advice lines with an icon, level word and speaker. The Ship Mind advises every pilot; a seated Navigator adds gravity, escape-burn and route notes, and a seated Surveyor reads targets and survey marks. Each crew member's Competence, Caution and Focus change how they advise. See [Ship Mind, Navigator and Surveyor advice](#ship-mind-navigator-and-surveyor-advice).
+- **SHIP MIND setting:** ALL ADVICE or CRITICAL ONLY under CONTROLS. Pausing never releases a backlog: at most the one message that was showing comes back if still true, and switching back to ALL ADVICE announces at most one ongoing hazard.
+- **Planned, not active:** Engineer, Defence and Quartermaster can be recruited and seated but have no duties yet; the Bridge says so.
+- **Documentation:** this README (crew, advice, gravity and STOP) and the [Player Guide](docs/PLAYER_GUIDE.md). The in-game HOW TO PLAY does not cover crew yet.
+
+None of this has been playtested by a person or tried on a physical device; see below.
+
+### Earlier: the 2026-10-25 archive
 
 These changes were made after the `GALAXIA-Game-Release-OpenTest-2026-10-23.zip` open-testing archive and are included in the 2026-10-25 archive. Classic Mode is unchanged.
 
@@ -432,15 +516,16 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 ## What has been verified
 
-**Automated, on the current code (2026-10-25):**
+**Automated, on the current code (2026-10-26):**
 
-- `npm run check` passes: typecheck, the Vitest suite (1,953 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.4 kB gzip of a 110 kB budget; Free Roam 200.1 kB of 225 kB, loaded only when chosen).
-- Browser scripts in headless Chromium, last run on 2026-10-24 against the same game code: the release smoke test (both modes and the first visit), the GitHub Pages-like server check, pause and resume, the new pause-menu groups (desktop and 320 px touch layouts, restart confirmation, double-click protection), NORMAL and REALISTIC flight with STOP (QA and production builds), Free Roam controls, the tutorial and HOW TO PLAY, and the economy. Arcade Display, the Hangar and Classic weapons were last run for the 2026-10-23 archive. The Armory script passed 44 of 46 checks there; its 2 failures (the Nuke card's disabled actions on the Petrel, and the Lock-On detail text) predate that release and are unresolved.
+- `npm run check` passes: typecheck, the Vitest suite (2,081 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.7 kB gzip of a 110 kB budget; Free Roam 219.7 kB of 225 kB, loaded only when chosen; CSS 24,997 bytes gzip of a 25,000-byte budget).
+- Browser scripts in headless Chromium on 2026-10-26, against this code: crew and the Bridge (42 of 42 checks), Ship Mind and crew advice including pause and resume, CRITICAL ONLY and the advice line at five screen sizes (65 of 65), the Hangar (34), the economy (66), Classic weapons after Wave 20 (72), NORMAL and REALISTIC flight with STOP (56 on the test build, 8 on the production build), pause and resume (20) and the pause-menu groups (85), all passing. The Armory script passed 43 and 44 of 46 in two runs: its Nuke-on-Petrel and Lock-On detail checks also fail on the build before crew was added (the 2026-10-24 pause-menu commit) and are unresolved, and its "plot is static" timing check fails intermittently on both builds.
+- The release smoke test on the production build (77 of 77: both modes, the HUD at several sizes, settings across a reload, the first visit) and the GitHub Pages-like server check (30 of 30) also passed on 2026-10-26. Controller simulation and Arcade Display were last run for earlier archives.
 - The release archive is built with the repository's own builder and checked by its verifier (see [Release archive](#release-archive)).
 
 **Not performed:**
 
-- No person has playtested this build, including the tutorial, target lock, zoom, the Armory and the economy.
+- No person has playtested this build, including crew, Ship Mind advice, the tutorial, target lock, zoom, the Armory and the economy.
 - No physical phones or tablets (including iOS Safari), real game controllers, real GPUs or high-refresh displays, and no listening check of the audio. Touch layouts were checked only in emulation.
 - Firefox and WebKit were not re-run for this build; earlier releases ran there in headless form.
 - Performance was measured only in headless, software-rendered Chromium on a two-core machine; no frame rate is promised.
@@ -449,6 +534,8 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 - **Open testing:** expect balance and feel issues. Combat tuning, gravity strength, marks rewards and prices come from simulations and automated checks, not from players.
 - **REALISTIC flight and STOP** are tuned from automated measurements only; expect the feel (turn rate, thrust, how STOP brakes near planets) to change after player feedback.
+- **Crew are advice only:** a Navigator or Surveyor never flies, fights, brakes, investigates or travels for you, and plots no routes. Engineer, Defence and Quartermaster duties, route planning and signal triangulation are planned, not implemented. Advice is text only (no voice), in English.
+- **Advice layout:** the advice line was checked in emulated layouts only (1280×720, and 360×640, 320×568, 740×360 and 568×320 touch screens). In touch portrait it hangs just below the ship and the NEARBY line steps aside while it shows. On the narrowest phones (320 px wide), a long crew message can overlap the touch stick's ring if your thumb rests high on the screen; it is drawn over, never in the way of input. Screen-reader announcements are wired up but were not tried with a real screen reader.
 - **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.
 - **Classic:** a single high score (no name entry or table); the score caps at 9,999,990; a few original arcade rules that could not be confirmed are configurable.
 - **General:** sound effects and short jingles only (no music); English only; saves are local to one browser.

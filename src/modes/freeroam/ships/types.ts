@@ -89,6 +89,11 @@ export interface ShipDef {
   readonly licence: readonly UnlockRequirement[];
   /** Price in cargo resources, paid once at a station hangar. */
   readonly cost: readonly ResourceCost[];
+  /**
+   * P05.1: crew seats on the bridge (crew/seats.ts reads it; 0 = solo hull). The
+   * pilot's own seat is not counted: a ship always flies with no crew at all.
+   */
+  readonly crewSeats: number;
 }
 
 /** Additive and multiplicative changes to stats. Applied as (base + Σadd) × Πmul, then clamped. */

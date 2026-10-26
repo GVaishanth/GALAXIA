@@ -47,6 +47,11 @@
  * of marks changes and recent claim ids; the balance stays `progression.marks`)
  * and `progression.bounty` (per-system bounty windows). Absent = empty, so
  * older saves keep their exact balance and gain no starting bonus.
+ * P05.1 crew (additive, still v10): `crew` (who signed on, whose berth fee is
+ * paid, who sits in which ship's seats). Absent = no crew: an older save
+ * loads with an empty roster and no crew member is ever granted by loading.
+ * Shapes only here; crew/persistence.ts checks the ids against the crew
+ * roster and the fleet, and the empty state is never written (no field).
  */
 import type { KeyValueStore } from '../../persistence/storage.ts';
 import { STORAGE_KEYS } from '../../shared/persistence/namespaces.ts';
@@ -98,6 +103,8 @@ export interface FreeRoamProfile {
    * A save without it starts at the initial stock; docking refills it.
    */
   readonly ordnance: Readonly<Record<string, number>>;
+  /** P05.1 (additive, still v10): the crew. Absent = no crew signed on. */
+  readonly crew?: SavedCrew;
   /* v10: save management */
   /** ms since epoch of the last successful save (0 = never saved by v10+). */
   readonly savedAt: number;
@@ -224,6 +231,18 @@ export interface SavedFleet {
 
 /** The starter ship's id (tests check it matches ships/roster.ts STARTER_SHIP). */
 export const STARTER_SHIP_ID = 'petrel';
+/** P05.1: crew ids only (definitions live in crew/data.ts, never in a save). */
+export interface SavedCrew {
+  /** Signed on, in hire order. */
+  readonly hired: readonly string[];
+  /** Berth fee already paid once. */
+  readonly paid: readonly string[];
+  /** Per ship id: crew ids in seat order. */
+  readonly seats: Readonly<Record<string, readonly string[]>>;
+  /** P05.2: Navigator doctrine; written only when 'safety' (absent = 'balanced'). */
+  readonly doctrine?: 'safety';
+}
+
 export const STARTER_SAVED_FLEET: SavedFleet = Object.freeze({ active: STARTER_SHIP_ID, owned: Object.freeze([STARTER_SHIP_ID]), loadouts: Object.freeze({}) });
 
 /** Free Roam control settings (v5). */
@@ -239,6 +258,12 @@ export interface FlightControls {
    * A missing (older save) or unknown value means 'normal'.
    */
   readonly flightMode: 'normal' | 'realistic';
+  /**
+   * P05.2: Ship Mind and crew advice. Absent = all advice (the default);
+   * 'critical' = only critical warnings (low hull, an imminent collision).
+   * Critical warnings cannot be switched off.
+   */
+  readonly advice?: 'critical';
 }
 
 export const DEFAULT_CONTROLS: FlightControls = Object.freeze({ bindings: DEFAULT_BINDINGS, mouseAim: false, zoom: 1, flightMode: 'normal' });
@@ -459,7 +484,11 @@ function controlsField(f: Fix, v: unknown): FlightControls {
   // P04.3: anything but exactly 'realistic' flies NORMAL (a missing field is an older save, not a repair)
   const m = v['flightMode'];
   if (m !== undefined && m !== 'normal' && m !== 'realistic') f.repaired = true;
-  return { bindings: b.bindings, mouseAim, zoom: zoomOk ? (z as number) : 1, flightMode: m === 'realistic' ? 'realistic' : 'normal' };
+  const out: FlightControls = { bindings: b.bindings, mouseAim, zoom: zoomOk ? (z as number) : 1, flightMode: m === 'realistic' ? 'realistic' : 'normal' };
+  // P05.2: only 'critical' is stored (absent = all advice, so older saves read unchanged)
+  const adv = v['advice'];
+  if (adv !== undefined && adv !== 'critical') f.repaired = true;
+  return adv === 'critical' ? { ...out, advice: 'critical' } : out;
 }
 
 function fleetField(f: Fix, v: unknown): SavedFleet {
@@ -507,6 +536,38 @@ function fleetField(f: Fix, v: unknown): SavedFleet {
 
 const WEAPON_REF = /^[a-z]+(?:-[a-z]+)*$/;
 const MAX_WEAPONS = 8;
+
+/* P05.1 crew (shapes and bounds only; crew/persistence.ts checks ids, ownership and seats) */
+const CREW_ID = /^[a-z]+(?:-[a-z]+)*$/;
+const MAX_CREW_IDS = 32;
+const MAX_CREW_SHIPS = 16;
+const MAX_SEATS_PER_SHIP = 8;
+
+function crewField(f: Fix, v: unknown): SavedCrew | undefined {
+  if (v === undefined) return undefined;
+  if (!isObj(v)) return ((f.repaired = true), undefined);
+  const hired = idList(f, v['hired'], CREW_ID, MAX_CREW_IDS, []);
+  const paid = idList(f, v['paid'], CREW_ID, MAX_CREW_IDS, []);
+  const seats: Record<string, readonly string[]> = {};
+  const raw = v['seats'];
+  if (raw !== undefined && !isObj(raw)) f.repaired = true;
+  if (isObj(raw)) {
+    for (const [ship, list] of Object.entries(raw)) {
+      if (!SHIP_ID.test(ship) || Object.keys(seats).length >= MAX_CREW_SHIPS) {
+        f.repaired = true;
+        continue;
+      }
+      const ids = idList(f, list, CREW_ID, MAX_SEATS_PER_SHIP, []);
+      if (ids.length) seats[ship] = ids;
+      else if (Array.isArray(list) && list.length === 0) f.repaired = true; // empty seat lists are never written
+    }
+  }
+  // the empty crew is no field at all (an old save and a save that never hired look the same)
+  if (!hired.length && !paid.length && !Object.keys(seats).length) return ((f.repaired = true), undefined);
+  const d = v['doctrine'];
+  if (d !== undefined && d !== 'safety') f.repaired = true; // 'balanced' is never written; anything else is junk
+  return d === 'safety' ? { hired, paid, seats, doctrine: 'safety' } : { hired, paid, seats };
+}
 
 function ordnanceField(f: Fix, v: unknown): Readonly<Record<string, number>> {
   const r = cleanOrdnance(v);
@@ -708,7 +769,8 @@ export const FREEROAM_SPEC: RecordSpec<FreeRoamProfile> = Object.freeze({
       resume: resumeField(f, doc['resume']),
       ordnance: ordnanceField(f, doc['ordnance']),
     };
-    return { data, repaired: f.repaired };
+    const crew = crewField(f, doc['crew']);
+    return { data: crew ? { ...data, crew } : data, repaired: f.repaired };
   },
   migrations: {
     // v1 -> v2: navigation fields start empty (the sanitizer fills the defaults). Lifetime
@@ -925,6 +987,12 @@ export function profileSummary(p: FreeRoamProfile): string {
 /** Store the saved ammunition counts (P03B); invalid entries are cleaned, never raised above capacity. */
 export function withOrdnance(p: FreeRoamProfile, ordnance: Readonly<Record<string, number>>): FreeRoamProfile {
   return { ...p, ordnance: cleanOrdnance(ordnance).counts };
+}
+
+/** P05.1: store the crew (crew/persistence.ts builds it); undefined = no crew, the field is removed. */
+export function withCrew(p: FreeRoamProfile, crew: SavedCrew | undefined): FreeRoamProfile {
+  const { crew: _old, ...rest } = p;
+  return crew ? { ...rest, crew } : rest;
 }
 
 /** Store progression (v9; progression/persistence.ts builds it). */

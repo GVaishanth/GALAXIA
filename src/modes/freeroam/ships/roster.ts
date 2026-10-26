@@ -26,6 +26,12 @@
  *  - nuke bay: only the Condor and the Albatross, the two advanced ships
  *    behind the late licences (the Lantern Gate milestone, a visit to the
  *    Large Magellanic Cloud). The owner chose this set.
+ *
+ * Crew seats (P05.1): bridge seats besides the pilot's, by hull size and
+ * role. The light Swift and the gunship Shrike carry one specialist; the
+ * explorer Petrel and the hauler Magpie two; the heavy Condor and the
+ * long-range Albatross three. Seats are a capacity only: crew grant no
+ * bonus in this stage, and every ship flies with no crew at all.
  */
 import type { ShipDef, ShipId } from './types.ts';
 
@@ -44,6 +50,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 1 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    crewSeats: 2,
     mounts: ['primary', 'missile-rack', 'heavy-rack'],
     defaultWeapon: 'plasma',
     licence: [],
@@ -61,6 +68,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 2, sensor: 1, cargo: 0 },
     weaponClasses: ['light'],
     stock: { weapon: ['needle-repeater'], shield: ['deflector'], engine: ['sprint-thrusters'], sensor: ['survey-scanner'], cargo: [] },
+    crewSeats: 1,
     mounts: ['primary', 'missile-rack'],
     defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 1 }],
@@ -81,6 +89,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 2, shield: 1, engine: 1, sensor: 1, cargo: 0 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['twin-pulse'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: [] },
+    crewSeats: 1,
     mounts: ['primary', 'missile-rack', 'heavy-rack'],
     defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 2 }],
@@ -101,6 +110,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 2, shield: 2, engine: 1, sensor: 1, cargo: 1 },
     weaponClasses: ['light', 'medium', 'heavy'],
     stock: { weapon: ['lance-driver'], shield: ['bastion-array'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    crewSeats: 3,
     mounts: ['primary', 'missile-rack', 'heavy-rack', 'nuke-bay'],
     defaultWeapon: 'plasma',
     licence: [{ kind: 'milestone', milestoneId: 'lantern-gate' }],
@@ -121,6 +131,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 3 },
     weaponClasses: ['light'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['salvage-rig', 'cargo-pod'] },
+    crewSeats: 2,
     mounts: ['primary', 'missile-rack'],
     defaultWeapon: 'plasma',
     licence: [{ kind: 'surveys', count: 1 }],
@@ -141,6 +152,7 @@ export const SHIPS: readonly ShipDef[] = [
     slots: { weapon: 1, shield: 1, engine: 1, sensor: 2, cargo: 1 },
     weaponClasses: ['light', 'medium'],
     stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['cruise-drive'], sensor: ['deep-array'], cargo: ['cargo-pod'] },
+    crewSeats: 3,
     mounts: ['primary', 'missile-rack', 'heavy-rack', 'nuke-bay'],
     defaultWeapon: 'plasma',
     licence: [{ kind: 'galaxy', galaxyId: 'lmc' }],
