@@ -5,20 +5,20 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
-- **Last updated:** 2026-10-26. See [What's new since the 2026-10-25 archive](#whats-new-since-the-2026-10-25-archive).
+- **Last updated:** 2026-10-27. See [What's new since the 2026-10-26 crew archive](#whats-new-since-the-2026-10-26-crew-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
-- **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls, ships, weapons and Guild marks (not crew yet).
+- **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls (including faint signals), ships, weapons and Guild marks (not crew yet).
 
 ---
 
 ## Contents
 
-**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Gravity and STOP](#gravity-stop-and-station-keeping) · [Guild marks](#guild-marks-credits) · [Crew and the Bridge](#crew-and-the-bridge) · [Ship Mind and crew advice](#ship-mind-navigator-and-surveyor-advice) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
+**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Gravity and STOP](#gravity-stop-and-station-keeping) · [Faint signals](#faint-signals) · [Guild marks](#guild-marks-credits) · [Crew and the Bridge](#crew-and-the-bridge) · [Ship Mind and crew advice](#ship-mind-navigator-and-surveyor-advice) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What's new](#whats-new-since-the-2026-10-25-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-since-the-2026-10-26-crew-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -84,6 +84,7 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Flight:** any direction with assisted inertia, boost, a follow camera with zoom, optional mouse aim, and planet and star gravity that pulls only your ship.
 - **Two flight modes:** **NORMAL** (the default, unchanged assisted flight) and an opt-in **REALISTIC** mode with momentum, rotate-and-thrust steering and gravity that bends your path, plus **STOP**, which brakes and then holds position by station-keeping.
 - **Combat:** four original factions with eight enemy families, met in patrols, outposts, ambushes, elite duels and capital-ship fights. Target lock turns your nose toward a chosen hostile (facing only).
+- **Faint signals:** an anomaly you have not investigated yet hides its source inside a dashed ring. Take bearings from different positions with INTERACT; two lines far enough apart fix the source, then investigate there. An optional **Simple Signals** setting makes one bearing enough. See [Faint signals](#faint-signals).
 - **Ships and weapons:** six ships, bought with cargo once you hold their licence, in a station **Hangar**; four weapons configured per ship in the **Armory**.
 - **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules, upgrades and one-time crew berth fees.
 - **Crew (optional):** seven named specialists to sign on and seat aboard your ships on a station's **BRIDGE**. A seated Navigator or Surveyor gives spoken-style text advice in flight; the built-in **Ship Mind** advises every pilot, crew or not. Advice only: crew never fly, fight, pay or travel for you. See [Crew and the Bridge](#crew-and-the-bridge).
@@ -151,7 +152,7 @@ Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP*
 | Next target (only while locked) | C | **»** beside LOCK | — |
 | STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
 | Camera zoom | Mouse wheel, or = and − | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
-| Interact (dock, open, inspect, gate) | E or Enter | Button that appears in range | A |
+| Interact (dock, open, inspect, take a signal bearing, gate) | E or Enter | Button that appears in range | A |
 | Sector map / cargo | M / I | **MAP** / **CARGO** | Select / Y |
 | Pause | Esc or P | **II** | Start |
 
@@ -177,6 +178,19 @@ Planets and stars pull **only your ship** (never shots, enemies or loot), and on
 - **Hazards:** hitting a planet's surface hard damages the ship, and a star's **corona** burns the shield while you are inside it.
 - **STOP** (REALISTIC only) brakes and then station-keeps: it fires the thrusters for you to hold that spot against drift and gravity, and shows **CAN'T HOLD** when a pull is stronger than the engines. It is a holding aid only: it never aims, fires or flies anywhere, and steering or thrusting hands control straight back.
 
+#### Faint signals
+
+An anomaly you have not investigated yet gives off only a faint signal: its marker sits at the centre of a dashed ring, and the real source is somewhere inside it. Find it by triangulation, with the same INTERACT control (no extra button):
+
+1. **Get close and slow down.** Inside sensor range and below 60 speed, the prompt reads **TAKE BEARING**.
+2. **Take a bearing and hold steady.** Press INTERACT and keep still for about a second; the prompt counts **HOLD STEADY 10% … 90%** and an arc fills around the ship. Going faster than 60, leaving sensor range, a planet or star coming into the line, pausing or docking cancels it.
+3. **A line is drawn** from where you were, through the ring. It is a measurement with an error (shown as **±x.x°**), so it passes near the source, not exactly through it.
+4. **Move, then take another.** Fly well around the marker: two lines at least **35°** apart fix the source. Pressing again from the same spot is refused, so moving matters more than pressing. If your lines stay too close, the fifth bearing always resolves it.
+5. **Read the log.** Every refusal says why: **TOO FAST**, **OUT OF SENSOR RANGE**, a named body **IN THE WAY**, **SAME SPOT**, or **INTERFERENCE** widening the error.
+6. **SOURCE RESOLVED:** the lines go and the marker moves to the source with a bright ring. Fly there and **INVESTIGATE** for the usual reward, paid once.
+
+Bearings are not saved: leaving the system starts the signal afresh (a completed anomaly stays completed). **Simple Signals** (pause → **SETTINGS & HELP** → **CONTROLS** → **SIGNALS** → **SIMPLE**, off by default) makes one valid bearing enough; range, speed, the steady hold and a clear line still apply, and the reward is the same. A seated Surveyor steadies each bearing (a smaller error) and explains failed ones; they never take a bearing or reveal the source for you.
+
 #### Pause menu
 
 Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIGHT** sit at the top; RESTART asks for confirmation first (CANCEL is focused, so a repeated key never restarts by accident). Below them are three groups that expand when chosen:
@@ -184,7 +198,7 @@ Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIG
 | Group | Contents |
 |---|---|
 | MISSIONS & PROGRESS | Missions, Record (recent Guild mark changes), Saves |
-| SETTINGS & HELP | Controls (bindings, mouse aim, zoom, flight mode, Ship Mind advice), How to Play, Sound |
+| SETTINGS & HELP | Controls (bindings, mouse aim, zoom, flight mode, Ship Mind advice, Simple Signals), How to Play, Sound |
 | NAVIGATION | Galaxy Map (or System Map, when you came from one), Main Menu |
 
 ---
@@ -251,12 +265,12 @@ Crew are optional: **flying solo is fully supported**, and no crew member is nee
 | Role | Status | What it does |
 |---|---|---|
 | **Navigator** | Active (advice) | Gravity watch, pull reading and route notes in flight |
-| **Surveyor** | Active (advice) | Signal reading and survey guidance in flight |
+| **Surveyor** | Active (advice) | Signal reading, survey guidance and steadier signal bearings in flight |
 | **Engineer** | **Planned** | Can be recruited and seated, but has no flight duty yet (shown as *NO FLIGHT DUTY YET*) |
 | **Defence** | **Planned** | As above |
 | **Quartermaster** | **Planned** | As above |
 
-Only the first Navigator and the first Surveyor seated on the ship you fly are on duty. Engineer, Defence and Quartermaster abilities, route planning and signal triangulation are not implemented; the Bridge labels them as planned.
+Only the first Navigator and the first Surveyor seated on the ship you fly are on duty. Engineer, Defence and Quartermaster abilities and route planning are not implemented; the Bridge labels them as planned.
 
 **Attributes** (1 to 5; rank changes none of them):
 
@@ -272,7 +286,7 @@ Advice appears as one short line at a time in flight, never over a menu, the map
 
 - **Ship Mind** (always present, solo or crewed): low hull, shield down, a collision course a couple of seconds out, a star's corona, a strong pull, hostile contacts, targets on sensors and empty magazines. It says what is happening; it does not plan.
 - **Navigator:** earlier drift-impact and corona warnings with a named escape burn checked against the forecast, how strongly a body pulls and whether your engine out-pulls it, a note when STOP cannot hold, and reactor-cell notes for the lanes out of the system.
-- **Surveyor:** the targets on sensors with their bearing and (with competence) what they are worth, survey marks still to chart, when interference is blinding the sensors, and when a survey is complete.
+- **Surveyor:** the targets on sensors with their bearing and (with competence) what they are worth, survey marks still to chart, when interference is blinding the sensors, when a survey is complete, and why a [faint-signal](#faint-signals) bearing failed or cannot fix the source yet. A higher Competence narrows each bearing's error; the Surveyor never takes a bearing or points to the source.
 
 **How messages are chosen.** The most urgent message shows first; a higher level interrupts a lower one, equal levels wait their turn, and at most three wait in line (a waiting message is dropped if it stops being true). Each condition is said once, again only if it gets worse (a lower hull, more contacts), and each target is named once per visit. Nothing non-urgent is said in the first moments after arriving, during a fight or while a decision prompt is open. Where the Ship Mind and a crew member would say the same thing, only one speaks.
 
@@ -491,7 +505,19 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
-## What's new since the 2026-10-25 archive
+## What's new since the 2026-10-26 crew archive
+
+These changes were made after `GALAXIA_Release_2026-10-26_Crew.zip` and are included in the 2026-10-27 signal-triangulation archive. Classic Mode, ships, weapons, flight modes, STOP, crew, prices and saves are unchanged; no save field was added.
+
+- **Faint signals:** Free Roam anomalies you have not investigated yet now hide their source inside a dashed ring. Take bearings with INTERACT from different positions (hold steady about a second; the prompt counts the progress), watch each measured line appear, and two lines at least 35° apart fix the source; the fifth bearing always does. Then investigate there for the usual reward, paid once. Every refused bearing says why in the log. See [Faint signals](#faint-signals).
+- **Simple Signals setting:** pause → SETTINGS & HELP → CONTROLS → SIGNALS → SIMPLE (off by default) makes one valid bearing enough. Saved with your controls.
+- **INTERACT near stations:** a station, gate or other point in reach keeps the prompt even when a faint signal is closer; only a bearing being held keeps it (for under a second).
+- **Surveyor:** a seated Surveyor's Competence narrows each bearing's error, and they explain failed bearings; they never take one or reveal the source.
+- **HOW TO PLAY and documentation:** the in-game Controls step, this README and the [Player Guide](docs/PLAYER_GUIDE.md) explain the six steps.
+
+None of this has been playtested by a person or tried on a physical device; see below.
+
+### Earlier: the 2026-10-26 crew archive
 
 These changes were made after `GALAXIA-Game-Release-25-10-2026.zip` and are included in the 2026-10-26 crew archive. Classic Mode, ships, weapons, flight modes, STOP, prices and saves from earlier versions are unchanged; crew are optional.
 
@@ -516,7 +542,12 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 ## What has been verified
 
-**Automated, on the current code (2026-10-26):**
+**Automated, on the current code (signal triangulation):**
+
+- `npm run check` passes: typecheck, the Vitest suite (2,131 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.8 kB gzip of a 110 kB budget; Free Roam 224.2 kB of 225 kB, loaded only when chosen; CSS 24,997 bytes gzip of a 25,000-byte budget).
+- Browser scripts in headless Chromium against this code: faint signals, the SIGNALS setting and the prompt and notices at 1280×720, 1920×1080 and 320×568 and 390×844 touch layouts (42 of 42), Ship Mind and crew advice (65 of 65), crew and the Bridge (42 of 42), NORMAL and REALISTIC flight with STOP (56 of 56) and pause and resume (20 of 20), all passing. The other scripts were not re-run for this change; their last results (2026-10-26, crew archive) follow.
+
+**Earlier, on the crew-archive code (2026-10-26):**
 
 - `npm run check` passes: typecheck, the Vitest suite (2,081 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.7 kB gzip of a 110 kB budget; Free Roam 219.7 kB of 225 kB, loaded only when chosen; CSS 24,997 bytes gzip of a 25,000-byte budget).
 - Browser scripts in headless Chromium on 2026-10-26, against this code: crew and the Bridge (42 of 42 checks), Ship Mind and crew advice including pause and resume, CRITICAL ONLY and the advice line at five screen sizes (65 of 65), the Hangar (34), the economy (66), Classic weapons after Wave 20 (72), NORMAL and REALISTIC flight with STOP (56 on the test build, 8 on the production build), pause and resume (20) and the pause-menu groups (85), all passing. The Armory script passed 43 and 44 of 46 in two runs: its Nuke-on-Petrel and Lock-On detail checks also fail on the build before crew was added (the 2026-10-24 pause-menu commit) and are unresolved, and its "plot is static" timing check fails intermittently on both builds.
@@ -525,7 +556,7 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 **Not performed:**
 
-- No person has playtested this build, including crew, Ship Mind advice, the tutorial, target lock, zoom, the Armory and the economy.
+- No person has playtested this build, including faint signals, crew, Ship Mind advice, the tutorial, target lock, zoom, the Armory and the economy.
 - No physical phones or tablets (including iOS Safari), real game controllers, real GPUs or high-refresh displays, and no listening check of the audio. Touch layouts were checked only in emulation.
 - Firefox and WebKit were not re-run for this build; earlier releases ran there in headless form.
 - Performance was measured only in headless, software-rendered Chromium on a two-core machine; no frame rate is promised.
@@ -534,7 +565,8 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 - **Open testing:** expect balance and feel issues. Combat tuning, gravity strength, marks rewards and prices come from simulations and automated checks, not from players.
 - **REALISTIC flight and STOP** are tuned from automated measurements only; expect the feel (turn rate, thrust, how STOP brakes near planets) to change after player feedback.
-- **Crew are advice only:** a Navigator or Surveyor never flies, fights, brakes, investigates or travels for you, and plots no routes. Engineer, Defence and Quartermaster duties, route planning and signal triangulation are planned, not implemented. Advice is text only (no voice), in English.
+- **Crew are advice only:** a Navigator or Surveyor never flies, fights, brakes, investigates or travels for you, and plots no routes. Engineer, Defence and Quartermaster duties and route planning are planned, not implemented. Advice is text only (no voice), in English.
+- **Faint signals:** there is no sound cue for a bearing. The bearing prompt is the usual INTERACT button; on a tall phone (390×844, emulated) a thumb resting low in the left corner can cover its edge, though the DRAG TO FLY spot does not. The difficulty (sensor range, the 35° rule, the error of each bearing) comes from simulations, not from players.
 - **Advice layout:** the advice line was checked in emulated layouts only (1280×720, and 360×640, 320×568, 740×360 and 568×320 touch screens). In touch portrait it hangs just below the ship and the NEARBY line steps aside while it shows. On the narrowest phones (320 px wide), a long crew message can overlap the touch stick's ring if your thumb rests high on the screen; it is drawn over, never in the way of input. Screen-reader announcements are wired up but were not tried with a real screen reader.
 - **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.
 - **Classic:** a single high score (no name entry or table); the score caps at 9,999,990; a few original arcade rules that could not be confirmed are configurable.

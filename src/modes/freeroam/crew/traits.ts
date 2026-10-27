@@ -107,13 +107,15 @@ export function surveyorTraits(a: CrewAttributes): SurveyorTraits {
 }
 
 /**
- * P06 extension point (signal triangulation, not built in P05.2): the bearing
- * spread a Surveyor would add to a signal bearing, in degrees (12 at
- * competence 1 down to 4 at 5). Nothing calls it yet; P06's investigation
- * state machine is meant to read it through the same crew view, so better
- * Surveyors give tighter bearings without a second crew system.
+ * P06.1 signal triangulation: a Surveyor on duty narrows the error of every
+ * signal bearing the pilot takes, by this factor (competence 1: 0.9, i.e. 10%
+ * tighter, down to 5: 0.6, 40% tighter). The investigation reads it through
+ * the shell (sector/signal.ts bearingSpread); the pilot still takes every
+ * bearing. It replaces P05.2's unused placeholder (an absolute spread of
+ * 12..4 degrees), which could not combine with the ship's own sensors: a
+ * competence-1 Surveyor would have been worse than flying solo.
  */
-export const surveyorBearingSpreadDeg = (a: CrewAttributes): number => 12 - 2 * (attr(a.competence) - 1);
+export const surveyorSpreadFactor = (a: CrewAttributes): number => (18 - 1.5 * (attr(a.competence) - 1)) / 20;
 
 /** Plain-language lines for the Bridge: what each attribute does for this role (the mapping above, never a bonus). */
 export function traitLines(role: string, a: CrewAttributes, doctrine: NavDoctrine = 'balanced'): readonly string[] {
@@ -130,7 +132,7 @@ export function traitLines(role: string, a: CrewAttributes, doctrine: NavDoctrin
     const t = surveyorTraits(a);
     const depth = t.detail === 1 ? 'kind and bearing' : t.detail === 2 ? 'kind, bearing, reach and survey value' : 'kind, bearing, reach, survey value and main resource';
     return [
-      `COMPETENCE ${attr(a.competence)} · reports ${depth}`,
+      `COMPETENCE ${attr(a.competence)} · reports ${depth}; signal bearings ${Math.round((1 - surveyorSpreadFactor(a)) * 100)}% tighter`,
       `CAUTION ${attr(a.caution)} · ${t.hazardNotes ? 'flags targets inside minefields, eruption fields or interference' : 'does not flag hazards around targets'}`,
       `FOCUS ${attr(a.focus)} · holds a topic ${hold(t.holdTicks)}${t.coreFirst ? '; skips salvage and caches while survey marks remain' : ''}`,
     ];

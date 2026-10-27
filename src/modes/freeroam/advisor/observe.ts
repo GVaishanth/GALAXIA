@@ -26,7 +26,8 @@ import { resourceName } from '../inventory/resources.ts';
 import { isDone, RUN, type SectorRun } from '../sector/run.ts';
 import { POI_RULES, type Landmark, type Poi } from '../sector/model.ts';
 import { realisticThrust, stopDisplay } from '../sector/realisticFlight.ts';
-import { OBSERVATION_LIMITS, type Forecast, type Observation, type ObservedBody, type ObservedPoi, type ObservedPoiKind, type Offset } from '../crew/observation.ts';
+import { signalView, type SignalView } from '../sector/signal.ts';
+import { OBSERVATION_LIMITS, type Forecast, type Observation, type ObservedBody, type ObservedPoi, type ObservedPoiKind, type ObservedSignal, type Offset } from '../crew/observation.ts';
 import type { NavDoctrine } from '../crew/types.ts';
 import type { Forecaster, ForecastQuery } from './forecast.ts';
 
@@ -126,6 +127,9 @@ export function observe(run: SectorRun, fc: Forecaster, o: ObserveOptions): Obse
   let remaining = 0;
   let markNearest: Offset | null = null;
   let exit: Offset | null = null;
+  // P06.1: the signal being observed, else the nearest unresolved one in range (instrument data only)
+  let signal: SignalView | null = null;
+  let signalD = Infinity;
   for (const p of L.pois) {
     if (p.kind === 'exit') {
       exit = offset(sh.x, sh.y, p.x, p.y);
@@ -144,11 +148,19 @@ export function observe(run: SectorRun, fc: Forecaster, o: ObserveOptions): Obse
       }
     }
     if (!shown || done) continue;
-    const off = offset(sh.x, sh.y, p.x, p.y);
+    const sv = p.kind === 'anomaly' ? signalView(run, p) : null;
+    const open = sv !== null && sv.fix === null;
+    const off = sv?.fix ? offset(sh.x, sh.y, sv.fix.x, sv.fix.y) : offset(sh.x, sh.y, p.x, p.y);
+    const sd = !open ? Infinity : sv.observing !== null ? -1 : sv.inRange ? off.distance : Infinity;
+    if (sd < signalD) {
+      signal = sv;
+      signalD = sd;
+    }
     let hazard: ObservedPoi['hazard'] = null;
     for (const z of L.hazards) if (Math.hypot(p.x - z.x, p.y - z.y) < z.r) hazard = z.kind;
     const rule = POI_RULES[p.kind];
-    pois.push(Object.freeze({ ...off, id: p.id, kind: p.kind as ObservedPoiKind, label: p.label, reach: p.r, verb: rule.verb, auto: rule.auto, required: p.required, hazard, resource: mainResource(p) }));
+    const base = { ...off, id: p.id, kind: p.kind as ObservedPoiKind, label: p.label, reach: p.r, verb: rule.verb, auto: rule.auto, required: p.required, hazard, resource: mainResource(p) };
+    pois.push(Object.freeze(open ? { ...base, reach: sensor, verb: 'Take a bearing on', signal: true as const } : base));
   }
   pois.sort((a, b) => a.distance - b.distance || (a.id < b.id ? -1 : 1));
   if (pois.length > OBSERVATION_LIMITS.pois) pois.length = OBSERVATION_LIMITS.pois;
@@ -192,5 +204,23 @@ export function observe(run: SectorRun, fc: Forecaster, o: ObserveOptions): Obse
     route: o.route ? Object.freeze({ ...o.route }) : null,
     emptyMagazines: Object.freeze(emptyMagazines),
     offer: run.offer !== null,
+    ...(signal ? { signal: observedSignal(signal) } : {}),
+  });
+}
+
+function observedSignal(v: SignalView): ObservedSignal {
+  return Object.freeze({
+    id: v.id,
+    label: v.label,
+    state: v.bearings.length ? 'bearings' : 'faint',
+    bearings: v.bearings.length,
+    separation: v.separation,
+    toFallback: v.toFallback,
+    inRange: v.inRange,
+    slow: v.slow,
+    spread: v.spread,
+    jammed: v.jammed,
+    refusal: v.refusal,
+    blocker: v.blocker,
   });
 }

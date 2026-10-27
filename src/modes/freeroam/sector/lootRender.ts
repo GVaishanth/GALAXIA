@@ -16,6 +16,7 @@ import { lootIconKey, iconCanvas } from '../inventory/ui/iconImages.ts';
 import { KILL_DROPS } from '../inventory/lootTables.ts';
 import type { CombatView } from './combatRender.ts';
 import { chipsLeft, type Pickup, type PickupKind, type SectorRun } from './run.ts';
+import { signalPoint } from './signal.ts';
 
 const RING: Readonly<Record<PickupKind, string>> = { pod: '#ffb347', ore: '#7fe3ff', cache: '#ffd34d', jettison: '#b7c0cc' };
 const DASH: Readonly<Record<PickupKind, readonly number[]>> = { pod: [], ore: [1, 3], cache: [], jettison: [4, 3] };
@@ -124,7 +125,8 @@ export function drawLootMap(ctx: CanvasRenderingContext2D, run: SectorRun, X: (x
   ctx.lineWidth = Math.max(1, Math.round(ratio));
   // a container or reward with loot left in it: an open square around it
   for (const [id] of run.left) {
-    const at = L.pois.find((p) => p.id === id) ?? run.pickups.find((p) => p.id === id);
+    const poi = L.pois.find((p) => p.id === id);
+    const at = poi ? signalPoint(run, poi) : run.pickups.find((p) => p.id === id); // P06.1: an anomaly opened at its fix
     if (!at) continue;
     const s = 6 * ratio;
     ctx.strokeStyle = OFFER;

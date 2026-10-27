@@ -49,7 +49,7 @@ import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMap
 import { applySystemTravel, deriveSystemView, HAZARD_LABEL, systemGraph, type SystemTravelResult } from './galaxy/systems.ts';
 import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
-import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint } from './profile.ts';
+import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint, withSimpleSignals } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
 import { auditProfile, auditText } from './saveAudit.ts';
 import { createSavesPanel, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
@@ -112,12 +112,14 @@ import type { CrewState, CrewWorld } from './crew/types.ts';
 import type { BridgeAct } from './crew/ui/bridgeSection.ts';
 import { ADVISOR, advisorCrew, advisorView, EMPTY_ADVISOR, evaluateAdvice, parkAdvisor, quietAdvisor, type AdvisorCrew, type AdvisorState, type AdvisorView } from './crew/advisor.ts';
 import type { Observation } from './crew/observation.ts';
-import { SHIP_MIND } from './crew/traits.ts';
+import { SHIP_MIND, surveyorSpreadFactor } from './crew/traits.ts';
 import { createAdvisorStrip, type AdvisorStrip } from './crew/ui/advisorStrip.ts';
 import { DOCTRINE_LABEL } from './crew/bridgeView.ts';
 import { createForecaster } from './advisor/forecast.ts';
 import { observe } from './advisor/observe.ts';
-import { shipCrewView, type ShipCrewView } from './crew/view.ts';
+import { memberWithRole, shipCrewView, type ShipCrewView } from './crew/view.ts';
+import { cleanFix, poiVerb, setSignalOptions, signalPoint, signalView, SIGNAL } from './sector/signal.ts';
+import { repeatsLast, signalNotice, type SignalNoticeMemo } from './ui/signalNotice.ts';
 import { createArmoryPanel, type ArmoryPanel, type ArmoryStatus } from './ships/armoryPanel.ts';
 import { armedLoadout, compatibleWeapons, type ArmedLoadout } from './ships/armory.ts';
 import { restockOrdnance, WEAPON_BY_ID, type WeaponId as PilotWeaponId } from '../../config/weapons.ts';
@@ -704,6 +706,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** P05.2: SHIP MIND advice (ALL / CRITICAL ONLY), CONTROLS panel. */
   let adviceBtns: Record<'all' | 'critical', HTMLButtonElement>;
   let adviceDesc: HTMLElement;
+  /** P06.2: SIGNALS (STANDARD / SIMPLE), CONTROLS panel: the Simple Signals accessibility preference. */
+  let signalBtns: Record<'standard' | 'simple', HTMLButtonElement>;
+  let signalDesc: HTMLElement;
   let zoomLabel: HTMLElement;
 
   const reducedMotion = (): boolean => {
@@ -1634,6 +1639,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     lastKey = '';
     return `Jettisoned ${n} ${resourceName(resource).toUpperCase()}. It floats behind the ship for a minute and can be picked up again.`;
   };
+  /** P06.2 signal feedback in the notice feed (ui/signalNotice.ts); a repeat within 1.5 s of sim time is not stacked. */
+  const signalMemo: SignalNoticeMemo = { text: '', tick: -1 };
   /** The sound of a sector event (audio/frCues.ts), with the shield state around its batch. */
   let hitCtx: HitContext = { shieldBefore: 0, shieldAfter: 0 };
   const cue = (e: SectorEvent): void => {
@@ -1652,19 +1659,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         cue(e);
         notify(`SALVAGE ${lootText(e.loot)}${e.left.length ? ` · ${unitsText(e.left)} LEFT` : ''}`, e.loot);
       } else if (e.type === 'looted') {
+        // P06.1: a two-bearing fix earns a cosmetic tag in the log line, nothing more
+        const clean = cleanFix(r, e.id) ? ' · CLEAN FIX' : '';
         if (e.loot.length === 0) {
           collect(sys, e);
           cue(e);
-          notify(`${e.label.toUpperCase()} · DISCOVERY RECORDED`, undefined, 'info');
+          notify(`${e.label.toUpperCase()} · DISCOVERY RECORDED${clean}`, undefined, 'info');
           return;
         }
         if (!collect(sys, e)) return;
         cue(e);
-        notify(`${e.label.toUpperCase()} ${lootText(e.loot)}${e.left.length ? ` · ${unitsText(e.left)} LEFT` : ''}`, e.loot);
+        notify(`${e.label.toUpperCase()} ${lootText(e.loot)}${e.left.length ? ` · ${unitsText(e.left)} LEFT` : ''}${clean}`, e.loot);
       } else if (e.type === 'picked') {
         if (!collect(sys, e)) return;
         cue(e);
         notify(`${e.label.toUpperCase()} ${lootText(e.loot)}${e.left.length ? ` · ${unitsText(e.left)} LEFT` : ''}`, e.loot);
+      } else if (e.type === 'signal') {
+        const sp = r.layout.pois.find((q) => q.id === e.id);
+        const n = signalNotice(e.label, e.result, sp ? signalView(r, sp)?.jammed === true : false, SIGNAL.minSeparationDeg);
+        if (!repeatsLast(signalMemo, n.text, r.tick)) notify(n.text, undefined, n.tone);
       } else if (e.type === 'dropped') {
         notify('SALVAGE POD · FLY OVER IT WITHIN 40 S', undefined, 'info');
       } else if (e.type === 'expired') {
@@ -2743,6 +2756,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       adviceBtns[m].classList.toggle('is-selected', adv === m);
     }
     adviceDesc.textContent = adv === 'critical' ? 'Ship Mind and crew speak only for critical warnings (low hull, an imminent collision).' : 'Ship Mind and crew advise in flight: hazards, gravity, contacts and sensor finds. Critical warnings always show.';
+    const simple = controls.simpleSignals === true;
+    for (const m of ['standard', 'simple'] as const) {
+      signalBtns[m].setAttribute('aria-pressed', String(simple === (m === 'simple')));
+      signalBtns[m].classList.toggle('is-selected', simple === (m === 'simple'));
+    }
+    signalDesc.textContent = simple
+      ? 'Simple Signals: one valid bearing resolves an anomaly. You still need sensor range, under 60 speed, a steady 0.8 s hold and a clear line.'
+      : 'Anomaly signals need bearings from two angles at least 35° apart (the fifth bearing always resolves).';
     controlsStatus.textContent = message || 'Select a key to change it. ESC cancels; BACKSPACE clears a second key. Menus always use the arrows, ENTER and ESC.';
   };
   /** Capture-phase keydown while a binding slot waits: the key never reaches flight or menus. */
@@ -2904,7 +2925,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const out: PoiCandidate[] = [];
     for (const p of r.layout.pois) {
       if (p.kind === 'survey' || !r.revealed.has(p.id) || isDone(r, p)) continue;
-      out.push({ id: p.id, label: p.kind === 'gate' ? r.gates[p.id]?.label ?? p.label : p.label, x: p.x, y: p.y });
+      const at = p.kind === 'anomaly' ? signalPoint(r, p) : p; // P06.1: a resolved signal points at its fix
+      out.push({ id: p.id, label: p.kind === 'gate' ? r.gates[p.id]?.label ?? p.label : p.label, x: at.x, y: at.y });
     }
     return out;
   };
@@ -3126,6 +3148,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     paintStopCtl(r, pv.stopTouches);
     let events: SectorEvent[] = [];
     batchShield = r.shield;
+    // P06.1: Simple Signals (a pref) and the Surveyor on duty shape signal bearings; the pilot still takes each one
+    const surveyor = memberWithRole(crewView, 'surveyor');
+    setSignalOptions(r, { simple: controls.simpleSignals === true, assist: surveyor ? surveyorSpreadFactor(surveyor.attributes) : 1 });
     const alpha = clock.advance(ts, () => {
       if (r.phase !== 'flight' || run !== r) return;
       // one weapon step and a latched FIRE press go to the first tick of the frame only
@@ -3212,7 +3237,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     renderAdvice(r);
     renderHud(r, ts, live && !document.hidden, Math.hypot(move.moveX, move.moveY), fire);
     const focus = !panel && r.phase === 'flight' && r.focus ? r.layout.pois.find((p) => p.id === r.focus) : undefined;
-    const prompt = focus ? `${POI_RULES[focus.kind].verb.toUpperCase()} · ${(focus.kind === 'gate' ? r.gates[focus.id]?.label ?? focus.label : focus.label).toUpperCase()}` : '';
+    const prompt = focus ? `${poiVerb(r, focus, POI_RULES[focus.kind].verb).toUpperCase()} · ${(focus.kind === 'gate' ? r.gates[focus.id]?.label ?? focus.label : focus.label).toUpperCase()}` : '';
     if (interactBtn.textContent !== prompt) interactBtn.textContent = prompt;
     if (interactBtn.hidden !== !focus) interactBtn.hidden = !focus;
     // the full-hold choice: low and small, never over the centre of the action
@@ -3740,7 +3765,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       adviceRow.setAttribute('aria-label', 'Ship Mind advice');
       const pickAdvice = (m: 'all' | 'critical'): void => {
         if ((controls.advice === 'critical' ? 'critical' : 'all') !== m) {
-          controls = m === 'critical' ? { ...controls, advice: 'critical' } : { bindings: controls.bindings, mouseAim: controls.mouseAim, zoom: controls.zoom, flightMode: controls.flightMode };
+          controls = m === 'critical' ? { ...controls, advice: 'critical' } : { bindings: controls.bindings, mouseAim: controls.mouseAim, zoom: controls.zoom, flightMode: controls.flightMode, ...(controls.simpleSignals ? { simpleSignals: true as const } : {}) };
           setControls({});
         }
         refreshControls(m === 'critical' ? 'Ship Mind: critical warnings only.' : 'Ship Mind: all advice.');
@@ -3756,6 +3781,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       adviceRow.append(el('span', 'fr-controls-action', 'SHIP MIND'), adviceBtns.all, adviceBtns.critical);
       adviceDesc = el('p', 'fr-text fr-text-dim fr-controls-mode-desc', '');
       modeDesc.after(adviceRow, adviceDesc);
+      // P06.2: SIGNALS: STANDARD (two angled bearings) or SIMPLE (one valid bearing); off by default, saved in the prefs
+      const signalRow = el('div', 'fr-controls-mode fr-controls-signals');
+      signalRow.setAttribute('role', 'group');
+      signalRow.setAttribute('aria-label', 'Simple Signals');
+      const signalBtn = (m: 'standard' | 'simple', text: string): HTMLButtonElement => {
+        const b = el('button', 'fr-btn fr-advice-btn', text);
+        b.type = 'button';
+        b.setAttribute('aria-pressed', 'false');
+        b.addEventListener('click', () => {
+          controls = withSimpleSignals(controls, m === 'simple');
+          setControls({});
+          refreshControls(m === 'simple' ? 'Simple Signals on.' : 'Simple Signals off.');
+        });
+        return b;
+      };
+      signalBtns = { standard: signalBtn('standard', 'STANDARD'), simple: signalBtn('simple', 'SIMPLE') };
+      signalRow.append(el('span', 'fr-controls-action', 'SIGNALS'), signalBtns.standard, signalBtns.simple);
+      signalDesc = el('p', 'fr-text fr-text-dim fr-controls-mode-desc', '');
+      adviceDesc.after(signalRow, signalDesc);
       gateTitle = panels.gate.querySelector('.fr-title')!;
       gateJump = panels.gate.querySelector('.fr-btn')!;
       briefingKicker = panels.briefing.querySelector('.fr-kicker')!;

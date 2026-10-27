@@ -44,6 +44,7 @@ import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, dr
 import { drawLootMap, drawLootWorld } from './lootRender.ts';
 import { drawFieldRings, drawPullArrow } from './gravityRender.ts';
 import { isDone, objectiveOf, RUN, type SectorRun } from './run.ts';
+import { openBearings, ringRadius, signalPoint, signalProgress } from './signal.ts';
 import { SPRITES, type SpriteId } from '../../../assets/sprites/index.ts';
 import { ANIMATION_TIMING } from '../../../config/visual.ts';
 
@@ -371,9 +372,36 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
     ctx.globalAlpha = 1;
   }
   const pulse = o.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(o.timeMs / 260);
+  // P06.2 signal traces: the uncertainty ring around an unresolved marker and each RECORDED (noisy) bearing
+  // from where it was taken; never the hidden source (sector/signal.ts keeps it private)
+  const ring = ringRadius(run.craft.stats.sensor);
+  ctx.strokeStyle = ART.poi['anomaly']!;
+  ctx.lineWidth = px(1);
   for (const p of L.pois) {
-    if (!visible(p.x, p.y, Math.max(p.r, p.alertR))) continue;
-    drawPoi(ctx, run, p, toX(p.x), toY(p.y), zoom, pulse, t, o.ratio);
+    const bs = p.kind === 'anomaly' && run.revealed.has(p.id) ? openBearings(run, p) : null;
+    if (!bs || (!bs.length && Math.hypot(run.ship.x - p.x, run.ship.y - p.y) > run.craft.stats.sensor)) continue;
+    ctx.globalAlpha = 0.3;
+    ctx.setLineDash([px(4), px(8)]);
+    ctx.beginPath();
+    ctx.arc(toX(p.x), toY(p.y), ring * zoom, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.65;
+    for (const b of bs) {
+      const len = Math.hypot(p.x - b.x, p.y - b.y) + ring;
+      ctx.beginPath();
+      ctx.moveTo(toX(b.x), toY(b.y));
+      ctx.lineTo(toX(b.x + Math.cos(b.angle) * len), toY(b.y + Math.sin(b.angle) * len));
+      ctx.stroke();
+      disc(ctx, toX(b.x), toY(b.y), px(3), ART.poi['anomaly']!);
+    }
+  }
+  ctx.globalAlpha = 1;
+  for (const p of L.pois) {
+    // P06.1: a resolved anomaly signal is drawn (and investigated) at its fix
+    const at = p.kind === 'anomaly' ? signalPoint(run, p) : p;
+    if (!visible(at.x, at.y, Math.max(p.r, p.alertR))) continue;
+    drawPoi(ctx, run, p, toX(at.x), toY(at.y), zoom, pulse, t, o.ratio);
   }
 
   /* ships ------------------------------------------------------------------- */
@@ -493,6 +521,15 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
     ctx.arc(toX(sx), toY(sy), (tune.radius + 7) * zoom, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * run.shield) / Math.max(1, stats.shield));
     ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+  const obs = signalProgress(run);
+  if (obs > 0) {
+    // P06.2: the bearing being held fills a ring around the ship (sim ticks; gone the moment it breaks)
+    ctx.strokeStyle = ART.poi['anomaly']!;
+    ctx.lineWidth = px(2);
+    ctx.beginPath();
+    ctx.arc(toX(sx), toY(sy), (tune.radius + 12) * zoom, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * obs);
+    ctx.stroke();
   }
   if (run.shieldHit && run.tick - run.shieldHit.tick < RUN.shieldFlareTicks) {
     // shield impact: a flare on the struck side, facing the hit
@@ -629,7 +666,8 @@ export function drawSectorMap(ctx: CanvasRenderingContext2D, w: number, h: numbe
     const done = isDone(run, p);
     const col = done ? ART.done : (ART.poi[p.kind] ?? COLORS['ui.highlight']);
     const r = Math.max(3 * ratio, Math.min(7 * ratio, p.r * scale));
-    disc(ctx, X(p.x), Y(p.y), r, col);
+    const at = p.kind === 'anomaly' ? signalPoint(run, p) : p; // P06.1: a resolved signal is charted at its fix
+    disc(ctx, X(at.x), Y(at.y), r, col);
     if (p.kind === 'gate' || p.kind === 'exit' || p.kind === 'station') {
       ctx.fillStyle = col;
       ctx.fillText(p.kind === 'exit' ? 'EXIT' : p.kind === 'gate' ? 'GATE' : 'STATION', X(p.x), Y(p.y) + r + 2 * ratio);
@@ -807,12 +845,14 @@ function drawPoi(ctx: CanvasRenderingContext2D, run: SectorRun, p: Poi, x: numbe
 
   // range ring: where the interaction triggers
   if (!done && p.kind !== 'installation') {
-    ctx.globalAlpha = p.id === run.focus ? 0.9 : 0.32;
+    // P06.2: a resolved signal's ring at the fix is bright and breathes like a survey mark
+    const fixed = p.kind === 'anomaly' && signalPoint(run, p) !== p;
+    ctx.globalAlpha = p.id === run.focus || fixed ? 0.9 : 0.32;
     ctx.strokeStyle = col;
     ctx.lineWidth = Math.max(1, Math.round(zoom));
     ctx.setLineDash([Math.max(2, 3 * s), Math.max(2, 5 * s)]);
     ctx.beginPath();
-    ctx.arc(x, y, (p.r + (p.kind === 'survey' ? 2 * pulse : 0)) * s, 0, Math.PI * 2);
+    ctx.arc(x, y, (p.r + (p.kind === 'survey' || fixed ? 2 * pulse : 0)) * s, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;

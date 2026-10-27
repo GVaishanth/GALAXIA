@@ -100,7 +100,7 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 | Next target (only while locked) | C | **»** beside LOCK (shown while locked) | — |
 | STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
 | Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
-| Interact (dock, open, inspect, use a gate) | E or Enter | The button that appears in range | A |
+| Interact (dock, open, inspect, take a signal bearing, use a gate) | E or Enter | The button that appears in range | A |
 | Sector map | M | **MAP** | Select / View |
 | Cargo hold | I | **CARGO** | Y |
 | Pause | Esc or P | **II** | Start |
@@ -153,6 +153,19 @@ The pause menu keeps **RESUME** and **RESTART FLIGHT** at the top. Everything el
 - The flight stays paused the whole time. Each pause starts with the groups closed and RESUME selected; after CONTROLS, SOUND, SAVES and the others you come back to the same place in the menu.
 - **RESTART FLIGHT asks first:** choose RESTART to go back to the arrival zone (shields and hull restored, flight clock and hostiles reset; cargo and completed work kept), or CANCEL. R does the same: press R to ask, R again to confirm. Esc cancels the question.
 - Keyboard: arrow keys (or W / S) move through the menu, Enter or Space opens a group or picks an action, Esc resumes.
+
+### Faint signals (finding an anomaly's source)
+
+An anomaly you have not investigated yet gives off only a faint signal. Its marker sits in the middle of a dashed ring, and the real source is somewhere inside that ring. You find it with bearings, using the normal INTERACT control (there is no extra button).
+
+1. **Close in and slow down.** Inside sensor range and below 60 speed, the prompt reads **TAKE BEARING**.
+2. **Hold steady.** Press INTERACT (on touch, tap the prompt) and keep still for about a second. The prompt counts **HOLD STEADY 10% … 90%** and an arc fills around your ship. Going faster than 60, leaving sensor range, a planet or star coming into the line, pausing or docking cancels it.
+3. **A line appears** from where you were, through the ring. It has an error (**±x.x°** in the log), so it passes near the source.
+4. **Move, then take another.** Fly well around the marker before the next bearing: two lines at least **35°** apart fix the source. Pressing again from the same spot is refused, so moving matters more than pressing. The fifth bearing always resolves it.
+5. **Read the log** if a bearing is refused: **TOO FAST**, **OUT OF SENSOR RANGE**, a named planet or star **IN THE WAY**, **SAME SPOT**, or **INTERFERENCE** widening the error.
+6. **SOURCE RESOLVED:** the lines go and the marker moves to the source with a bright ring. Fly there and **INVESTIGATE** for the usual reward (paid once).
+
+Bearings are not saved; leave the system and the signal starts again (a finished anomaly stays finished). **Simple Signals** (pause → **SETTINGS & HELP** → **CONTROLS** → **SIGNALS** → **SIMPLE**, off by default) makes one good bearing enough. You still need sensor range, under 60 speed, the steady hold and a clear line, and the reward is the same.
 
 ### Travel and staying safe
 
@@ -231,7 +244,7 @@ Short advice lines appear in flight, one at a time, each starting with an icon, 
 
 - The **Ship Mind** is always with you: low hull, shield down, a collision course, a star's corona, a strong pull, hostile contacts, targets on sensors and empty magazines.
 - A **Navigator** warns earlier about drifting into a planet or corona and names an escape burn, explains how strongly a body pulls and whether your engine beats it, tells you when STOP cannot hold, and notes the reactor cells the lanes out need.
-- A **Surveyor** reads the targets on your sensors and what they are worth, the survey marks still to chart, and tells you when interference blinds the sensors or a survey is complete.
+- A **Surveyor** reads the targets on your sensors and what they are worth, the survey marks still to chart, and tells you when interference blinds the sensors or a survey is complete. With a [faint signal](#faint-signals-finding-an-anomalys-source) they explain why a bearing failed, and a higher Competence makes each bearing more precise. They never take a bearing or show you the source.
 
 Advice uses only what your sensors can see. A condition is mentioned once, and again only if it gets worse; each target is named once per visit. After a pause, only the message that was showing comes back, and only if it is still true. **Advice never flies the ship:** nobody steers, brakes, toggles STOP, aims, fires, spends marks or travels for you.
 
@@ -242,7 +255,7 @@ Advice uses only what your sensors can see. A condition is mentioned once, and a
 ## Settings and accessibility
 
 - **Classic SETTINGS:** sound, volume, effects and jingle levels, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
-- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode, Ship Mind advice) and → **SOUND** (including fullscreen).
+- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode, Ship Mind advice, **SIGNALS**: Simple Signals) and → **SOUND** (including fullscreen).
 - **Reduced motion** follows your system setting by default and can be changed in SETTINGS.
 - Menus work fully from the keyboard with visible focus; nothing depends on hover.
 - Sound starts only after your first click, tap or key press. The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.

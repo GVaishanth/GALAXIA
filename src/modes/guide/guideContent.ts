@@ -117,7 +117,7 @@ export function freeRoamKeyboard(b: Bindings, mouseAim: boolean): ControlRow[] {
     { id: 'target', keys: alts(b, 'target'), action: ACTION_LABEL.target.toUpperCase(), text: 'Only while locked: move the lock to the next target.' },
     { id: 'stop', keys: alts(b, 'stop'), action: 'STOP · REALISTIC', text: 'Realistic flight only: brake, then hold position against momentum and gravity. Active thrust, not paused physics. Press again, thrust or brake to release.' },
     { id: 'zoom', keys: [['WHEEL'], ['+', '−']], action: 'ZOOM', text: 'Zoom the camera in or out. The mouse wheel only zooms; it never switches weapons.' },
-    { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect or use a gate when a prompt shows.' },
+    { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect, take a signal bearing or use a gate when a prompt shows.' },
     { id: 'map', keys: alts(b, 'map'), action: 'SECTOR MAP', text: 'The map of this sector.' },
     { id: 'cargo', keys: alts(b, 'cargo'), action: 'CARGO', text: 'Your hold and equipment.' },
     { id: 'pause', keys: [...alts(b, 'pause'), ['ESC']], action: 'PAUSE', text: 'Pause: missions, record, saves, controls and HOW TO PLAY.' },
@@ -282,7 +282,24 @@ function controls(ctx: GuideContext): GuideBlock[] {
   } else if (ctx.mode === 'classic') {
     out.push({ kind: 'note', text: ctx.input === 'keyboard' ? 'Classic keys are fixed. In Classic, X fires; Classic has no boost, zoom or target lock.' : 'Classic has no boost, zoom or target lock.' });
   }
+  if (ctx.mode === 'freeroam') out.push(signals(ctx));
   return out;
+}
+
+/** P06.2: tracing an anomaly's faint signal with the INTERACT control (no extra button). */
+function signals(ctx: GuideContext): GuideBlock {
+  const press = ctx.input === 'touch' ? 'tap the TAKE BEARING prompt' : ctx.input === 'controller' ? 'press A (TAKE BEARING)' : 'press INTERACT (TAKE BEARING)';
+  return {
+    kind: 'points',
+    items: [
+      { label: 'FAINT SIGNAL', text: 'An anomaly hides its source somewhere inside the dashed ring around its marker. Find it with bearings.' },
+      { label: 'BEARING', text: `Within sensor range and below 60 speed, ${press}, then hold steady for a moment while the ring around your ship fills.` },
+      { label: 'NEW ANGLE', text: 'Fly well around the marker before the next bearing: lines at least 35° apart fix the source. Pressing again from the same spot does nothing; the fifth bearing always resolves.' },
+      { label: 'REFUSED?', text: 'The log says why: too fast, out of range, a planet or star in the line, the same spot, or interference widening the error.' },
+      { label: 'RESOLVED', text: 'The marker moves to the source. Fly there and INVESTIGATE for the usual reward, once.' },
+      { label: 'SIMPLE SIGNALS', text: 'PAUSE → SETTINGS & HELP → CONTROLS → SIGNALS: SIMPLE makes one valid bearing enough.' },
+    ],
+  };
 }
 
 function marks(ctx: GuideContext): GuideBlock[] {

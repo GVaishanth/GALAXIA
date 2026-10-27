@@ -64,6 +64,7 @@ import { initialDropBudget, interactContainer, killDrop, leftFromSave, lootStrea
 import type { AgentRole } from '../combat/state.ts';
 import { NO_CONTROLS, type VectorControls } from './vectorFlight.ts';
 import { clearStationKeeping, createRealisticFlight, freshStationKeeping, stepRealistic, updateStationKeeping, vectorMoving, type FlightMode, type RealisticFlight, type StationKeeping } from './realisticFlight.ts';
+import { cancelBearing, createSignals, resetSignals, signalReach, startBearing, stepSignal, type SignalResult, type SignalRunState } from './signal.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
 
 export const RUN = Object.freeze({
@@ -196,6 +197,8 @@ export type SectorEvent =
   /** Salvage taken (`left` = what stays in the node; empty when it is done). */
   | { readonly type: 'collected'; readonly id: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] }
   | { readonly type: 'looted'; readonly id: string; readonly kind: PoiKind; readonly label: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] }
+  /** P06.1 signal triangulation (sector/signal.ts): an observation started, was refused or broken, or a bearing was recorded. */
+  | { readonly type: 'signal'; readonly id: string; readonly label: string; readonly result: SignalResult }
   /* collection (Prompt 10) */
   | { readonly type: 'picked'; readonly id: string; readonly kind: PickupKind; readonly label: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[]; readonly persistent: boolean }
   | { readonly type: 'dropped'; readonly id: string; readonly x: number; readonly y: number }
@@ -415,6 +418,8 @@ export interface SectorRun {
   readonly stop: StationKeeping;
   /** P04.3: REALISTIC step scratch (built once). */
   readonly realistic: RealisticFlight;
+  /** P06.1: signal triangulation of this visit's anomalies (temporary; never saved; sector/signal.ts). */
+  readonly signal: SignalRunState;
 }
 
 export interface RunOptions {
@@ -457,6 +462,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
   const craft = o.ship ?? deriveShip('petrel');
   const revealed = new Set(layout.pois.filter((p) => save.surveyed || BEACON_KINDS.includes(p.kind)).map((p) => p.id));
   const done = new Set(save.done.filter((id) => ids.has(id)));
+  const left = leftFromSave(layout, save, done);
   const row = difficultyRow(layout.difficulty);
   const run: SectorRun = {
     layout,
@@ -474,7 +480,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     cargoSpace: o.cargoSpace ?? Infinity,
     pickups: [],
     nextPickup: 1,
-    left: leftFromSave(layout, save, done),
+    left,
     claimed: new Set(),
     dropRolled: new Set(),
     dropBudget: initialDropBudget(layout),
@@ -533,6 +539,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     flightMode: o.flightMode === 'realistic' ? 'realistic' : 'normal',
     stop: freshStationKeeping(),
     realistic: createRealisticFlight(),
+    signal: createSignals(layout, done, left),
   };
   layFieldMines(run);
   spawnSavedCaches(run);
@@ -554,6 +561,7 @@ export function applyShip(run: SectorRun, craft: DerivedShip): void {
   run.heat = 0;
   run.overheated = false;
   clearStationKeeping(run.stop); // P04.3: a new hull (new thrust): STOP starts over
+  cancelBearing(run); // P06.1: a bearing is taken with one ship's sensors
   sense(run);
 }
 
@@ -861,6 +869,9 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     events.push({ type: 'recalled' });
   }
 
+  /* P06.1: a signal observation in progress (after the ship moved; a recall above already reset it) */
+  stepSignal(run, events);
+
   /* button interactions: the nearest usable one in range */
   run.focus = focusOf(run);
   run.flight?.afterTick?.(run, events);
@@ -873,25 +884,39 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     sh.thrusting = false;
     clearShipLock(run); // the survey-complete panel covers the flight view
     clearStationKeeping(run.stop);
+    cancelBearing(run);
     events.push({ type: 'surveyComplete', ticks: run.tick }, { type: 'phase', phase: 'complete' });
   }
   return events;
 }
 
 function focusOf(run: SectorRun): string | null {
+  // P06.2: the signal being observed keeps the prompt (its hold progress) until the bearing ends
+  const obs = run.signal.obs;
+  if (obs) return obs.id;
   let best: string | null = null;
   let bestD = Infinity;
+  let far: string | null = null;
+  let farD = Infinity;
   for (const p of run.layout.pois) {
     if (POI_RULES[p.kind].auto) continue;
     if (isDone(run, p)) continue;
     if (p.kind === 'gate' && run.gates[p.id]?.state === 'dormant') continue;
-    const d = dist(run.ship, p);
-    if (d <= p.r + run.tune.radius && d < bestD) {
-      best = p.id;
-      bestD = d;
+    // P06.1: an anomaly's signal answers within sensor range (bearings), then at its fix (investigation)
+    const at = p.kind === 'anomaly' ? signalReach(run, p) : null;
+    const d = dist(run.ship, at ?? p);
+    if (d <= p.r + run.tune.radius) {
+      if (d < bestD) {
+        best = p.id;
+        bestD = d;
+      }
+    } else if (at && d <= at.r && d < farD) {
+      // P06.2: a bearing from afar never takes the prompt from a station, gate or find within its own reach
+      far = p.id;
+      farD = d;
     }
   }
-  return best;
+  return best ?? far;
 }
 
 /**
@@ -928,6 +953,7 @@ function recall(run: SectorRun): void {
   resetMissiles(run);
   clearShipLock(run);
   clearStationKeeping(run.stop); // P04.3: no STOP or hold point survives a recall / restart
+  resetSignals(run); // P06.1: partial bearings are temporary sector state
   Object.assign(run.gravity, freshGravity());
   for (const st of run.patrols.values()) {
     st.awake = false;
@@ -941,7 +967,16 @@ export function interact(run: SectorRun): SectorEvent[] {
   if (run.phase !== 'flight' || run.disposed || !run.focus) return [];
   const p = poiById(run.layout, run.focus);
   if (!p) return [];
-  if (p.kind === 'derelict' || p.kind === 'cache' || p.kind === 'anomaly') {
+  if (p.kind === 'anomaly') {
+    // P06.1: an unresolved signal takes a bearing; a resolved one is investigated (the existing path) at its fix
+    const r = startBearing(run, p);
+    if (r) return [{ type: 'signal', id: p.id, label: p.label, result: r }];
+    const fix = run.signal.tracks.get(p.id)?.fix;
+    const ev = interactContainer(run, p, fix ?? p);
+    run.focus = focusOf(run);
+    return ev;
+  }
+  if (p.kind === 'derelict' || p.kind === 'cache') {
     const ev = interactContainer(run, p);
     run.focus = focusOf(run);
     return ev;
@@ -957,6 +992,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     run.ship.vx = 0;
     run.ship.vy = 0;
     run.docked = p.id;
+    cancelBearing(run); // P06.1: docking ends a signal observation
     clearShipLock(run); // docked: no combat lock
     clearStationKeeping(run.stop); // docked: the station holds the ship
     return [{ type: 'docked', id: p.id, first }];
@@ -973,6 +1009,7 @@ export function pauseSector(run: SectorRun): SectorEvent[] {
   if (run.phase !== 'flight') return [];
   run.phase = 'paused';
   run.ship.thrusting = false;
+  cancelBearing(run);
   return [{ type: 'phase', phase: 'paused' }];
 }
 
@@ -981,6 +1018,7 @@ export function resumeSector(run: SectorRun): SectorEvent[] {
   if (run.phase !== 'paused' && run.phase !== 'complete' && run.phase !== 'briefing') return [];
   run.phase = 'flight';
   run.docked = null; // launching from the hangar undocks
+  cancelBearing(run);
   return [{ type: 'phase', phase: 'flight' }];
 }
 
@@ -1012,6 +1050,8 @@ export function disposeSectorRun(run: SectorRun): void {
   run.offer = null;
   run.snooze = null;
   run.patrols.clear();
+  run.signal.tracks.clear();
+  cancelBearing(run);
   run.focus = null;
   run.disposed = true;
 }

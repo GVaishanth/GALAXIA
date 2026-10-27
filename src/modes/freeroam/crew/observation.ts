@@ -42,6 +42,31 @@ export interface ObservedPoi extends Offset {
   readonly hazard: 'minefield' | 'eruption' | 'interference' | null;
   /** Main resource of its sensor return (display name), or null. */
   readonly resource: string | null;
+  /** P06.1: an anomaly whose signal source is still unresolved (verb and reach are the bearing's). */
+  readonly signal?: true;
+}
+
+/**
+ * P06.1: the signal investigation nearest the ship (or the one being observed),
+ * as the pilot's instruments know it: counts, measured angles' spread and the
+ * reason the last bearing failed. Never the hidden source.
+ */
+export interface ObservedSignal {
+  readonly id: string;
+  readonly label: string;
+  readonly state: 'faint' | 'bearings';
+  readonly bearings: number;
+  /** Widest angle between two bearing lines so far (degrees), or null. */
+  readonly separation: number | null;
+  /** Valid bearings left until the source is resolved regardless. */
+  readonly toFallback: number;
+  readonly inRange: boolean;
+  readonly slow: boolean;
+  /** Error half-width of a bearing taken here and now (degrees), and whether interference widens it. */
+  readonly spread: number;
+  readonly jammed: boolean;
+  readonly refusal: 'range' | 'speed' | 'occluded' | 'samePlace' | 'offer' | null;
+  readonly blocker: string | null;
 }
 
 export interface ObservedBody {
@@ -127,6 +152,8 @@ export interface Observation {
   readonly emptyMagazines: readonly string[];
   /** A decision prompt (the full-hold choice) is open: non-urgent advice waits. */
   readonly offer: boolean;
+  /** P06.1: the signal investigation in focus (absent when none). */
+  readonly signal?: ObservedSignal;
 }
 
 export const OBSERVATION_LIMITS = Object.freeze({ pois: 8, magazines: 4 });

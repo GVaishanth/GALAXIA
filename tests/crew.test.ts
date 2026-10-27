@@ -504,9 +504,9 @@ describe('Bridge view model (P05.1)', () => {
       ['CAUTION', 3, 5],
       ['FOCUS', 3, 5],
     ]);
-    // Surveyor: two working duties first, then the planned P06 one, labelled as planned
-    expect(c.contribution.map((l) => l.includes('(planned)'))).toEqual([false, false, true]);
-    expect(c.contribution[2]).toMatch(/^Signal triangulation \(planned\): /);
+    // Surveyor: all three duties work since P06.1 (signal triangulation: tighter bearings and advice, never auto-collection)
+    expect(c.contribution.map((l) => l.includes('(planned)'))).toEqual([false, false, false]);
+    expect(c.contribution[2]).toMatch(/^Signal triangulation: Tightens the bearings/);
     const eng = bridgeModel(ctx({ crew: { hired: ['brask-ottley'], paid: [], seats: { petrel: ['brask-ottley'] } } })).seatCards[0]!;
     for (const line of eng.member!.contribution) expect(line).toContain('(planned)');
     expect(eng.onDuty).toBe(false);

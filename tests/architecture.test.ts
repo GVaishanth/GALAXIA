@@ -229,7 +229,8 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps the local sector world model and runtime pure; only the sector renderer touches the DOM (Prompt 6)', () => {
     const dir = join(src, 'modes/freeroam/sector');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'realisticFlight.ts', 'render.ts', 'resume.ts', 'run.ts', 'validate.ts', 'vectorFlight.ts']);
+    // P06.1: bearing.ts (pure bearing geometry) and signal.ts (the signal-triangulation state machine)
+    expect(files.sort()).toEqual(['bearing.ts', 'collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'realisticFlight.ts', 'render.ts', 'resume.ts', 'run.ts', 'signal.ts', 'validate.ts', 'vectorFlight.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // no storage access: persistent changes leave the sector code only as events
@@ -240,6 +241,26 @@ describe('mode separation (Free Roam Prompt 2)', () => {
       // gravityRender.ts draws but needs no DOM access, so it stays under the purity rule above
       if (f !== 'gravityRender.ts') expect(code, f).not.toMatch(/from '\.\/(?:combatR|lootR|gravityR|r)ender\.ts'/);
     }
+  });
+
+  it('keeps P06.1 signal triangulation pure and its hidden source out of the presentation', () => {
+    const dir = join(src, 'modes/freeroam/sector');
+    for (const f of ['signal.ts', 'bearing.ts']) {
+      const code = readFileSync(join(dir, f), 'utf8');
+      // never moves the ship, steers, fires, pays or completes anything: it writes only its own run.signal state
+      expect(code, f).not.toMatch(/\b(?:ship|sh)\.(?:x|y|vx|vy|heading|thrusting)\s*[-+*/]?=(?!=)/);
+      expect(code, f).not.toMatch(/\brun\.(?:done|claimed|left|cargoSpace|ammo|arsenal|shots|missiles|shipLock|stop|ship|focus|phase|offer|revealed)\s*(?:=(?!=)|\.(?:add|set|delete|push|splice|clear)\()/);
+      expect(code, f).not.toMatch(/\b(?:fire|damagePlayer|damageAgent|interactContainer|takeOffer|award|withSectorProgress|setRunOrdnance)\(/);
+    }
+    // bearing.ts is plain geometry: the Point type only (no sector state, no randomness at all)
+    expect(importSpecs(join(dir, 'bearing.ts'))).toEqual(['modes/freeroam/sector/model.ts']);
+    // the hidden source and the raw measurement stay in sector logic: no renderer, HUD, shell or advisor reads them
+    for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/sector/') || /render\.ts$/i.test(x))) {
+      const code = readFileSync(f, 'utf8');
+      expect(code, rel(f)).not.toMatch(/\b(?:signalSource|measureBearing|signalBlocker|resolveSignal)\b/);
+    }
+    // nothing about a signal investigation is saved
+    for (const f of ['profile.ts', 'saveSlots.ts', 'saveAudit.ts']) expect(readFileSync(join(src, 'modes/freeroam', f), 'utf8'), f).not.toMatch(/bearings|signalTrack|SignalRunState/);
   });
 
   it('keeps the Gravity Flight prototype contained: pure physics and runtime, DOM only in its overlay and shell, loaded lazily behind its build flag (FR-TD-83)', () => {

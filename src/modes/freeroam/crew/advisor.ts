@@ -36,7 +36,7 @@
  */
 import { holdTicksFor, navigatorTraits, SHIP_MIND, surveyorTraits, type NavigatorTraits, type SurveyorTraits } from './traits.ts';
 import type { NavDoctrine } from './types.ts';
-import type { Observation, ObservedPoi, Offset } from './observation.ts';
+import type { Observation, ObservedPoi, ObservedSignal, Offset } from './observation.ts';
 import { memberWithRole, type ShipCrewView } from './view.ts';
 
 /* -------------------------------------------------------------- vocabulary */
@@ -189,6 +189,10 @@ function escapeText(c: Ctx): string {
   return e.verified ? `${how}: the forecast clears it.` : `${how}: guidance only, the forecast cannot confirm a clear line.`;
 }
 
+/** P06.1: the angle two signal bearings need (sector/signal.ts SIGNAL.minSeparationDeg; crew code cannot import the sector). */
+export const SIGNAL_MIN_SEPARATION = 35;
+type SignalNote = Exclude<NonNullable<ObservedSignal['refusal']>, 'offer'> | 'narrow' | 'jammed';
+
 const HAZARD_WORDS: Readonly<Record<NonNullable<ObservedPoi['hazard']>, string>> = { minefield: 'a minefield', eruption: 'an eruption field', interference: 'sensor interference' };
 
 export const RULES: readonly AnyRule[] = Object.freeze([
@@ -277,7 +281,7 @@ export const RULES: readonly AnyRule[] = Object.freeze([
       obs.pois
         .filter((p) => p.kind === 'anomaly' || p.kind === 'derelict' || p.kind === 'cache' || p.kind === 'installation')
         .map((p) => ({ key: p.id, topic: `poi:${p.id}`, level: p.kind === 'installation' ? ('warning' as const) : undefined, params: { poi: p, where: where(p, obs) } })),
-    template: (p) => `Sensors: ${p.poi.label} ${p.where}.${p.poi.kind === 'installation' ? ' Installations raise the alarm when approached.' : ''}`,
+    template: (p) => `Sensors: ${p.poi.label} ${p.where}.${p.poi.kind === 'installation' ? ' Installations raise the alarm when approached.' : ''}${p.poi.signal ? ' Faint signal: take bearings on it to find its source.' : ''}`,
   }),
   rule<{ name: string }>({
     id: 'mind.magazine',
@@ -433,6 +437,32 @@ export const RULES: readonly AnyRule[] = Object.freeze([
     rearmTicks: 1200,
     when: (c) => (sur(c) && c.obs.jammed ? { key: 'jammed', params: null } : null),
     template: () => 'Interference is blinding the sensors: nothing new will show until we clear it.',
+  }),
+  rule<{ s: ObservedSignal; t: SurveyorTraits; why: SignalNote }>({
+    id: 'sur.signal',
+    source: 'surveyor',
+    topic: 'signal',
+    level: 'info',
+    policy: 'transition',
+    rearmTicks: 600,
+    // P06.1: why a bearing failed or cannot fix the source yet; words only, never the hidden source
+    when: (c) => {
+      const t = sur(c);
+      const s = c.obs.signal;
+      if (!t || !s) return null;
+      const narrow = s.bearings >= 2 && (s.separation ?? 0) < SIGNAL_MIN_SEPARATION;
+      const why: SignalNote | null = s.refusal && s.refusal !== 'offer' ? s.refusal : narrow ? 'narrow' : s.jammed && s.inRange ? 'jammed' : null;
+      return why ? { key: `${s.id}:${why}:${s.bearings}`, params: { s, t, why } } : null;
+    },
+    template: ({ s, t, why }) => {
+      const more = t.detail >= 2 && s.toFallback > 0 ? ` At most ${plural(s.toFallback, 'more bearing')} and the source resolves.` : '';
+      if (why === 'occluded') return `${s.blocker ?? 'A body'} is in the line to the ${s.label}. Take the bearing from another side.`;
+      if (why === 'speed') return `Too fast for a bearing on the ${s.label}. Slow below 60 and hold steady.`;
+      if (why === 'range') return `The ${s.label} slipped out of sensor range. Close in for the next bearing.`;
+      if (why === 'samePlace') return 'We already took a bearing from here. Move a few ship lengths, then take the next.';
+      if (why === 'narrow') return `Our bearings on the ${s.label} are only ${Math.floor(s.separation ?? 0)}° apart; a fix needs ${SIGNAL_MIN_SEPARATION}°. Swing wider around it.${more}`;
+      return `Interference widens our bearings to ±${s.spread.toFixed(1)}°. Clear it for a cleaner fix.${more}`;
+    },
   }),
   rule<{ remaining: number }>({
     id: 'sur.none',

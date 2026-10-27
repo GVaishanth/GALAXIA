@@ -56,7 +56,7 @@ export const ROLE_DEFS: readonly CrewRoleDef[] = Object.freeze([
     capabilities: [
       { id: 'signal-reading', name: 'Signal reading', text: 'Interprets new sensor contacts: what they are, where they lie, whether they are in reach and whether they count toward the survey.', stage: 'active' },
       { id: 'survey-guidance', name: 'Survey guidance', text: 'Tracks the survey marks on sensors, and says when none are left in sensor range.', stage: 'active' },
-      { id: 'triangulation', name: 'Signal triangulation', text: 'Planned: bearings for tracing hidden signals (a later milestone).', stage: 'later' },
+      { id: 'triangulation', name: 'Signal triangulation', text: 'Tightens the bearings you take on faint anomaly signals (more with competence) and explains a refused or inconclusive bearing. Never takes one for you or names the source.', stage: 'active' },
     ],
   },
   {

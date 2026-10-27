@@ -99,8 +99,10 @@ describe('file selection', () => {
       'docs/development/playtest/release-smoke.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md', 'docs/PLAYER_GUIDE.md', 'docs/RELEASE_CHECKLIST.md', 'skills-lock.json', 'notes.txt',
       // P05.3: the crew harnesses ship (crew is a player feature); other development harnesses stay out
       'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/freeroam-armory-p03b.mjs',
+      // P06.2: the signal harness ships too (faint signals are a player feature); its design notes stay out
+      'docs/development/playtest/signal-p06.mjs', 'docs/freeroam/SIGNALS.md',
     ]);
-    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
+    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
   });
 
   it('rejects unsafe paths', () => {

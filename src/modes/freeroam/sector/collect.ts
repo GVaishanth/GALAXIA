@@ -222,12 +222,13 @@ export function touchPoi(run: SectorRun, p: Poi, events: SectorEvent[]): void {
 }
 
 /** INTERACT on a container: take it, or open the offer; a second press while the offer is open takes what fits. */
-export function interactContainer(run: SectorRun, p: Poi): SectorEvent[] {
+export function interactContainer(run: SectorRun, p: Poi, at: { readonly x: number; readonly y: number } = p): SectorEvent[] {
   const events: SectorEvent[] = [];
   if (run.done.has(p.id)) return events;
   if (run.offer?.id === p.id) return takeOffer(run);
   if (run.snooze?.id === p.id) run.snooze = null; // pressing INTERACT again asks again
-  touch(run, { kind: 'poi', poi: p }, p.x, p.y, p.r + run.tune.radius + 30, events);
+  // `at`: where the find is (a resolved anomaly signal is investigated at its fix, P06.1)
+  touch(run, { kind: 'poi', poi: p }, at.x, at.y, p.r + run.tune.radius + 30, events);
   return events;
 }
 

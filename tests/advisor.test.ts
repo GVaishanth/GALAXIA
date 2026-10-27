@@ -33,15 +33,16 @@ import {
   relBearing,
   RULE_IDS,
   RULES,
+  SIGNAL_MIN_SEPARATION,
   type AdviceMode,
   type AdvisorCrew,
   type AdvisorState,
 } from '../src/modes/freeroam/crew/advisor.ts';
 import { CREW_BY_ID } from '../src/modes/freeroam/crew/data.ts';
-import type { Observation, ObservedPoi } from '../src/modes/freeroam/crew/observation.ts';
+import type { Observation, ObservedPoi, ObservedSignal } from '../src/modes/freeroam/crew/observation.ts';
 import { crewFromSaved, crewToSaved } from '../src/modes/freeroam/crew/persistence.ts';
 import { cleanCrew, EMPTY_CREW, setDoctrine } from '../src/modes/freeroam/crew/state.ts';
-import { attr, holdTicksFor, navigatorTraits, SHIP_MIND, surveyorBearingSpreadDeg, surveyorTraits, traitLines } from '../src/modes/freeroam/crew/traits.ts';
+import { attr, holdTicksFor, navigatorTraits, SHIP_MIND, surveyorSpreadFactor, surveyorTraits, traitLines } from '../src/modes/freeroam/crew/traits.ts';
 import type { CrewAttributes, CrewState } from '../src/modes/freeroam/crew/types.ts';
 import { shipCrewView } from '../src/modes/freeroam/crew/view.ts';
 import { bridgeModel, type BridgeContext } from '../src/modes/freeroam/crew/bridgeView.ts';
@@ -101,6 +102,9 @@ const poi = (id: string, kind: ObservedPoi['kind'], over: Partial<ObservedPoi> =
   resource: null,
   ...over,
 });
+
+/** P06.1: an unresolved signal as the observation carries it. */
+const signalObs = (over: Partial<ObservedSignal> = {}): ObservedSignal => ({ id: 'anomaly-1', label: 'Phase shimmer', state: 'faint', bearings: 0, separation: null, toFallback: 5, inRange: true, slow: true, spread: 3.4, jammed: false, refusal: null, blocker: null, ...over });
 
 const impact = (inS: number, kind: 'surface' | 'corona' = 'surface', escape: NonNullable<Observation['forecast']>['escape'] = null): Observation['forecast'] => ({
   horizonS: 5,
@@ -206,11 +210,16 @@ describe('crew traits: one documented attribute mapping (P05.2)', () => {
     expect(traitLines('engineer', A(4, 3, 2))).toEqual([]);
   });
 
-  it('offers only a typed P06 extension point for triangulation (nothing in P05.2 uses it)', () => {
-    expect([surveyorBearingSpreadDeg(A(1, 3, 3)), surveyorBearingSpreadDeg(A(5, 3, 3))]).toEqual([12, 4]);
+  it('P06.1: the Surveyor extension point narrows signal bearings by a bounded, competence-only factor, read only by the shell', () => {
+    // P05.2 shipped an unused placeholder (an absolute 12..4 degree spread); P06.1 replaced it with a factor that always helps
+    expect([1, 2, 3, 4, 5].map((c) => surveyorSpreadFactor(A(c, 3, 3)))).toEqual([0.9, 0.825, 0.75, 0.675, 0.6]);
+    expect(surveyorSpreadFactor(A(5, 1, 1))).toBe(surveyorSpreadFactor(A(5, 5, 5))); // competence only
+    expect(surveyorSpreadFactor(A(Number.NaN, 3, 3))).toBe(0.75); // invalid reads as typical
+    expect(traitLines('surveyor', A(5, 3, 3))[0]).toMatch(/signal bearings 40% tighter/);
     const adv = readFileSync(join(root, 'src/modes/freeroam/crew/advisor.ts'), 'utf8');
-    expect(adv).not.toMatch(/surveyorBearingSpreadDeg|triangulat/i);
-    for (const f of ['src/modes/freeroam/advisor/observe.ts', 'src/modes/freeroam/advisor/forecast.ts', 'src/modes/freeroam/freeRoamMode.ts']) expect(readFileSync(join(root, f), 'utf8'), f).not.toMatch(/surveyorBearingSpreadDeg/);
+    expect(adv).not.toMatch(/surveyorSpreadFactor/); // the advisor speaks; it never feeds the investigation
+    for (const f of ['src/modes/freeroam/advisor/observe.ts', 'src/modes/freeroam/advisor/forecast.ts']) expect(readFileSync(join(root, f), 'utf8'), f).not.toMatch(/surveyorSpreadFactor/);
+    expect(readFileSync(join(root, 'src/modes/freeroam/freeRoamMode.ts'), 'utf8')).toMatch(/setSignalOptions\(r, \{ simple: controls\.simpleSignals === true, assist: surveyor \? surveyorSpreadFactor\(surveyor\.attributes\) : 1 \}\)/);
   });
 });
 
@@ -420,7 +429,7 @@ describe('pause / resume and CRITICAL ONLY refinements (P05.3)', () => {
 
 describe('one advisory system: stable ids, whitelisted output, frozen input (P05.2)', () => {
   it('has unique, stable rule ids, each with a valid level, source and suppression policy', () => {
-    expect(RULE_IDS).toEqual(['mind.hull', 'mind.shield', 'mind.impact', 'mind.corona', 'mind.gravity', 'mind.contacts', 'mind.poi', 'mind.magazine', 'nav.impact', 'nav.corona', 'nav.gravity', 'nav.stop', 'nav.route', 'sur.poi', 'sur.marks', 'sur.jammed', 'sur.none', 'sur.complete']);
+    expect(RULE_IDS).toEqual(['mind.hull', 'mind.shield', 'mind.impact', 'mind.corona', 'mind.gravity', 'mind.contacts', 'mind.poi', 'mind.magazine', 'nav.impact', 'nav.corona', 'nav.gravity', 'nav.stop', 'nav.route', 'sur.poi', 'sur.marks', 'sur.jammed', 'sur.signal', 'sur.none', 'sur.complete']);
     expect(new Set(RULE_IDS).size).toBe(RULE_IDS.length);
     for (const r of RULES) {
       expect(ADVICE_LEVELS).toContain(r.level);
@@ -484,6 +493,7 @@ describe('one advisory system: stable ids, whitelisted output, frozen input (P05
       [{ pois: [poi('anomaly-1', 'anomaly')] }, surC],
       [{ survey: { remaining: 2, onSensors: 1, seen: 1, nearest: { dx: 1, dy: 0, distance: 1 }, complete: false } }, surC],
       [{ jammed: true }, surC],
+      [{ signal: signalObs({ refusal: 'occluded', blocker: 'Ice body' }) }, surC],
       [{ survey: { remaining: 2, onSensors: 0, seen: 0, nearest: null, complete: false } }, surC],
       [{ survey: { remaining: 0, onSensors: 0, seen: 3, nearest: null, complete: true } }, surC],
     ];
@@ -513,6 +523,45 @@ describe('one advisory system: stable ids, whitelisted output, frozen input (P05
     const seq = over(80, (t, i) => O({ tick: t, hull: i > 40 ? 0.2 : 1, pois: i > 10 ? [poi('anomaly-1', 'anomaly'), poi('derelict-1', 'derelict')] : [], forecast: i % 17 === 0 ? impact(1.8) : null }));
     const crew = crewWith({ nav: A(3, 4, 3), sur: A(4, 3, 3) });
     expect(JSON.stringify(play(seq, crew))).toBe(JSON.stringify(play(seq, crew)));
+  });
+});
+
+/* ===================================================== P06.1 signal advice */
+
+describe('Surveyor signal advice (P06.1)', () => {
+  const said = (sig: ObservedSignal | undefined, crew: AdvisorCrew, extra: Partial<Observation> = {}): string[] => {
+    const st = evaluateAdvice(EMPTY_ADVISOR, O({ tick: 200, ...(sig ? { signal: sig } : {}), ...extra }), crew, 'all');
+    return [st.current?.advice, ...st.queue].filter((a) => a !== undefined && a.id === 'sur.signal').map((a) => a!.text);
+  };
+  const surC = crewWith({ sur: A(3, 3, 3) });
+
+  it('explains occlusion, speed, range, the same spot, narrow separation and interference, in words only', () => {
+    expect(said(signalObs({ refusal: 'occluded', blocker: 'Ice body' }), surC)[0]).toMatch(/^Ice body is in the line to the Phase shimmer\. Take the bearing from another side\.$/);
+    expect(said(signalObs({ refusal: 'speed', slow: false }), surC)[0]).toMatch(/Slow below 60/);
+    expect(said(signalObs({ refusal: 'range', inRange: false }), surC)[0]).toMatch(/out of sensor range/);
+    expect(said(signalObs({ refusal: 'samePlace', bearings: 1, state: 'bearings' }), surC)[0]).toMatch(/Move a few ship lengths/);
+    const narrow = said(signalObs({ bearings: 2, state: 'bearings', separation: 21.7, toFallback: 3 }), surC)[0]!;
+    expect(narrow).toMatch(/only 21° apart; a fix needs 35°/);
+    expect(narrow).toMatch(/At most 3 more bearings/);
+    expect(said(signalObs({ jammed: true, spread: 6.8 }), surC)[0]).toMatch(/±6\.8°/);
+    expect(SIGNAL_MIN_SEPARATION).toBe(35);
+  });
+
+  it('stays quiet without a Surveyor, while a decision is open, and when nothing is wrong', () => {
+    expect(said(signalObs({ refusal: 'occluded', blocker: 'Ice body' }), NO_CREW)).toEqual([]);
+    expect(said(signalObs({ refusal: 'offer' }), surC)).toEqual([]);
+    expect(said(signalObs(), surC)).toEqual([]);
+    expect(said(signalObs({ bearings: 2, state: 'bearings', separation: 50 }), surC)).toEqual([]);
+    expect(said(undefined, surC)).toEqual([]);
+  });
+
+  it('a faint signal on sensors gets the Ship Mind hint; the Surveyor never names a position', () => {
+    const st = evaluateAdvice(EMPTY_ADVISOR, O({ tick: 200, pois: [poi('anomaly-1', 'anomaly', { signal: true })] }), NO_CREW, 'all');
+    const mind = [st.current?.advice, ...st.queue].find((a) => a?.id === 'mind.poi');
+    expect(mind?.text).toMatch(/Faint signal: take bearings on it to find its source\./);
+    for (const r of ['occluded', 'speed', 'range', 'samePlace'] as const) {
+      for (const t of said(signalObs({ refusal: r, blocker: 'Ice body' }), crewWith({ sur: A(5, 5, 5) }))) expect(t).not.toMatch(/\b(?:north|south|east|west|o'clock|px|at \d)/i);
+    }
   });
 });
 

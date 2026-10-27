@@ -264,9 +264,21 @@ export interface FlightControls {
    * Critical warnings cannot be switched off.
    */
   readonly advice?: 'critical';
+  /**
+   * P06.1 accessibility: Simple Signals. One valid bearing resolves an anomaly
+   * signal (range, steady observation and line of sight still apply). Absent =
+   * off (the default); only `true` is stored. No settings UI yet (P06.2).
+   */
+  readonly simpleSignals?: true;
 }
 
 export const DEFAULT_CONTROLS: FlightControls = Object.freeze({ bindings: DEFAULT_BINDINGS, mouseAim: false, zoom: 1, flightMode: 'normal' });
+
+/** P06.1: Simple Signals on or off (for the settings UI of P06.2); every other control is kept. */
+export function withSimpleSignals(c: FlightControls, on: boolean): FlightControls {
+  const out: FlightControls = { bindings: c.bindings, mouseAim: c.mouseAim, zoom: c.zoom, flightMode: c.flightMode, ...(c.advice === 'critical' ? { advice: 'critical' as const } : {}) };
+  return on ? { ...out, simpleSignals: true } : out;
+}
 
 /** Persistent gameplay changes of one sector (same shape as sector/model.ts SectorSave). */
 export interface SectorRecord {
@@ -488,7 +500,11 @@ function controlsField(f: Fix, v: unknown): FlightControls {
   // P05.2: only 'critical' is stored (absent = all advice, so older saves read unchanged)
   const adv = v['advice'];
   if (adv !== undefined && adv !== 'critical') f.repaired = true;
-  return adv === 'critical' ? { ...out, advice: 'critical' } : out;
+  // P06.1: only `true` is stored (absent = off)
+  const simple = v['simpleSignals'];
+  if (simple !== undefined && simple !== true) f.repaired = true;
+  const withAdvice: FlightControls = adv === 'critical' ? { ...out, advice: 'critical' } : out;
+  return simple === true ? { ...withAdvice, simpleSignals: true } : withAdvice;
 }
 
 function fleetField(f: Fix, v: unknown): SavedFleet {
