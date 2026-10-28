@@ -14,7 +14,7 @@ import { DEFAULT_BINDINGS, PANEL_KEYS, RESERVED_KEYS, ZOOM_KEYS, type Bindings, 
 import type { FlightInput } from './sim.ts';
 
 /** Gamepad standard-mapping indices used by Free Roam flight. */
-export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], weapon: [11] as readonly number[], aimDeadZone: 0.3 });
+export const PAD = Object.freeze({ rightX: 2, rightY: 3, fire: [7, 5, 2] as readonly number[], boost: [4, 6] as readonly number[], weapon: [11] as readonly number[], silent: [10] as readonly number[], aimDeadZone: 0.3 });
 
 const held = (keys: ReadonlySet<string>, b: Bindings, a: FlightAction): boolean => keys.has(b[a][0]) || (b[a][1] !== null && keys.has(b[a][1]));
 
@@ -79,6 +79,11 @@ export function padBoost(snap: PadSnapshot | null): boolean {
 /** Right-stick click (R3) held: NEXT WEAPON (every face and shoulder button already has a flight role). */
 export function padWeapon(snap: PadSnapshot | null): boolean {
   return !!snap && PAD.weapon.some((i) => snap.pressed[i] === true);
+}
+
+/** Left-stick click (L3) held: SILENT RUNNING (P07.2; the shell toggles on the press only, like R3). */
+export function padSilent(snap: PadSnapshot | null): boolean {
+  return !!snap && PAD.silent.some((i) => snap.pressed[i] === true);
 }
 
 /** Sum of all sources, clamped to the unit disc (two devices never exceed full thrust). */

@@ -910,8 +910,7 @@ html.game-mode body {
   margin: 0;
 }
 
-.side-keys dt,
-.side-records dt {
+.side-keys dt {
   color: var(--accent);
 }
 
@@ -1073,7 +1072,6 @@ html.game-mode body {
   display: grid;
   gap: calc(var(--u) * 1.5);
   justify-items: stretch;
-  min-width: calc(var(--u) * 92);
 }
 
 .screen-btn,
@@ -1134,7 +1132,6 @@ html.game-mode body {
 
 .screen-hint {
   margin: 0;
-  font-size: calc(var(--u) * 5);
   color: var(--text-dim);
 }
 
@@ -1146,7 +1143,6 @@ html.game-mode body {
 
 .screen-sub {
   margin: 0;
-  font-size: calc(var(--u) * 5.5);
   color: var(--text-dim);
 }
 
@@ -1209,7 +1205,6 @@ html.game-mode body {
   display: grid;
   gap: calc(var(--u) * 5);
   width: 100%;
-  font-size: calc(var(--u) * 5.5);
 }
 
 .screen-keys {
@@ -1276,7 +1271,6 @@ html.game-mode body {
 
 @media (pointer: coarse) {
   .screen-range {
-    height: 36px;
     touch-action: none;
   }
 }
@@ -1830,7 +1824,7 @@ html.game-mode body {
   right: max(10px, var(--safe-right));
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end; /* the HUD buttons only (top right) */
   gap: 12px;
   pointer-events: none;
 }
@@ -1849,7 +1843,6 @@ html.game-mode body {
 }
 
 .fr-pause:focus-visible {
-  outline: none;
   border-color: var(--highlight);
   color: var(--highlight);
 }
@@ -1915,11 +1908,6 @@ html.game-mode body {
 
 .fr-interact[hidden] {
   display: none;
-}
-
-.fr-interact:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
 }
 
 .freeroam-app:not([data-panel='none']) .fr-interact {
@@ -2354,7 +2342,6 @@ html.game-mode body {
   color: var(--highlight);
 }
 
-.fr-map-details[data-state='locked'] .fr-det-kicker,
 .fr-map-details[data-state='discovered'] .fr-det-kicker {
   color: var(--text-dim);
 }
@@ -2899,7 +2886,6 @@ html.game-mode body {
 }
 
 .fr-hudbtn:focus-visible {
-  outline: none;
   border-color: var(--highlight);
   color: var(--highlight);
 }
@@ -2990,8 +2976,7 @@ html.game-mode body {
     bottom: max(10px, var(--safe-bottom));
   }
 
-  .fr-interact,
-  .freeroam-app[data-input='touch'] .fr-interact {
+  .fr-interact {
     bottom: calc(max(10px, var(--safe-bottom)) + 26px);
   }
 
@@ -3658,15 +3643,6 @@ html.game-mode body {
   box-shadow: inset 3px 0 0 var(--highlight);
 }
 
-.fr-hangar-ship:focus-visible,
-.fr-hangar-filter:focus-visible,
-.fr-hangar-sort:focus-visible,
-.fr-hangar-vs:focus-visible,
-.fr-hangar-back:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
-}
-
 .fr-hangar-ship:focus,
 .fr-hangar-filter:focus,
 .fr-hangar-sort:focus,
@@ -3942,13 +3918,6 @@ html.game-mode body {
   border-color: var(--highlight);
   color: var(--highlight);
   box-shadow: inset 0 -3px 0 var(--highlight);
-}
-
-.fr-hangar-view:focus-visible,
-.fr-bridge-btn:focus-visible,
-.fr-bridge-inspect:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
 }
 
 .fr-hangar-info,
@@ -4368,7 +4337,7 @@ html.game-mode body {
   left: 50%;
   top: calc(max(8px, var(--safe-top)) + 92px);
   transform: translateX(-50%);
-  max-width: calc(100% - 24px);
+  max-width: min(520px, calc(100% - 2 * (var(--fr-card-w) + 24px))); /* same slot and width rule as the notice card */
   margin: 0;
   padding: 5px 14px;
   border: 2px solid currentColor;
@@ -4493,17 +4462,7 @@ html.game-mode body {
   }
 }
 
-/* short landscape phones: toast, then the alert, then the objective column (all above FIRE / BOOST) */
-@media (max-height: 420px) {
-  .fr-alert {
-    top: calc(max(6px, var(--safe-top)) + 108px);
-  }
-
-  .fr-combat {
-    top: calc(max(6px, var(--safe-top)) + 148px);
-  }
-}
-
+/* short landscape phones: the alert and the objective column follow the notice card (the max-height 420px block below) */
 @media (prefers-reduced-motion: reduce) {
   .fr-alert[data-tone='danger'] {
     animation: none;
@@ -4641,11 +4600,6 @@ html.game-mode body {
   color: var(--text-dim);
   border-color: var(--text-dim);
   cursor: default;
-}
-
-.fr-offer-btn:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
 }
 
 .freeroam-app:not([data-panel='none']) .fr-offer {
@@ -5243,11 +5197,6 @@ html.game-mode body {
   --fr-buttons-w: 200px;
 }
 
-/* the HUD buttons only (top right) */
-.fr-hud {
-  justify-content: flex-end;
-}
-
 /* ---- ship card: top left ---- */
 .fr-shipcard {
   position: absolute;
@@ -5700,11 +5649,6 @@ html.game-mode body {
   color: var(--fr-danger);
 }
 
-/* the combat banner: same slot as the notice card, same width rule */
-.fr-alert {
-  max-width: min(520px, calc(100% - 2 * (var(--fr-card-w) + 24px)));
-}
-
 /* overlays open: the flight HUD steps back (the open panel's own HUD button stays) */
 .freeroam-app:not([data-panel='none']) .fr-shipcard,
 .freeroam-app:not([data-panel='none']) .fr-top,
@@ -5874,7 +5818,9 @@ html.game-mode body {
   }
 }
 
-/* ---- focus and states (keyboard, pad and touch alike) ---- */
+/* ---- focus and states (keyboard, pad and touch alike) ----
+   P07.2: this rule is the focus ring of every Free Roam control (STOP, SILENT, INTERACT, the hangar, bridge and
+   offer buttons had identical copies earlier in the file, which this later rule already overrode) */
 .freeroam-app :focus-visible {
   outline: 2px solid var(--highlight);
   outline-offset: 2px;
@@ -9604,22 +9550,24 @@ html.game-mode body {
 }
 
 /* ---- P04.3: REALISTIC flight's mode tag and STOP control (hidden in NORMAL flight and behind panels) ----
-   Desktop: the empty bottom-right corner, above the key hint line. Touch: the right-hand column directly
+   Desktop: the empty right side, above the crew strip's corner (P07.2: raised from + 40 px, as SILENT now shows
+   in every flight mode). Touch: the right-hand column directly
    above WPN (FIRE, BOOST, WPN and INTERACT stay where they are; LOCK and NEXT TARGET are on the left;
    the stick lands on the open lower left). A STOP finger has its own pointer role (pointers.ts). */
 .fr-flightctl {
   position: absolute;
   right: max(14px, var(--safe-right));
-  bottom: calc(max(14px, var(--safe-bottom)) + 40px);
+  bottom: calc(max(14px, var(--safe-bottom)) + 150px);
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse; /* P07.2: STOP (first) at the bottom; the mode tag, SILENT and the stealth tag above it */
   align-items: flex-end;
   gap: 4px;
   pointer-events: none;
 }
 
 .fr-flightctl[hidden],
-.freeroam-app:not([data-panel='none']) .fr-flightctl {
+.freeroam-app:not([data-panel='none']) .fr-flightctl,
+.fr-stop[hidden] {
   display: none;
 }
 
@@ -9667,14 +9615,7 @@ html.game-mode body {
 }
 
 /* the hint names the release only while engaged; the key or the tap depending on the input in use */
-.fr-stop-on {
-  display: none;
-}
-
-.fr-stop:not([data-state='off']) .fr-stop-on {
-  display: inline;
-}
-
+.fr-stop[data-state='off'] .fr-stop-on,
 .fr-stop:not([data-state='off']) .fr-stop-off {
   display: none;
 }
@@ -9685,7 +9626,8 @@ html.game-mode body {
   background: rgba(255, 210, 63, 0.14);
 }
 
-.fr-stop[data-state='holding'] {
+.fr-stop[data-state='holding'],
+.fr-silent[data-state='on'] {
   border-color: #2ec4e6;
   color: var(--highlight);
   background: rgba(46, 196, 230, 0.2);
@@ -9702,11 +9644,6 @@ html.game-mode body {
   background: rgba(251, 248, 238, 0.2);
 }
 
-.fr-stop:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
-}
-
 @media (pointer: coarse) {
   .fr-flightctl {
     bottom: calc(max(14px, var(--safe-bottom)) + 274px);
@@ -9717,16 +9654,44 @@ html.game-mode body {
   bottom: calc(max(14px, var(--safe-bottom)) + 274px);
 }
 
-/* short landscape: WPN sits lower (bottom + 150 px), STOP follows it */
+/* short landscape (P07.2): WPN sits lower (bottom + 150 px) and the crew strip fills the right half (from the
+   centre + 34 px), so the column hangs under the location line instead, between the ship card and the strip,
+   above the ship at the centre: STOP, the mode tag, SILENT top down. It spans to the bottom so the stealth tag can
+   sit on the free lower right, under the strip and left of FIRE. Touch screens only: a short desktop window keeps
+   the right-hand column (NEARBY sits at the bottom centre there) */
 @media (max-height: 420px) and (pointer: coarse) {
-  .fr-flightctl {
-    bottom: calc(max(14px, var(--safe-bottom)) + 216px);
+  .freeroam-app .fr-flight .fr-flightctl {
+    top: 30px;
+    right: calc(50% - 30px);
+    bottom: max(14px, var(--safe-bottom));
+    flex-direction: column;
+  }
+
+  .fr-stealth {
+    position: absolute;
+    left: 50%;
+    bottom: 0;
+    width: max-content;
   }
 }
 
-@media (max-height: 420px) {
-  .freeroam-app[data-input='touch'] .fr-flightctl {
-    bottom: calc(max(14px, var(--safe-bottom)) + 216px);
+/* 640x360 and smaller: untracked type keeps the column clear of the ship card (120 px between the card and the
+   strip on 568 px); on 568x320 the ship comes up to the column's bottom, so STOP alone marks REALISTIC flight there
+   (the pause menu names the mode) */
+@media (max-height: 360px) {
+  .fr-flightctl * {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+
+  .fr-silent {
+    padding: 4px;
+  }
+}
+
+@media (max-height: 340px) {
+  .fr-flightmode-tag:not(.fr-stealth) {
+    display: none;
   }
 }
 

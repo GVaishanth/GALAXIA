@@ -111,6 +111,10 @@ export interface Agent {
   flash: number;
   /** Ticks continuously seeing its target (recon call). */
   seen: number;
+  /** P07.1 contact memory: AI steps since the pilot was last observed while the contact is held (0 = in sight or no contact). */
+  lost: number;
+  /** P07.2 Gravity Shadow: at the last AI step the pilot was within this ship's acquisition range but a celestial body blocked its sight (the AI's own result; presentation reads it). */
+  shadow: boolean;
 }
 
 export type ShotKind = 'bolt' | 'shell' | 'missile';

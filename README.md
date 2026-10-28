@@ -151,6 +151,7 @@ Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP*
 | Target lock on / off | X | **LOCK** (left side) | — |
 | Next target (only while locked) | C | **»** beside LOCK | — |
 | STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
+| Silent running on / off (firing or boosting ends it) | Z | **SILENT**, above the weapon button (next to STOP in REALISTIC flight; top centre on a landscape phone) | L3 (press the left stick) |
 | Camera zoom | Mouse wheel, or = and − | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
 | Interact (dock, open, inspect, take a signal bearing, gate) | E or Enter | Button that appears in range | A |
 | Sector map / cargo | M / I | **MAP** / **CARGO** | Select / Y |
@@ -160,6 +161,7 @@ Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP*
 - **Target lock is facing only.** X locks the hostile nearest your nose that is in range and in sight, and your ship's nose turns to face it. It never moves the ship, chases, dodges or fires; you still steer, boost and shoot yourself. Press X again to release it at once.
 - **C** moves the lock to the next hostile in range (clockwise, wrapping round); it does nothing without a lock and never fires.
 - Mouse aim is optional (CONTROLS → MOUSE AIM, off by default). Target lock, next target and STOP are not available on a controller.
+- **Gravity Shadow:** a planet or star between you and a hostile hides you from it; a ship that loses sight of you keeps chasing your last seen position for about 1.25 s without firing, then searches. It works per hostile and only when the body is in the line, not just nearby; a small **GRAVITY SHADOW** tag shows while a body really hides you, and **SEARCHING · LAST KNOWN POSITION** while a hostile hunts your last seen spot. Hiding is not protection: you can still be hit. **Silent running** (Z, the **SILENT** button on touch, L3 on a controller) shrinks the range at which hostiles can spot you to about a third. It is not invisibility: ships close by still detect you. Your shield does not recharge while it is on, and pressing fire or boost ends it (the log names the input). The SILENT control reads **SILENT RUNNING** while it is on. More in the [Player Guide](docs/PLAYER_GUIDE.md#silent-running-and-gravity-shadow).
 
 #### Flight mode and STOP
 
@@ -387,6 +389,8 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`arcade-display.mjs`](docs/development/playtest/arcade-display.mjs) | Responsive and Arcade Display across screen sizes, switching mid-game | `npm run preview:e2e` |
   | [`crew-bridge-p05.mjs`](docs/development/playtest/crew-bridge-p05.mjs) | The Bridge: an old save loads without crew, recruitment and fees through the ledger, refusals with reasons, assign up to capacity, unassign, dismiss, switching ships, saves across a reload, planned duties labelled, the 360 px touch layout | `npm run preview:e2e` |
   | [`crew-advisor-p05.mjs`](docs/development/playtest/crew-advisor-p05.mjs) | Ship Mind, Navigator and Surveyor advice in flight: levels, no repeats, pause and resume, ALL / CRITICAL ONLY, no steering, sensor limits, layout clear of the HUD, ship and touch stick | `npm run preview:e2e` |
+  | [`signal-p06.mjs`](docs/development/playtest/signal-p06.mjs) | Faint signals: bearing prompts and notices, resolution and its reward paid once, the Simple Signals setting saved across a reload, layout clear of the touch controls | `npm run preview:e2e` |
+  | [`stealth-p07.mjs`](docs/development/playtest/stealth-p07.mjs) | Silent Running and Gravity Shadow: Z and the SILENT button on and off, fire and boost ending it, the shield pause, the shadow and searching tags against the AI, pause, restart, dock and ship change, HOW TO PLAY text, touch layouts | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview

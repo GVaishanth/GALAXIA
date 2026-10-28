@@ -733,7 +733,7 @@ describe('planet occlusion (P02, gravity sector only)', () => {
     expect(off.lab.diag.sightBlocked).toBe(false);
   });
 
-  it('only the gravity sector has a sight hook; ordinary sectors keep line of sight through bodies', () => {
+  it('only the gravity sector has a sight hook (P07.1: ordinary sectors\' bodies hide the pilot through combat/stealth.ts instead)', () => {
     const run = createSectorRun(SOL_LAYOUT, EMPTY_SECTOR_SAVE, { seed: 3 });
     expect(run.flight).toBeNull();
     const { run: lr } = labRun('C');

@@ -10,7 +10,8 @@
  * (P04.1, the same latched press; it never takes the stick); a finger on the
  * target-cycle button (P04.1 polish) selects the next target once, the same
  * way; a finger on STOP (P04.3, REALISTIC flight only) toggles
- * braking / station-keeping once, the same way. Releasing or
+ * braking / station-keeping once, the same way; a finger on SILENT (P07.2)
+ * toggles Silent Running once, the same way. Releasing or
  * cancelling one pointer releases only that pointer's role, so moving and
  * firing work simultaneously, and reset() (blur, hidden tab, rotation,
  * panels) releases everything so nothing can stay stuck.
@@ -31,6 +32,8 @@ export interface PointerSnapshot {
   readonly targetTouches: number;
   /** Fingers holding the STOP button (P04.3, REALISTIC flight). */
   readonly stopTouches: number;
+  /** Fingers holding the SILENT button (P07.2). */
+  readonly silentTouches: number;
   readonly mouseFire: boolean;
   readonly cursor: { readonly x: number; readonly y: number } | null;
 }
@@ -51,6 +54,8 @@ export class FlightPointers {
   private targetPress = false;
   private readonly stopIds = new Set<number>();
   private stopPress = false;
+  private readonly silentIds = new Set<number>();
+  private silentPress = false;
   private mouseDown = false;
   private cursorPos: { x: number; y: number } | null = null;
 
@@ -60,7 +65,7 @@ export class FlightPointers {
 
   /** The pointer already has a button role (FIRE, BOOST, WPN, LOCK, NEXT TARGET): one role per pointer id. */
   private onButton(id: number): boolean {
-    return this.fireIds.has(id) || this.boostIds.has(id) || this.weaponIds.has(id) || this.lockIds.has(id) || this.targetIds.has(id) || this.stopIds.has(id);
+    return this.fireIds.has(id) || this.boostIds.has(id) || this.weaponIds.has(id) || this.lockIds.has(id) || this.targetIds.has(id) || this.stopIds.has(id) || this.silentIds.has(id);
   }
 
   /** A pointer went down on the open canvas: it takes the stick if the stick is free. */
@@ -144,6 +149,20 @@ export class FlightPointers {
     return p;
   }
 
+  /** A pointer went down on the SILENT button (P07.2): one toggle per press (a second finger while one holds it is ignored). */
+  silentDown(id: number): void {
+    if (this.stick.owns(id) || (this.onButton(id) && !this.silentIds.has(id))) return;
+    if (this.silentIds.size === 0) this.silentPress = true;
+    this.silentIds.add(id);
+  }
+
+  /** The latched SILENT press, cleared by reading it. */
+  takeSilentPress(): boolean {
+    const p = this.silentPress;
+    this.silentPress = false;
+    return p;
+  }
+
   move(id: number, x: number, y: number): void {
     this.stick.move(id, x, y);
   }
@@ -157,6 +176,7 @@ export class FlightPointers {
     this.lockIds.delete(id);
     this.targetIds.delete(id);
     this.stopIds.delete(id);
+    this.silentIds.delete(id);
   }
 
   /** Mouse aim: cursor position (client px) over the canvas, or null when it left. */
@@ -190,12 +210,14 @@ export class FlightPointers {
     this.targetPress = false;
     this.stopIds.clear();
     this.stopPress = false;
+    this.silentIds.clear();
+    this.silentPress = false;
     this.mouseDown = false;
     if (all) this.cursorPos = null;
   }
 
   snapshot(): PointerSnapshot {
     const st = this.stick.state();
-    return { stickActive: st.active, stick: st.vector, fireTouches: this.fireIds.size, boostTouches: this.boostIds.size, weaponTouches: this.weaponIds.size, lockTouches: this.lockIds.size, targetTouches: this.targetIds.size, stopTouches: this.stopIds.size, mouseFire: this.mouseDown, cursor: this.cursorPos };
+    return { stickActive: st.active, stick: st.vector, fireTouches: this.fireIds.size, boostTouches: this.boostIds.size, weaponTouches: this.weaponIds.size, lockTouches: this.lockIds.size, targetTouches: this.targetIds.size, stopTouches: this.stopIds.size, silentTouches: this.silentIds.size, mouseFire: this.mouseDown, cursor: this.cursorPos };
   }
 }

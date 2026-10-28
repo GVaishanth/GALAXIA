@@ -101,8 +101,10 @@ describe('file selection', () => {
       'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/freeroam-armory-p03b.mjs',
       // P06.2: the signal harness ships too (faint signals are a player feature); its design notes stay out
       'docs/development/playtest/signal-p06.mjs', 'docs/freeroam/SIGNALS.md',
+      // P07.2: the stealth harness ships too (Silent Running is a player feature); its design notes stay out
+      'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/STEALTH.md',
     ]);
-    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
+    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
   });
 
   it('rejects unsafe paths', () => {

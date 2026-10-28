@@ -116,6 +116,7 @@ export function freeRoamKeyboard(b: Bindings, mouseAim: boolean): ControlRow[] {
     { id: 'lock', keys: alts(b, 'lock'), action: 'LOCK TARGET', text: 'Lock the hostile nearest your nose that is in range and in sight. Your nose turns to face it; you still steer, thrust and fire yourself. Press again to release.' },
     { id: 'target', keys: alts(b, 'target'), action: ACTION_LABEL.target.toUpperCase(), text: 'Only while locked: move the lock to the next target.' },
     { id: 'stop', keys: alts(b, 'stop'), action: 'STOP · REALISTIC', text: 'Realistic flight only: brake, then hold position against momentum and gravity. Active thrust, not paused physics. Press again, thrust or brake to release.' },
+    { id: 'silent', keys: alts(b, 'silent'), action: 'SILENT RUNNING', text: 'Toggle a low signature: hostiles must come much closer to spot you, and your shield stops recharging. Firing or boosting ends it. The SILENT control (right side) shows its state.' },
     { id: 'zoom', keys: [['WHEEL'], ['+', '−']], action: 'ZOOM', text: 'Zoom the camera in or out. The mouse wheel only zooms; it never switches weapons.' },
     { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect, take a signal bearing or use a gate when a prompt shows.' },
     { id: 'map', keys: alts(b, 'map'), action: 'SECTOR MAP', text: 'The map of this sector.' },
@@ -146,6 +147,7 @@ export function freeRoamTouch(): ControlRow[] {
     { id: 'lock', keys: [['LOCK']], action: 'LOCK TARGET', text: 'On the left. Tap to lock the hostile nearest your nose, tap again to cancel. Your nose faces the target; you still fly and fire.' },
     { id: 'target', keys: [['»']], action: 'NEXT TARGET', text: 'Appears beside LOCK while locked: tap for the next target.' },
     { id: 'stop', keys: [['STOP']], action: 'STOP · REALISTIC', text: 'Realistic flight only, above the weapon button: brake, then hold position. Tap again, or steer, to release.' },
+    { id: 'silent', keys: [['SILENT']], action: 'SILENT RUNNING', text: 'Above the weapon button (top centre on a landscape phone; next to STOP in Realistic flight): tap to toggle a low signature. It reads SILENT RUNNING while on; firing or boosting ends it.' },
     { id: 'interact', keys: [['PROMPT']], action: 'INTERACT', text: 'A button appears near things you can use, for example DOCK · or USE GATE ·. Tap it.' },
     { id: 'hud', keys: [['MAP'], ['CARGO'], ['II']], action: 'TOP RIGHT', text: 'Sector map, cargo hold and pause.' },
     { id: 'zoom', keys: [['II', 'CONTROLS']], action: 'ZOOM', text: 'Pause, then CONTROLS: ZOOM − and ZOOM +.' },
@@ -171,6 +173,7 @@ export function freeRoamController(): ControlRow[] {
     { id: 'fire', keys: [['RT'], ['RB'], ['X']], action: 'FIRE · HOLD', text: 'Fire the selected weapon.' },
     { id: 'boost', keys: [['LB'], ['LT']], action: 'BOOST · HOLD', text: 'A burst of speed that uses energy.' },
     { id: 'weapon', keys: [['R3']], action: 'NEXT WEAPON', text: 'Press the right stick for the next weapon.' },
+    { id: 'silent', keys: [['L3']], action: 'SILENT RUNNING', text: 'Press the left stick to toggle a low signature.' },
     { id: 'interact', keys: [['A']], action: 'INTERACT', text: 'Dock, open, inspect or use a gate.' },
     { id: 'back', keys: [['B']], action: 'BACK', text: 'Close a panel or go back.' },
     { id: 'map', keys: [['SELECT']], action: 'SECTOR MAP', text: 'The map of this sector.' },
@@ -282,8 +285,36 @@ function controls(ctx: GuideContext): GuideBlock[] {
   } else if (ctx.mode === 'classic') {
     out.push({ kind: 'note', text: ctx.input === 'keyboard' ? 'Classic keys are fixed. In Classic, X fires; Classic has no boost, zoom or target lock.' : 'Classic has no boost, zoom or target lock.' });
   }
-  if (ctx.mode === 'freeroam') out.push(signals(ctx));
+  if (ctx.mode === 'freeroam') out.push(signals(ctx), ...stealth(ctx));
   return out;
+}
+
+/** P07.2: Silent Running and Gravity Shadow (the run's rules, combat/stealth.ts; no extra screen). */
+function stealth(ctx: GuideContext): GuideBlock[] {
+  const press = ctx.input === 'touch' ? 'Tap SILENT' : ctx.input === 'controller' ? 'Press L3' : `Press ${keyLabel(ctx.bindings.silent[0])}`;
+  return [
+    {
+      kind: 'points',
+      items: [
+        { label: 'SILENT RUNNING', text: `${press} to cut your signature to about a third: each hostile has to come much closer before it spots you. Press again to turn it off.` },
+        { label: 'NOT INVISIBLE', text: 'Hostiles close by still detect you, and one already chasing you holds on a little further out.' },
+        { label: 'SHIELD', text: 'Your shield does not recharge while Silent Running is on.' },
+        { label: 'FIRE OR BOOST', text: 'Pressing fire or boost ends it at once, even if the weapon is still cooling down; the log names the input.' },
+        { label: 'ENDS ON', text: 'Docking, a recall, RESTART FLIGHT and a ship change also turn it off. It is never saved.' },
+        { label: 'HUD', text: 'The SILENT control (next to STOP in Realistic flight) reads SILENT RUNNING while on, with LOW SIGNATURE and SHIELD RECHARGE PAUSED.' },
+      ],
+    },
+    {
+      kind: 'points',
+      items: [
+        { label: 'GRAVITY SHADOW', text: 'A star, planet or moon directly between you and a hostile blocks its line of sight.' },
+        { label: 'PER HOSTILE', text: 'It hides you only from hostiles on the far side of the body. Any with a clear line still see you.' },
+        { label: 'HUD', text: 'GRAVITY SHADOW shows only while a body really blocks a hostile close enough to see you, and says how many still track you.' },
+        { label: 'LAST KNOWN', text: 'A hostile that loses sight heads for where it last saw you for a moment, then searches there (… SEARCHING · LAST KNOWN POSITION).' },
+        { label: 'NOT A SHIELD', text: 'Hiding is not protection: you can still be hit, and a hostile that rounds the body sees you again.' },
+      ],
+    },
+  ];
 }
 
 /** P06.2: tracing an anomaly's faint signal with the INTERACT control (no extra button). */

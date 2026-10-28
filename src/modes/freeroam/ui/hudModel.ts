@@ -17,6 +17,7 @@
  * objective replaces them) and only a cargo warning stays.
  */
 import type { CombatLevel } from '../combat/state.ts';
+import type { StealthStatus } from '../combat/stealth.ts';
 
 /** Ticks (60 per second). */
 export const HUD_TIMING = Object.freeze({
@@ -331,4 +332,37 @@ export function shipCard(i: ShipCardInput): ShipCard {
 /** Cargo chip text: hold use and reactor cells. */
 export function cargoText(used: number, cap: number, cells: number): string {
   return `HOLD ${used}/${cap} · CELLS ${cells}`;
+}
+
+/** P07.2: the Silent Running control and the stealth status tag (flight HUD, every frame). */
+export interface StealthHud {
+  /** The SILENT button: its state, its two kinds of text and its accessible name. */
+  readonly on: boolean;
+  readonly state: string;
+  readonly hint: string;
+  readonly aria: string;
+  /** The status tag lines (empty: no tag): Gravity Shadow and contact memory, only from the AI's own counts. */
+  readonly tag: readonly string[];
+}
+
+/**
+ * What the HUD says about stealth, from combat/stealth.ts stealthStatus (the
+ * simulation's own counts; never geometry here). `key`: the bound Silent
+ * Running key; `touch`: the touch layout (the button is tapped, not keyed).
+ * Off: discoverable, not alarming (the key and what it does). On: on, low
+ * signature, shield recharge paused, fire or boost ends it (shorter words on
+ * touch, so the button stays clear of LOCK / NEXT TARGET on a 320 px phone). The tag never
+ * claims protection from every hostile: it counts the blocked ones and says
+ * how many still see the pilot.
+ */
+export function stealthHud(s: Pick<StealthStatus, 'silent' | 'tracking' | 'searching' | 'shadowed'>, key: string, touch: boolean): StealthHud {
+  const tag: string[] = [];
+  const k = touch ? '' : ` (${key})`; // the key only where a key is in use
+  const n = (k: number): string => `${k} ${k === 1 ? 'HOSTILE' : 'HOSTILES'}`;
+  if (s.shadowed > 0) tag.push('GRAVITY SHADOW', `HIDDEN FROM ${n(s.shadowed)}`);
+  if (s.shadowed > 0 && s.tracking > 0) tag.push(`${n(s.tracking)} STILL TRACKING`);
+  if (s.searching > 0) tag.push(`${n(s.searching)} SEARCHING`, 'LAST KNOWN POSITION');
+  return s.silent
+    ? { on: true, state: 'SILENT RUNNING', hint: touch ? 'LOW SIGNATURE\nSHIELD PAUSED\nFIRE/BOOST ENDS' : 'LOW SIGNATURE\nSHIELD RECHARGE PAUSED\nFIRE OR BOOST ENDS IT', aria: `Silent running is on${k}: low signature, shield recharge paused; firing or boosting ends it. Press to turn off`, tag }
+    : { on: false, state: 'SILENT', hint: touch ? 'LOW SIGNATURE' : `${key} · LOW SIGNATURE`, aria: `Silent running${k}: off. Lowers your signature and pauses shield recharge`, tag };
 }

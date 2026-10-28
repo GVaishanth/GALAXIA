@@ -23,10 +23,16 @@
  * Every timed state has an exit, damage applies in every live state, and the
  * one-time transitions are flagged, so no ship can be stuck or invulnerable.
  *
- * Sight is distance-only (detect range), except where the sector's flight hook
- * reports an occluder (only the gravity lab: its planet, FR-TD-84). A target
- * that goes out of sight is treated like any lost target (investigate its
- * last-known position); reacquiring it starts the reaction delay again.
+ * Sight is distance-only (detect range) between ships. Seeing the pilot
+ * (P07.1, combat/stealth.ts) also needs a clear line past every celestial body
+ * (Gravity Shadow) and a distance within detect range x the pilot's signature
+ * (Silent Running). In the gravity lab its flight hook owns sight instead
+ * (its planet, FR-TD-84: plain geometric sight, no contact memory).
+ * A pilot lost from sight stays the target for STEALTH.memoryTicks (contact
+ * memory: the ship steers at the frozen last-observed position and holds its
+ * fire); after that it is treated like any lost target (investigate its
+ * last-known position). Reacquiring within the memory keeps the reaction
+ * already served; after it, reacquiring starts the reaction delay again.
  *
  * No ship fires during the arrival grace, before its reaction delay after
  * acquiring a target, in its first COMBAT.spawnFireDelay ticks, or at a pilot
@@ -41,6 +47,7 @@ import type { FactionId } from '../catalogue/types.ts';
 import { inInterference } from './hazards.ts';
 import { dropMine, spawnShot, stepBeam } from './projectiles.ts';
 import type { Agent, AgentRole, AiState, Target } from './state.ts';
+import { bodyBetween, effectiveRange, signature, STEALTH } from './stealth.ts';
 import { WEAPONS } from './weapons.ts';
 import { damagePlayer, hostileTo, inSanctuary, pushOutOfSolids, setState, targetPos, TICK } from './world.ts';
 
@@ -119,6 +126,8 @@ export function spawnAgent(
     launched: 0,
     flash: 0,
     seen: 0,
+    lost: 0,
+    shadow: false,
   };
   run.hostiles.push(a);
   return a;
@@ -142,15 +151,21 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
   let bestScore = Infinity;
   const keep = a.target;
   const playerOk = run.grace === 0 && !run.docked && !inSanctuary(run.layout, P) && hostileTo(run, a.faction, 'player');
-  // line of sight is distance-only, unless the sector's flight hook owns an occluder (the gravity lab's planet)
+  // ship-to-ship sight is distance-only, unless the sector's flight hook owns an occluder (the gravity lab's planet)
   const blocked = run.flight?.sightBlocked;
+  // P07.1: the pilot is seen within detect range x signature, past every celestial body; else a held contact is
+  // remembered. The lab's hook owns its sight model (its planet, plain geometric sight, no memory), like its physics.
+  // P07.2: `shadow` records that a body (not range or signature) is what hides the pilot from this ship
+  let mem = false;
+  a.shadow = false;
   if (playerOk) {
     const d = dist(a, P);
-    const range = detectRange(run, a, P) * (keep === 'player' ? 1.3 : 1);
-    if (d <= range && !blocked?.(a.x, a.y, P.x, P.y)) {
+    const range = effectiveRange(detectRange(run, a, P), signature(run)) * (keep === 'player' ? 1.3 : 1);
+    a.shadow = d <= range && !!(blocked ? blocked(a.x, a.y, P.x, P.y) : bodyBetween(run.layout.landmarks, a.x, a.y, P.x, P.y));
+    if (d <= range && !a.shadow) {
       best = 'player';
       bestScore = d * 0.85;
-    }
+    } else mem = !blocked && keep === 'player' && a.lost < STEALTH.memoryTicks;
   }
   const mayInfight = typeof keep === 'number' || infighters < COMBAT.maxInfighters;
   if (mayInfight) {
@@ -164,7 +179,9 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
       }
     }
   }
-  return best;
+  mem &&= best === null;
+  a.lost = mem ? a.lost + 1 : 0;
+  return mem ? 'player' : best;
 }
 
 function steer(a: Agent, tx: number, ty: number, speed: number, accel: number): void {
@@ -435,8 +452,10 @@ function stepAgent(run: SectorRun, a: Agent, fights: { n: number }, events: Sect
   if (a.target !== null && prev === null) a.reaction = Math.round(run.row.reaction * (0.8 + 0.4 * a.trait));
   else if (a.target === null) a.reaction = 0;
   else if (a.reaction > 0) a.reaction -= 1;
-  const t = targetPos(run, a.target);
-  if (t) {
+  // P07.1 contact memory: the frozen last-observed position stands in for the pilot (never the live one)
+  const ls = a.lastSeen;
+  const t = a.lost > 0 ? ls && { x: ls.x, y: ls.y, vx: 0, vy: 0 } : targetPos(run, a.target);
+  if (t && !a.lost) {
     a.lastSeen = { x: t.x, y: t.y };
     a.seen += 1;
   } else a.seen = 0;
@@ -546,7 +565,8 @@ function stepAgent(run: SectorRun, a: Agent, fights: { n: number }, events: Sect
         break;
       }
       tactic(run, a, t, d);
-      if (a.state === 'attack') tryFire(run, a, t, d, events);
+      if (a.lost) a.windup = null; // P07.1: never fires at a remembered position
+      else if (a.state === 'attack') tryFire(run, a, t, d, events);
       break;
     }
     case 'evade': {

@@ -47,6 +47,20 @@ describe('computeStack', () => {
     expect(computeStack({ root: rect(0, 0, 390, 844), card: HIDDEN, column: null, obstacles: [HIDDEN] })).toEqual({ cardBottom: null, feedTop: null, tight: false });
   });
 
+  it('P07.2: a control column starting under the log in its column keeps the log to the newest line (320x568 touch)', () => {
+    const base = { root: rect(0, 0, 320, 568), card: rect(10, 8, 134, 109), column: { left: 146, right: 308 }, obstacles: [rect(10, 8, 134, 109), rect(46, 113, 274, 149)] };
+    expect(computeStack(base).tight).toBe(false);
+    // SILENT at 150..306 x 220..280: 65 px under the log's top, less than two wrapped entries
+    const r = computeStack({ ...base, floor: rect(150, 220, 306, 280) });
+    expect(r.feedTop).toBe(155);
+    expect(r.tight).toBe(true);
+    // far enough down (390x844 class), beside the column, hidden, or above the log's top: no effect
+    expect(computeStack({ ...base, floor: rect(150, 155 + 4 * FEED_LINE_PX, 306, 400) }).tight).toBe(false);
+    expect(computeStack({ ...base, floor: rect(0, 220, 140, 280) }).tight).toBe(false);
+    expect(computeStack({ ...base, floor: HIDDEN }).tight).toBe(false);
+    expect(computeStack({ ...base, floor: rect(150, 30, 306, 540) }).tight).toBe(false);
+  });
+
   it('is relative to the flight root, not the page', () => {
     const r = computeStack({ root: rect(0, 100, 390, 944), card: rect(10, 108, 194, 209), column: { left: 10, right: 376 }, obstacles: [rect(10, 108, 194, 209)] });
     expect(r.cardBottom).toBe(109);

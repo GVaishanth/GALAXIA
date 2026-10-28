@@ -99,6 +99,7 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 | Target lock on / off | X | **LOCK**, on the left | — |
 | Next target (only while locked) | C | **»** beside LOCK (shown while locked) | — |
 | STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
+| Silent Running on / off (firing or boosting ends it) | Z | **SILENT**, above the weapon button (next to STOP in REALISTIC flight; top centre on a landscape phone) | Press the left stick (L3) |
 | Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
 | Interact (dock, open, inspect, take a signal bearing, use a gate) | E or Enter | The button that appears in range | A |
 | Sector map | M | **MAP** | Select / View |
@@ -111,6 +112,18 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 - **Next target** moves the lock to the next hostile in range, clockwise around your ship, wrapping round. It never fires or uses ammunition.
 - **The lock ends** when you press X or LOCK again, or when the target is destroyed, leaves range or the sector, or when you dock, leave the sector or are recalled. It never jumps to a new target by itself.
 - On a controller, target lock, next target and STOP are not available; use the keyboard or touch.
+
+### Silent Running and Gravity Shadow
+
+- **Silent Running** (Z, the **SILENT** button, or L3) cuts your signature to about a third: each hostile has to come much closer before it spots you. Press again to turn it off.
+- **It is not invisibility.** Hostiles close by still detect you, and one already chasing you holds on a little further out.
+- **Your shield does not recharge** while it is on. It recharges as usual once it is off.
+- **Pressing fire or boost ends it at once**, even if the weapon is cooling down or the boost is refused. The log says so: `SILENT RUNNING OFF — FIRE INPUT` or `— BOOST INPUT`. Docking, a recall, RESTART FLIGHT and a ship change also turn it off, and it is never saved.
+- The **SILENT** control shows the state in words: **SILENT** when off; **SILENT RUNNING** with LOW SIGNATURE, SHIELD RECHARGE PAUSED and FIRE OR BOOST ENDS IT when on.
+- **Gravity Shadow:** a star, planet or moon directly between you and a hostile blocks that hostile's line of sight. It works per hostile: any with a clear line still see you. Being near a planet is not enough; the body has to be in the line.
+- While a body really blocks a hostile close enough to see you, a small tag reads **GRAVITY SHADOW · HIDDEN FROM n HOSTILE(S)**, and says how many are **STILL TRACKING** you.
+- **Contact memory:** a hostile that loses sight of you heads for where it last saw you for about 1.25 seconds without firing, then searches there. The tag reads **n HOSTILE(S) SEARCHING · LAST KNOWN POSITION** meanwhile.
+- **Hiding is not protection.** You can still be hit, and a hostile that rounds the body sees you again.
 
 ### Flight mode (NORMAL or REALISTIC)
 

@@ -15,7 +15,9 @@
  *   --fr-feed-top     below every visible top-HUD element in the log's column
  *                     (small screens place the collection log there);
  *   [data-tight]      on the log, when two lines would reach the ship drawn at
- *                     the centre: only the newest line shows.
+ *                     the centre, or (P07.2) when the flight control column
+ *                     (SILENT, STOP) starts in the log's column less than two
+ *                     wrapped entries below its top: only the newest line shows.
  *
  * A ResizeObserver reruns it when any of these elements resizes, appears or
  * hides, and when the flight view resizes; never per frame. It is HUD layout,
@@ -38,6 +40,8 @@ export interface StackInput {
   /** The log's column: left edge and right edge at its resolved max-width (null while hidden). */
   readonly column: { readonly left: number; readonly right: number } | null;
   readonly obstacles: readonly DOMRect[];
+  /** P07.2: a control box the log must end above (the flight control column), when it starts below the log's top. */
+  readonly floor?: DOMRect;
 }
 export interface StackResult {
   readonly cardBottom: number | null;
@@ -57,11 +61,13 @@ export function computeStack(i: StackInput): StackResult {
   const cx = i.root.left + i.root.width / 2;
   const crosses = left < cx + SHIP_CLEAR_PX && right > cx - SHIP_CLEAR_PX;
   const room = i.root.height / 2 - SHIP_CLEAR_PX - feedTop;
-  return { cardBottom, feedTop, tight: crosses && room < 2 * FEED_LINE_PX };
+  const f = i.floor;
+  const above = f && f.height > 0 && f.left < right && f.right > left ? f.top - i.root.top - feedTop : -1;
+  return { cardBottom, feedTop, tight: (crosses && room < 2 * FEED_LINE_PX) || (above >= 0 && above < 4 * FEED_LINE_PX) };
 }
 
 /** Keep the HUD stacked under the measured ship card, for the life of `scope`. */
-export function stackFlightHud(scope: DisposableScope, root: HTMLElement, card: HTMLElement, feed: HTMLElement): void {
+export function stackFlightHud(scope: DisposableScope, root: HTMLElement, card: HTMLElement, feed: HTMLElement, floor: HTMLElement): void {
   const obstacles = [...root.querySelectorAll<HTMLElement>(FEED_OBSTACLES)];
   const place = (): void => {
     const box = root.getBoundingClientRect();
@@ -82,11 +88,11 @@ export function stackFlightHud(scope: DisposableScope, root: HTMLElement, card: 
       column = { left: f.left, right: feed.getBoundingClientRect().right };
       feed.style.width = w;
     }
-    const r = computeStack({ root: box, card: card.getBoundingClientRect(), column, obstacles: obstacles.map((o) => o.getBoundingClientRect()) });
+    const r = computeStack({ root: box, card: card.getBoundingClientRect(), column, obstacles: obstacles.map((o) => o.getBoundingClientRect()), floor: floor.getBoundingClientRect() });
     if (r.feedTop === null) return;
     root.style.setProperty('--fr-feed-top', `${r.feedTop}px`);
     feed.toggleAttribute('data-tight', r.tight);
   };
   const observer = scope.observer(new ResizeObserver(place));
-  for (const el of [root, feed, ...obstacles]) observer.observe(el);
+  for (const el of [root, feed, floor, ...obstacles]) observer.observe(el);
 }

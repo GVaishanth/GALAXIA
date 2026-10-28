@@ -167,6 +167,8 @@ export interface SectorInput extends FlightInput {
    * `lockToggle`. REALISTIC flight only; in NORMAL it changes nothing.
    */
   readonly stopToggle?: boolean | undefined;
+  /** P07.1: toggle Silent Running this tick (Z). An edge command like `stopToggle`. */
+  readonly silentToggle?: boolean | undefined;
 }
 
 /**
@@ -184,7 +186,7 @@ export interface FlightHook {
   /**
    * Line of sight (FR-TD-84): true when something this hook owns (the lab's planet) blocks the
    * view from (ax, ay) to (bx, by). Enemy target choice treats a blocked target as out of sight.
-   * Absent everywhere except the gravity lab, so ordinary sectors keep distance-only sight.
+   * Absent everywhere except the gravity lab (every sector's own bodies hide the pilot through combat/stealth.ts, P07.1).
    */
   sightBlocked?(ax: number, ay: number, bx: number, by: number): boolean;
 }
@@ -193,6 +195,8 @@ export type SectorEvent =
   | { readonly type: 'phase'; readonly phase: FreeRoamPhase }
   /** P04.3 STOP: engaged, released (toggle), cancelled (movement input), or unavailable (NORMAL flight). */
   | { readonly type: 'stop'; readonly change: 'engaged' | 'released' | 'cancelled' | 'unavailable' }
+  /** P07.1 Silent Running: toggled on / off, or dropped by a FIRE or boost request (which then runs once as usual). */
+  | { readonly type: 'silent'; readonly change: 'on' | 'off' | 'fire' | 'boost' }
   | { readonly type: 'recorded'; readonly id: string; readonly remaining: number }
   /** Salvage taken (`left` = what stays in the node; empty when it is done). */
   | { readonly type: 'collected'; readonly id: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] }
@@ -302,6 +306,12 @@ export interface SectorRun {
   boost: number;
   boosting: boolean;
   sinceBoost: number;
+  /**
+   * P07.1 Silent Running (combat/stealth.ts): the signature drops to
+   * STEALTH.silent and the shield does not regenerate. Temporary: off on
+   * entry, dock, recall / restart, ship change and unload; never saved.
+   */
+  silent: boolean;
   /** Free cargo space (units); the shell sets it from the profile. Infinity = unlimited. */
   cargoSpace: number;
   /* collection (Prompt 10, sector/collect.ts) */
@@ -477,6 +487,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     boost: 0,
     boosting: false,
     sinceBoost: RUN.energyDelayTicks,
+    silent: false,
     cargoSpace: o.cargoSpace ?? Infinity,
     pickups: [],
     nextPickup: 1,
@@ -557,6 +568,7 @@ export function applyShip(run: SectorRun, craft: DerivedShip): void {
   run.boost = 0;
   run.boosting = false;
   run.sinceBoost = RUN.energyDelayTicks;
+  run.silent = false; // P07.1: a new hull starts at its normal signature
   run.fireCooldown = 0;
   run.heat = 0;
   run.overheated = false;
@@ -738,6 +750,15 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     const change = updateStationKeeping(run.stop, input.stopToggle === true, vectorMoving(vec));
     if (change) events.push({ type: 'stop', change });
   } else if (input.stopToggle === true) events.push({ type: 'stop', change: 'unavailable' });
+  /* P07.1 Silent Running: the toggle; a boost or FIRE request drops it, then runs once through its normal path below */
+  if (input.silentToggle === true && !run.docked) {
+    run.silent = !run.silent;
+    events.push({ type: 'silent', change: run.silent ? 'on' : 'off' });
+  }
+  if (run.silent && (input.fire === true || input.boost === true)) {
+    run.silent = false;
+    events.push({ type: 'silent', change: input.fire === true ? 'fire' : 'boost' });
+  }
   /* boost: spend energy while held with thrust; the level eases so the top speed never jumps */
   const st = run.craft.stats;
   const thrustIn = Math.hypot(Number.isFinite(input.moveX) ? input.moveX : 0, Number.isFinite(input.moveY) ? input.moveY : 0) > 0.05 && !(vec && run.stop.phase !== 'off');
@@ -862,7 +883,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   /* shield: invulnerability time, regeneration; an empty hull destroys the ship (recall) */
   if (run.invuln > 0) run.invuln -= 1;
   run.sinceHit += 1;
-  if (run.sinceHit > RUN.regenDelayTicks && run.shield < st.shield) run.shield = Math.min(st.shield, run.shield + st.shieldRegen / 60);
+  if (run.sinceHit > RUN.regenDelayTicks && run.shield < st.shield && !run.silent) run.shield = Math.min(st.shield, run.shield + st.shieldRegen / 60);
   if (run.hull <= 0) {
     events.push({ type: 'wrecked', x: run.ship.x, y: run.ship.y, heading: run.ship.heading });
     recall(run);
@@ -932,6 +953,7 @@ function recall(run: SectorRun): void {
   run.energy = run.craft.stats.energy;
   run.boost = 0;
   run.boosting = false;
+  run.silent = false; // P07.1
   run.shieldHit = null;
   run.docked = null;
   run.offer = null; // pickups stay where they are; the budget is not refilled
@@ -992,6 +1014,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     run.ship.vx = 0;
     run.ship.vy = 0;
     run.docked = p.id;
+    run.silent = false; // P07.1: the station holds the ship at its normal signature
     cancelBearing(run); // P06.1: docking ends a signal observation
     clearShipLock(run); // docked: no combat lock
     clearStationKeeping(run.stop); // docked: the station holds the ship
@@ -1053,6 +1076,7 @@ export function disposeSectorRun(run: SectorRun): void {
   run.signal.tracks.clear();
   cancelBearing(run);
   run.focus = null;
+  run.silent = false;
   run.disposed = true;
 }
 

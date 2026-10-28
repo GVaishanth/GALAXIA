@@ -47,7 +47,7 @@ import { buildNavGraph, type NavGraph } from './galaxy/graph.ts';
 import { applySurvey, applyTravel, deriveView, describeRequirement, progressDiff, progressFromSaved, type ExplorationProgress, type SurveyResult } from './galaxy/progress.ts';
 import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMapStatus } from './galaxy/systemMapScreen.ts';
 import { applySystemTravel, deriveSystemView, HAZARD_LABEL, systemGraph, type SystemTravelResult } from './galaxy/systems.ts';
-import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
+import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padSilent, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
 import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint, withSimpleSignals } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
@@ -131,7 +131,8 @@ import { ENGINE_LOOP, FR_SOUNDS, type FrSoundId } from './audio/frSounds.ts';
 import { engineLevel, momentCue, sectorCue, type HitContext, type MomentCue } from './audio/frCues.ts';
 import type { VolumeBus } from './audio/audioSettings.ts';
 import { createFlightHud, type FlightHud, type MarksReadout } from './ui/flightHud.ts';
-import { cargoText, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
+import { stealthStatus } from './combat/stealth.ts';
+import { cargoText, stealthHud, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
 import { clearNotices, EMPTY_NOTICES, flushNotices, noticeLine, pushNotice, tickNotices, type Notice, type NoticeKind, type NoticeState } from './ui/notices.ts';
 import { browserAnimate, createMotion, type Motion } from './ui/motion.ts';
 import { createStationPanel, type StationPanel as StationHub } from './ui/stationPanel.ts';
@@ -602,10 +603,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let stopBtn: HTMLButtonElement;
   let stopState: HTMLElement;
   let stopRelease: HTMLElement;
+  /** P07.2: the SILENT control (HUD indicator + button) and the stealth status tag, in the same column as STOP. */
+  let modeTag: HTMLElement;
+  let silentBtn: HTMLButtonElement;
+  let stealthTag: HTMLElement;
+  let silentKey = '';
   let stopPending = false;
+  let silentPending = false;
+  /** P07.2: the hints name the tap until a flight pointer event says otherwise when the primary pointer is coarse (read once). */
+  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const touchHints = (): boolean => (container.dataset['input'] ? container.dataset['input'] === 'touch' : coarsePointer);
   let cyclePending: 1 | -1 | 0 = 0;
   let firePending = false;
   let padWeaponWas = false;
+  let padSilentWas = false;
   let padFireWas = false;
   const paintMissileBtn = (r: SectorRun, touches: number): void => {
     const c = weaponCard(r);
@@ -651,10 +662,32 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   };
   /** P04.3: the STOP control mirrors the simulation (STOP / STOPPING / HOLDING POSITION / CAN'T HOLD); shown in REALISTIC flight only. */
   const STOP_TEXT: Readonly<Record<StopDisplay, string>> = { off: 'STOP', stopping: 'STOPPING', holding: 'HOLDING POSITION', cannot: "CAN'T HOLD" };
-  const paintStopCtl = (r: SectorRun, touches: number): void => {
-    const show = r.flightMode === 'realistic' && r.flight === null;
+  /** P07.2: the SILENT control and the stealth tag mirror the run every frame (stealthStatus: the simulation's own counts), never a local guess. */
+  const paintSilent = (r: SectorRun, touches: number): void => {
+    const m = stealthHud(stealthStatus(r), keyLabel(controls.bindings.silent[0]), touchHints());
+    const tag = m.tag.join('\n');
+    const k = `${m.hint}|${m.aria}|${tag}`;
+    if (k !== silentKey) {
+      silentKey = k;
+      silentBtn.dataset['state'] = m.on ? 'on' : 'off';
+      silentBtn.setAttribute('aria-pressed', `${m.on}`);
+      silentBtn.setAttribute('aria-label', m.aria);
+      const [st, hint] = silentBtn.children as unknown as [HTMLElement, HTMLElement];
+      st.textContent = m.state;
+      hint.innerText = m.hint; // line breaks become <br>
+      stealthTag.innerText = tag;
+      stealthTag.hidden = !tag;
+    }
+    silentBtn.classList.toggle('is-active', touches > 0);
+  };
+  const paintStopCtl = (r: SectorRun, touches: number, silentTouches: number): void => {
+    const show = r.flight === null;
     if (flightCtl.hidden === show) flightCtl.hidden = !show;
     if (!show) return;
+    paintSilent(r, silentTouches);
+    const real = r.flightMode === 'realistic';
+    if (stopBtn.hidden === real) stopBtn.hidden = modeTag.hidden = !real;
+    if (!real) return;
     const d = stopDisplay(r.stop);
     if (stopBtn.dataset['state'] !== d) {
       stopBtn.dataset['state'] = d;
@@ -671,7 +704,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       );
     }
     if (d !== 'off') {
-      const rel = container.dataset['input'] === 'touch' ? 'TAP TO RELEASE' : `${keyLabel(controls.bindings.stop[0])} OR CLICK TO RELEASE`;
+      const rel = touchHints() ? 'TAP TO RELEASE' : `${keyLabel(controls.bindings.stop[0])} OR CLICK TO RELEASE`;
       if (stopRelease.textContent !== rel) stopRelease.textContent = rel;
     }
     stopBtn.classList.toggle('is-active', touches > 0);
@@ -1762,6 +1795,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         // P04.3: one short corner-log line where the button alone would not explain it (never a card over the play area)
         if (e.change === 'unavailable') notify('STOP · REALISTIC FLIGHT ONLY (PAUSE · CONTROLS)', undefined, 'info');
         else if (e.change === 'cancelled') notify('STOP RELEASED · MANUAL CONTROL', undefined, 'info');
+      } else if (e.type === 'silent') {
+        // P07.1 / P07.2: one corner-log line per change; an automatic end names its input (the request, not a claim that it fired or boosted)
+        notify(e.change === 'on' ? 'SILENT RUNNING ON' : `SILENT RUNNING OFF${e.change === 'off' ? '' : ` — ${e.change.toUpperCase()} INPUT`}`, undefined, 'info');
       } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady' || e.type === 'weaponSwitched') {
         cue(e); // the HUD weapon row and the WPN button carry the text (NO TARGET, LOCK LOST, EMPTY...)
       } else if (e.type === 'ordnanceSpent') {
@@ -3061,6 +3097,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         if (run?.phase === 'flight' && (binds.target[0] === code || binds.target[1] === code)) targetPending = true;
         // P04.3: STOP is one toggle per press (REALISTIC flight; in NORMAL the run only reports it unavailable)
         if (run?.phase === 'flight' && (binds.stop[0] === code || binds.stop[1] === code)) stopPending = !stopPending;
+        // P07.1: SILENT RUNNING is one toggle per press
+        if (run?.phase === 'flight' && binds.silent.includes(code)) silentPending = !silentPending;
         if (run?.phase === 'flight' && (binds.fire[0] === code || binds.fire[1] === code)) firePending = true;
       }
     }
@@ -3105,6 +3143,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (pointers.takeLockPress() && live) lockPending = !lockPending;
     if (pointers.takeTargetPress() && live) targetPending = true;
     if (pointers.takeStopPress() && live) stopPending = !stopPending;
+    if (pointers.takeSilentPress() && live) silentPending = !silentPending;
+    const padS = padSilent(snapshot);
+    if (padS && !padSilentWas && live) silentPending = !silentPending;
+    padSilentWas = padS;
     if (padW && !padWeaponWas && live) cyclePending = 1;
     padWeaponWas = padW;
     const padF = padFire(snapshot);
@@ -3116,6 +3158,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       lockPending = false;
       targetPending = false;
       stopPending = false;
+      silentPending = false;
     }
     const weaponKey = live && (keyboardWeapon(keys.heldCodes, binds) || padW || pointers.weaponHeld);
     let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost } : { ...move, fire, boost };
@@ -3145,7 +3188,6 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     paintMissileBtn(r, pv.weaponTouches);
     paintLockBtn(r, pv.lockTouches);
     paintTargetBtn(r, pv.targetTouches);
-    paintStopCtl(r, pv.stopTouches);
     let events: SectorEvent[] = [];
     batchShield = r.shield;
     // P06.1: Simple Signals (a pref) and the Surveyor on duty shape signal bearings; the pilot still takes each one
@@ -3159,7 +3201,9 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       if (lockPending) f = { ...f, lockToggle: true };
       if (targetPending) f = { ...f, targetCycle: true };
       if (stopPending) f = { ...f, stopToggle: true };
+      if (silentPending) f = { ...f, silentToggle: true };
       stopPending = false;
+      silentPending = false;
       cyclePending = 0;
       firePending = false;
       lockPending = false;
@@ -3169,6 +3213,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     });
     if (events.length > 0) handleEvents(r, events);
     if (run !== r || !art) return; // an event left the sector (exit beacon)
+    // P07.2: STOP / SILENT and the stealth tag after this frame's ticks, so a FIRE or boost that ended Silent Running shows the same frame
+    paintStopCtl(r, pv.stopTouches, pv.silentTouches);
     // P05.2: Ship Mind and crew advice on the simulation's own cadence (reads the run, never writes it)
     if (r.phase === 'flight' && !panel && r.docked === null) adviseTick(r);
     // Prompt 13: a timed autosave every AUTOSAVE_SECONDS of flight (with a safe resume point), so an
@@ -3383,7 +3429,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       stopRelease = el('span', 'fr-stop-on', 'TAP TO RELEASE');
       stopHint.append(stopRelease, el('span', 'fr-stop-off', 'BRAKE · HOLD'));
       stopBtn.append(stopState, stopHint);
-      flightCtl.append(el('span', 'fr-flightmode-tag', 'REALISTIC FLIGHT'), stopBtn);
+      // P07.2: SILENT (every flight mode) and the stealth tag stack above (the column runs bottom-up), so STOP never moves
+      modeTag = el('span', 'fr-flightmode-tag', 'REALISTIC FLIGHT');
+      silentBtn = el('button', 'fr-stop fr-silent');
+      silentBtn.type = 'button';
+      silentBtn.append(el('span', 'fr-stop-state'), el('span', 'fr-stop-hint'));
+      stealthTag = el('span', 'fr-flightmode-tag fr-stealth');
+      stealthTag.hidden = true;
+      flightCtl.append(stopBtn, modeTag, silentBtn, stealthTag);
       interactBtn = el('button', 'fr-interact');
       interactBtn.type = 'button';
       interactBtn.hidden = true;
@@ -3814,7 +3867,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       combatView = createCombatHud(flightRoot);
       advisorStrip = createAdvisorStrip(flightRoot);
       // measured HUD stacking under the ship card (FR-TD-80; ui/hudStack.ts)
-      stackFlightHud(scope, flightRoot, flightHud.card, feed.root);
+      stackFlightHud(scope, flightRoot, flightHud.card, feed.root, flightCtl);
       flightRoot.append(panelLayer);
       keys.setCodes(allCodes(controls.bindings));
       map = createGalaxyMap({
@@ -4032,6 +4085,25 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         if (e.detail === 0 && !panel && run?.phase === 'flight') stopPending = !stopPending;
         stopBtn.blur(); // keep Space / Enter for flight
       });
+      // P07.2 SILENT: the same pointer role pattern and the same latch as the Silent Running key (one toggle per press)
+      scope.on<PointerEvent>(silentBtn, 'pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (panel || run?.phase !== 'flight') return;
+        try {
+          silentBtn.setPointerCapture(e.pointerId);
+        } catch {
+          /* synthetic pointers cannot be captured; window pointerup still releases them */
+        }
+        pointers.silentDown(e.pointerId);
+        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+      });
+      scope.on<PointerEvent>(silentBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+      scope.on<Event>(silentBtn, 'contextmenu', (e) => e.preventDefault());
+      scope.on<MouseEvent>(silentBtn, 'click', (e) => {
+        if (e.detail === 0 && !panel && run?.phase === 'flight') silentPending = !silentPending;
+        silentBtn.blur();
+      });
       scope.on<PointerEvent>(container, 'pointerdown', (e) => {
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
@@ -4056,7 +4128,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       });
       refreshHint();
 
-      status = {
+      // P07.2 (TD-78): the diagnostics readers exist only with the test hooks; a release keeps the four counters the loop updates
+      status = !__GALAXIA_TEST_HOOKS__ ? ({ frames: 0, ticks: 0, draws: 0, orientationChanges: 0 } as unknown as FreeRoamStatus) : {
         get state() {
           return run ?? idle;
         },
