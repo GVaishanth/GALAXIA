@@ -783,43 +783,67 @@ export function drawShipLock(ctx: CanvasRenderingContext2D, run: SectorRun, V: C
   ctx.restore();
 }
 
-/** P04.1: a hollow chevron at the screen edge pointing to a locked ship that is off screen (inboard of the threat markers). */
-export function drawShipLockMarker(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
-  const { toX, toY, W, H, ratio, alpha: k } = V;
-  const p = lockPoint(run, k);
-  if (!p) return;
-  const x = toX(p.x);
-  const y = toY(p.y);
+/** A hollow chevron at the screen edge pointing to (x, y) device px when that point is off screen (inboard of the threat markers). */
+function edgeChevron(ctx: CanvasRenderingContext2D, V: CombatView, x: number, y: number, color: string, size: number): void {
+  const { W, H, ratio } = V;
   if (x >= 0 && y >= 0 && x <= W && y <= H) return;
   const inset = 30 * ratio;
   const ang = Math.atan2(y - H / 2, x - W / 2);
   const ex = Math.max(inset, Math.min(W - inset, W / 2 + Math.cos(ang) * W));
   const ey = Math.max(inset, Math.min(H - inset, H / 2 + Math.sin(ang) * H));
-  const s = 8 * ratio;
+  const s = size * ratio;
   ctx.save();
   ctx.translate(Math.round(ex), Math.round(ey));
   ctx.rotate(ang);
   ctx.globalAlpha = 0.95;
   ctx.lineJoin = 'round';
-  ctx.lineWidth = Math.max(1, Math.round(3.5 * ratio));
-  ctx.strokeStyle = '#05060c';
-  const chevron = (): void => {
+  const chevron = (w: number, c: string): void => {
+    ctx.lineWidth = Math.max(1, Math.round(w * ratio));
+    ctx.strokeStyle = c;
     ctx.beginPath();
     ctx.moveTo(s, 0);
     ctx.lineTo(-s * 0.6, -s * 0.75);
     ctx.lineTo(-s * 0.6, s * 0.75);
     ctx.closePath();
+    ctx.stroke();
   };
-  chevron();
-  ctx.stroke();
-  ctx.lineWidth = Math.max(1, Math.round(1.6 * ratio));
-  ctx.strokeStyle = COLORS['player.trim'];
-  chevron();
-  ctx.stroke();
-  ctx.fillStyle = COLORS['player.trim'];
+  chevron(3.5, '#05060c');
+  chevron(1.6, color);
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.arc(0, 0, Math.max(1, 1.6 * ratio), 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+}
+
+/** P04.1: the locked ship, when it is off screen. */
+export function drawShipLockMarker(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView): void {
+  const p = lockPoint(run, V.alpha);
+  if (p) edgeChevron(ctx, V, V.toX(p.x), V.toY(p.y), COLORS['player.trim'], 8);
+}
+
+/**
+ * P08.2: what an active Salvage Pulse or Deep Scan found, from the run's own
+ * contact list (refreshed by the run with its sensors, emptied when the effect
+ * ends, the sector changes or a contact is gone; never a query here): a thin
+ * dashed ring around each one on screen (`edge` false: the world layer, under
+ * the ships), or a small hollow chevron at the screen edge (`edge` true).
+ */
+export function drawScanMarks(ctx: CanvasRenderingContext2D, run: SectorRun, V: CombatView, edge: boolean): void {
+  const { toX, toY, ratio } = V;
+  const c = COLORS['ui.highlight'];
+  ctx.save();
+  ctx.strokeStyle = c;
+  ctx.lineWidth = Math.max(1, Math.round(1.5 * ratio));
+  if (!edge) ctx.setLineDash([4 * ratio, 4 * ratio]);
+  for (const k of run.ability.contacts) {
+    if (edge) edgeChevron(ctx, V, toX(k.x), toY(k.y), c, 6);
+    else if (V.visible(k.x, k.y, 40)) {
+      ctx.beginPath();
+      ctx.arc(toX(k.x), toY(k.y), Math.max(12 * ratio, 34 * V.zoom), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
   ctx.restore();
 }
 

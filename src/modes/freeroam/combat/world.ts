@@ -24,6 +24,7 @@ import type { SectorLayout } from '../sector/model.ts';
 import { COMBAT } from './difficulty.ts';
 import { isHostile, type Side } from './factions.ts';
 import { FAMILIES } from './families.ts';
+import { incomingDamageMul } from './shipAbilities.ts';
 import type { Agent, Target } from './state.ts';
 
 export const TICK = 1 / 60;
@@ -97,10 +98,11 @@ export type PlayerDamageSource = 'impact' | 'hostile' | 'star' | 'hazard' | 'fir
 /**
  * Damage the pilot: the shield absorbs first, the rest hits the hull. Combat
  * sources respect (and grant) invulnerability; environmental drain does not.
- * Returns the damage dealt (0 when ignored).
+ * P08.1: the one damage boundary for the Condor's Bulwark (combat/shipAbilities.ts
+ * incomingDamageMul: combat hits only, exactly 1 otherwise). Returns the damage dealt (0 when ignored).
  */
 export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamageSource, events: SectorEvent[], from?: { readonly x: number; readonly y: number }): number {
-  const n = Math.max(0, Number.isFinite(amount) ? amount : 0);
+  const n = Math.max(0, Number.isFinite(amount) ? amount : 0) * incomingDamageMul(run, source);
   if (n <= 0 || run.disposed) return 0;
   const timed = source !== 'star' && source !== 'hazard';
   if (timed && run.invuln > 0) return 0;

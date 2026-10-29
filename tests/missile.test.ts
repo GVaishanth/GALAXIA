@@ -397,7 +397,8 @@ describe('missile controls, HUD and audio', () => {
     const s2 = sanitizeBindings(both);
     expect(s2.repaired).toBe(false);
     expect(s2.bindings.map).toEqual(['KeyQ', null]);
-    expect(s2.bindings.missile).toEqual(['KeyF', null]);
+    // the first free spare key (P08.1: KeyF is now the ship ability's default, so the next spare, KeyN)
+    expect(s2.bindings.missile).toEqual(['KeyN', null]);
   });
 
   it('the WPN touch button presses once per touch; a second finger and holding never repeat; release clears', () => {

@@ -40,7 +40,7 @@ import type { Viewport } from '../../../render/viewport.ts';
 import type { CameraView } from '../camera.ts';
 import { noseOf } from '../sim.ts';
 import type { Landmark, Poi, Rock, SectorLayout } from './model.ts';
-import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, drawShipLock, drawShipLockMarker, drawThreatMarkers, type CombatView } from './combatRender.ts';
+import { drawCombatMap, drawCombatShips, drawCombatWorld, drawPlayerMissiles, drawScanMarks, drawShipLock, drawShipLockMarker, drawThreatMarkers, type CombatView } from './combatRender.ts';
 import { drawLootMap, drawLootWorld } from './lootRender.ts';
 import { drawFieldRings, drawPullArrow } from './gravityRender.ts';
 import { isDone, objectiveOf, RUN, type SectorRun } from './run.ts';
@@ -410,6 +410,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   const V: CombatView = { toX, toY, zoom, ratio: o.ratio, W, H, v, visible, alpha: k, timeMs: o.timeMs, glow: o.glow, reducedMotion: o.reducedMotion };
   drawLootWorld(ctx, run, V);
   drawCombatWorld(ctx, run, V);
+  drawScanMarks(ctx, run, V, false); // P08.2: the active scan's results, under the ships
   // player bolts: a short streak along their (fixed) flight direction
   if (run.shots.length > 0) {
     ctx.lineCap = 'round';
@@ -590,6 +591,7 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
 
   drawThreatMarkers(ctx, run, V);
   drawShipLockMarker(ctx, run, V); // P04.1: the locked ship, when off screen
+  drawScanMarks(ctx, run, V, true); // P08.2: off-screen scan results
 
   if (o.aim) {
     // mouse-aim reticle (device px sized)

@@ -61,6 +61,9 @@ import { SHIP_BY_ID, SHIPS } from './roster.ts';
 import { SLOT_TYPES, type ShipId } from './types.ts';
 import type { UpgradeLevels } from './upgrades.ts';
 import { createBridgeSection, type BridgeDeps, type BridgeStatus } from '../crew/ui/bridgeSection.ts';
+import { el } from '../progression/ui/common.ts';
+
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
 
 export interface HangarDeps {
   readonly sprites: SpriteCache;
@@ -142,13 +145,6 @@ const STATE_LINE: Readonly<Record<ShipStatus, string>> = {
 const label = (id: string): string => id.replace(/-/g, ' ').toUpperCase();
 const costText = (cost: readonly { readonly resource: string; readonly amount: number }[]): string => cost.map((c) => `${label(c.resource)} ${c.amount}`).join(' + ');
 const trimNum = (v: number, d = 1): string => (Number.isInteger(v) ? String(v) : v.toFixed(d));
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
 
 const SVG = 'http://www.w3.org/2000/svg';
 /** Status glyph: a shape per state, so the state reads without colour. */
@@ -859,6 +855,7 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
       if (bayState.dirty || resized || (animating && ts - bayState.lastDraw >= FRAME_MS)) drawBay(ts);
     },
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       const cx = ctx();
       const statuses = {} as Record<ShipId, ShipStatus>;
       for (const s of SHIPS) statuses[s.id] = statusOf(cx, s.id);

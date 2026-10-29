@@ -11,7 +11,8 @@
  * target-cycle button (P04.1 polish) selects the next target once, the same
  * way; a finger on STOP (P04.3, REALISTIC flight only) toggles
  * braking / station-keeping once, the same way; a finger on SILENT (P07.2)
- * toggles Silent Running once, the same way. Releasing or
+ * toggles Silent Running once, the same way; a finger on the ship ability
+ * button (P08.2) requests one activation, the same way. Releasing or
  * cancelling one pointer releases only that pointer's role, so moving and
  * firing work simultaneously, and reset() (blur, hidden tab, rotation,
  * panels) releases everything so nothing can stay stuck.
@@ -34,6 +35,8 @@ export interface PointerSnapshot {
   readonly stopTouches: number;
   /** Fingers holding the SILENT button (P07.2). */
   readonly silentTouches: number;
+  /** Fingers holding the ship ability button (P08.2). */
+  readonly abilityTouches: number;
   readonly mouseFire: boolean;
   readonly cursor: { readonly x: number; readonly y: number } | null;
 }
@@ -42,20 +45,16 @@ export interface PointerSnapshot {
  * Pointer roles for flight. Coordinates are client (CSS) px; the shell turns
  * the cursor into a world aim with camera.screenToWorld.
  */
+/** The latched one-press buttons (WPN, LOCK, NEXT TARGET, STOP, SILENT, the ship ability): one rule for all of them. */
+type Latch = 'weapon' | 'lock' | 'target' | 'stop' | 'silent' | 'ability';
+
 export class FlightPointers {
   readonly stick: PointerStick;
   private readonly fireIds = new Set<number>();
   private readonly boostIds = new Set<number>();
-  private readonly weaponIds = new Set<number>();
-  private weaponPress = false;
-  private readonly lockIds = new Set<number>();
-  private lockPress = false;
-  private readonly targetIds = new Set<number>();
-  private targetPress = false;
-  private readonly stopIds = new Set<number>();
-  private stopPress = false;
-  private readonly silentIds = new Set<number>();
-  private silentPress = false;
+  /** Fingers on each latched button, and its press waiting for the simulation. */
+  private readonly ids: Record<Latch, Set<number>> = { weapon: new Set(), lock: new Set(), target: new Set(), stop: new Set(), silent: new Set(), ability: new Set() };
+  private readonly press = new Set<Latch>();
   private mouseDown = false;
   private cursorPos: { x: number; y: number } | null = null;
 
@@ -63,9 +62,22 @@ export class FlightPointers {
     this.stick = new PointerStick(stickRadius);
   }
 
-  /** The pointer already has a button role (FIRE, BOOST, WPN, LOCK, NEXT TARGET): one role per pointer id. */
+  /** The pointer already has a button role (FIRE, BOOST or a latched button): one role per pointer id. */
   private onButton(id: number): boolean {
-    return this.fireIds.has(id) || this.boostIds.has(id) || this.weaponIds.has(id) || this.lockIds.has(id) || this.targetIds.has(id) || this.stopIds.has(id) || this.silentIds.has(id);
+    return this.fireIds.has(id) || this.boostIds.has(id) || Object.values(this.ids).some((s) => s.has(id));
+  }
+
+  /** A pointer went down on a latched button: one press (a second finger while one holds it is ignored; never the stick finger). */
+  private latch(k: Latch, id: number): void {
+    const s = this.ids[k];
+    if (this.stick.owns(id) || (this.onButton(id) && !s.has(id))) return;
+    if (s.size === 0) this.press.add(k);
+    s.add(id);
+  }
+
+  /** The latched press, cleared by reading it (the shell reads it once per frame). */
+  private take(k: Latch): boolean {
+    return this.press.delete(k);
   }
 
   /** A pointer went down on the open canvas: it takes the stick if the stick is free. */
@@ -88,95 +100,75 @@ export class FlightPointers {
     return this.boostIds.size > 0;
   }
 
-  /** A pointer went down on the WPN button: one press (a second finger while one holds it is ignored). */
+  /** WPN (Combat P03C): one weapon step per press. */
   weaponDown(id: number): void {
-    if (this.stick.owns(id) || (this.onButton(id) && !this.weaponIds.has(id))) return;
-    if (this.weaponIds.size === 0) this.weaponPress = true;
-    this.weaponIds.add(id);
+    this.latch('weapon', id);
   }
 
   /** WPN held by any finger. */
   get weaponHeld(): boolean {
-    return this.weaponIds.size > 0;
+    return this.ids.weapon.size > 0;
   }
 
-  /** The latched press, cleared by reading it (the shell reads it once per simulated tick). */
   takeWeaponPress(): boolean {
-    const p = this.weaponPress;
-    this.weaponPress = false;
-    return p;
+    return this.take('weapon');
   }
 
-  /** A pointer went down on the LOCK button (P04.1): one toggle per press (a second finger while one holds it is ignored). */
+  /** LOCK (P04.1): one toggle per press. */
   lockDown(id: number): void {
-    if (this.stick.owns(id) || (this.onButton(id) && !this.lockIds.has(id))) return;
-    if (this.lockIds.size === 0) this.lockPress = true;
-    this.lockIds.add(id);
+    this.latch('lock', id);
   }
 
-  /** The latched LOCK press, cleared by reading it. */
   takeLockPress(): boolean {
-    const p = this.lockPress;
-    this.lockPress = false;
-    return p;
+    return this.take('lock');
   }
 
-  /** A pointer went down on the NEXT TARGET button: one step per press (a second finger while one holds it is ignored). */
+  /** NEXT TARGET (P04.1 polish): one step per press. */
   targetDown(id: number): void {
-    if (this.stick.owns(id) || (this.onButton(id) && !this.targetIds.has(id))) return;
-    if (this.targetIds.size === 0) this.targetPress = true;
-    this.targetIds.add(id);
+    this.latch('target', id);
   }
 
-  /** The latched NEXT TARGET press, cleared by reading it. */
   takeTargetPress(): boolean {
-    const p = this.targetPress;
-    this.targetPress = false;
-    return p;
+    return this.take('target');
   }
 
-  /** A pointer went down on the STOP button (P04.3): one toggle per press (a second finger while one holds it is ignored). */
+  /** STOP (P04.3): one toggle per press. */
   stopDown(id: number): void {
-    if (this.stick.owns(id) || (this.onButton(id) && !this.stopIds.has(id))) return;
-    if (this.stopIds.size === 0) this.stopPress = true;
-    this.stopIds.add(id);
+    this.latch('stop', id);
   }
 
-  /** The latched STOP press, cleared by reading it. */
   takeStopPress(): boolean {
-    const p = this.stopPress;
-    this.stopPress = false;
-    return p;
+    return this.take('stop');
   }
 
-  /** A pointer went down on the SILENT button (P07.2): one toggle per press (a second finger while one holds it is ignored). */
+  /** SILENT (P07.2): one toggle per press. */
   silentDown(id: number): void {
-    if (this.stick.owns(id) || (this.onButton(id) && !this.silentIds.has(id))) return;
-    if (this.silentIds.size === 0) this.silentPress = true;
-    this.silentIds.add(id);
+    this.latch('silent', id);
   }
 
-  /** The latched SILENT press, cleared by reading it. */
   takeSilentPress(): boolean {
-    const p = this.silentPress;
-    this.silentPress = false;
-    return p;
+    return this.take('silent');
+  }
+
+  /** The ship ability button (P08.2): one activation request per press, the same request as the key. */
+  abilityDown(id: number): void {
+    this.latch('ability', id);
+  }
+
+  takeAbilityPress(): boolean {
+    return this.take('ability');
   }
 
   move(id: number, x: number, y: number): void {
     this.stick.move(id, x, y);
   }
 
-  /** pointerup / pointercancel / lostpointercapture: release only this pointer's role. */
+  /** pointerup / pointercancel / lostpointercapture: release only this pointer's role (a press already latched stays one press). */
   release(id: number): void {
     this.stick.up(id);
     this.fireIds.delete(id);
     this.boostIds.delete(id);
-    this.weaponIds.delete(id);
-    this.lockIds.delete(id);
-    this.targetIds.delete(id);
-    this.stopIds.delete(id);
-    this.silentIds.delete(id);
+    for (const s of Object.values(this.ids)) s.delete(id);
   }
 
   /** Mouse aim: cursor position (client px) over the canvas, or null when it left. */
@@ -197,27 +189,20 @@ export class FlightPointers {
     return this.fireIds.size > 0 || this.mouseDown;
   }
 
-  /** Release every role (blur, hidden tab, rotation, panel, screen change). The cursor is kept unless `all`. */
+  /** Release every role and drop every latched press (blur, hidden tab, rotation, panel, screen change). The cursor is kept unless `all`. */
   reset(all = false): void {
     this.stick.reset();
     this.fireIds.clear();
     this.boostIds.clear();
-    this.weaponIds.clear();
-    this.weaponPress = false;
-    this.lockIds.clear();
-    this.lockPress = false;
-    this.targetIds.clear();
-    this.targetPress = false;
-    this.stopIds.clear();
-    this.stopPress = false;
-    this.silentIds.clear();
-    this.silentPress = false;
+    for (const s of Object.values(this.ids)) s.clear();
+    this.press.clear();
     this.mouseDown = false;
     if (all) this.cursorPos = null;
   }
 
   snapshot(): PointerSnapshot {
     const st = this.stick.state();
-    return { stickActive: st.active, stick: st.vector, fireTouches: this.fireIds.size, boostTouches: this.boostIds.size, weaponTouches: this.weaponIds.size, lockTouches: this.lockIds.size, targetTouches: this.targetIds.size, stopTouches: this.stopIds.size, silentTouches: this.silentIds.size, mouseFire: this.mouseDown, cursor: this.cursorPos };
+    const n = this.ids;
+    return { stickActive: st.active, stick: st.vector, fireTouches: this.fireIds.size, boostTouches: this.boostIds.size, weaponTouches: n.weapon.size, lockTouches: n.lock.size, targetTouches: n.target.size, stopTouches: n.stop.size, silentTouches: n.silent.size, abilityTouches: n.ability.size, mouseFire: this.mouseDown, cursor: this.cursorPos };
   }
 }

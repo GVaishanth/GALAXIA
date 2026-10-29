@@ -357,13 +357,13 @@ describe('Free Roam key bindings (bindings.ts, FR-TD-43)', () => {
   it('the key tracker follows rebinding and drops held keys when its codes change', () => {
     const k = new KeyTracker(trackedCodes(DEFAULT_BINDINGS));
     const ev = (code: string) => ({ code, repeat: false, ctrlKey: false, metaKey: false, altKey: false, target: null, preventDefault: () => undefined }) as never;
-    // KeyF is bound to nothing by default (KeyQ became the missile key in Combat P03)
-    expect(k.down(ev('KeyF'))).toBe(false);
+    // KeyY is bound to nothing by default (KeyQ became the missile key in Combat P03; P08.1 gave KeyF to the ship ability)
+    expect(k.down(ev('KeyY'))).toBe(false);
     k.down(ev('KeyW'));
-    const r = rebind(DEFAULT_BINDINGS, 'fire', 1, 'KeyF');
+    const r = rebind(DEFAULT_BINDINGS, 'fire', 1, 'KeyY');
     if (r.ok) k.setCodes(trackedCodes(r.bindings));
     expect(k.heldCodes.size).toBe(0);
-    expect(k.down(ev('KeyF'))).toBe(true);
+    expect(k.down(ev('KeyY'))).toBe(true);
   });
 });
 
@@ -438,16 +438,19 @@ describe('Free Roam pointers (pointers.ts, FR-TD-44)', () => {
     p.targetDown(5); // P04.1 polish NEXT TARGET
     p.stopDown(6); // P04.3 STOP (REALISTIC flight)
     p.silentDown(9); // P07.2 SILENT
+    p.abilityDown(10); // P08.2 ship ability
     expect(p.snapshot().stopTouches).toBe(1);
     expect(p.snapshot().silentTouches).toBe(1);
+    expect(p.snapshot().abilityTouches).toBe(1);
     p.setCursor(30, 40);
     p.setMouseFire(true);
     p.reset();
-    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, weaponTouches: 0, lockTouches: 0, targetTouches: 0, stopTouches: 0, silentTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
+    expect(p.snapshot()).toEqual({ stickActive: false, stick: { x: 0, y: 0 }, fireTouches: 0, boostTouches: 0, weaponTouches: 0, lockTouches: 0, targetTouches: 0, stopTouches: 0, silentTouches: 0, abilityTouches: 0, mouseFire: false, cursor: { x: 30, y: 40 } });
     expect(p.takeLockPress()).toBe(false); // a latched LOCK press does not survive a reset
     expect(p.takeSilentPress()).toBe(false); // nor a latched SILENT press
     expect(p.takeStopPress()).toBe(false); // nor a latched STOP press (STOP is never left engaged by a stale press)
     expect(p.takeTargetPress()).toBe(false); // nor a latched NEXT TARGET press
+    expect(p.takeAbilityPress()).toBe(false); // nor a latched ship ability press
     expect(p.firing).toBe(false);
     expect(p.weaponHeld).toBe(false);
     expect(p.takeWeaponPress()).toBe(false); // a latched press does not survive a reset

@@ -37,6 +37,8 @@ import {
   type TravelResult,
 } from './progress.ts';
 
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
+
 type Services = ModeContext['services'];
 
 export interface GalaxyMapDeps {
@@ -607,6 +609,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     frame,
     refresh,
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       return {
         visible,
         selected,

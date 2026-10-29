@@ -48,6 +48,7 @@ import { openZone } from './dilation.ts';
 import { FAMILIES } from './families.ts';
 import { inInterference } from './hazards.ts';
 import { triggerMine } from './projectiles.ts';
+import { focusKeepCone, focusLockTicks } from './shipAbilities.ts';
 import type { Agent } from './state.ts';
 import { damageAgent, hostileTo, shotBlocked, sweptHit, TICK } from './world.ts';
 
@@ -294,14 +295,15 @@ export function stepMissileSkill(run: SectorRun, fireDown: boolean, events: Sect
   const w = ordnance(id);
   if (sk.state === 'acquiring') {
     const t = agentById(run, sk.target);
-    if (!w || w.guidance.kind !== 'lock' || !t || run.docked || !validTarget(run, t, MISSILE.keepRange, MISSILE.keepCone)) {
+    // P08.1 Predator Focus (Shrike) widens only the hold cone and shortens only the lock time; range, sight and the pick are unchanged
+    if (!w || w.guidance.kind !== 'lock' || !t || run.docked || !validTarget(run, t, MISSILE.keepRange, focusKeepCone(run, MISSILE.keepCone))) {
       cancelLock(run);
       notify(run, 'lockLost', id);
       events.push({ type: 'missileLockLost' });
       return;
     }
     sk.lock += 1;
-    if (sk.lock >= w.guidance.acquire.lockTicks) {
+    if (sk.lock >= focusLockTicks(run, w.guidance.acquire.lockTicks)) {
       // re-checked at launch: boost may have spent the energy during the lock (refused, nothing consumed)
       const gate = gateOf(run, id);
       if (gate !== 'ok') {

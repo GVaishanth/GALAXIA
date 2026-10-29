@@ -7,18 +7,12 @@
  * The flight root carries `data-combat="calm|alert|engaged"` for styling.
  */
 import type { CombatHudModel } from './combat/hudModel.ts';
+import { el } from './progression/ui/common.ts';
 
 export interface CombatHudView {
   readonly root: HTMLElement;
   render(m: CombatHudModel | null): void;
 }
-
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ''): HTMLElementTagNameMap[K] => {
-  const n = document.createElement(tag);
-  n.className = cls;
-  if (text) n.textContent = text;
-  return n;
-};
 
 export function createCombatHud(host: HTMLElement): CombatHudView {
   const root = el('div', 'fr-combat');

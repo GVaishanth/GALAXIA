@@ -18,6 +18,9 @@
 import { NOTICE, type Notice } from './notices.ts';
 import type { HudView, ShipCard } from './hudModel.ts';
 import type { Motion } from './motion.ts';
+import { el } from '../progression/ui/common.ts';
+
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
 
 export interface LocationLine {
   readonly name: string;
@@ -64,12 +67,6 @@ export interface FlightHud {
   status(): { readonly cargo: string; readonly marks: string; readonly objective: string; readonly nearby: string | null; readonly notice: string | null; readonly location: string; readonly critical: boolean; readonly weapon: string; readonly missile: string; readonly missileLabel: string; readonly missileState: string };
 }
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text = ''): HTMLElementTagNameMap[K] => {
-  const n = document.createElement(tag);
-  n.className = cls;
-  if (text) n.textContent = text;
-  return n;
-};
 const setText = (n: HTMLElement, t: string): void => {
   if (n.textContent !== t) n.textContent = t;
 };
@@ -272,6 +269,7 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
       }
     },
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       return {
         cargo: cargo.hidden ? '' : cargo.textContent ?? '',
         marks: marks.hidden ? '' : `${marksValue.textContent ?? ''}${marksTag.hidden ? '' : ` ${marksTag.textContent ?? ''}`}`,

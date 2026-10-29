@@ -100,6 +100,7 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 | Next target (only while locked) | C | **»** beside LOCK (shown while locked) | — |
 | STOP / hold position (REALISTIC flight only) | B | **STOP**, above the weapon button | — |
 | Silent Running on / off (firing or boosting ends it) | Z | **SILENT**, above the weapon button (next to STOP in REALISTIC flight; top centre on a landscape phone) | Press the left stick (L3) |
+| Ship ability (one per ship; see below) | F | The button named with your ship's ability tag (for example **CALIB**): above **SILENT**; left of SILENT on a short portrait phone; under **MAP** on a landscape phone | — (no controller button yet) |
 | Camera zoom | Mouse wheel, or = and − (also numpad + and −; these keys are fixed) | Pause → SETTINGS & HELP → CONTROLS → ZOOM | — |
 | Interact (dock, open, inspect, take a signal bearing, use a gate) | E or Enter | The button that appears in range | A |
 | Sector map | M | **MAP** | Select / View |
@@ -111,7 +112,7 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 - **Target lock** picks the hostile nearest your nose that is in range and in sight, and marks it with brackets (an arrow at the screen edge if it goes off screen). While locked, your ship's **nose turns to face it. That is all it does:** it never thrusts, chases, dodges or fires. You still steer, boost and shoot yourself.
 - **Next target** moves the lock to the next hostile in range, clockwise around your ship, wrapping round. It never fires or uses ammunition.
 - **The lock ends** when you press X or LOCK again, or when the target is destroyed, leaves range or the sector, or when you dock, leave the sector or are recalled. It never jumps to a new target by itself.
-- On a controller, target lock, next target and STOP are not available; use the keyboard or touch.
+- On a controller, target lock, next target, STOP and the ship ability are not available; use the keyboard or touch.
 
 ### Silent Running and Gravity Shadow
 
@@ -124,6 +125,30 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 - While a body really blocks a hostile close enough to see you, a small tag reads **GRAVITY SHADOW · HIDDEN FROM n HOSTILE(S)**, and says how many are **STILL TRACKING** you.
 - **Contact memory:** a hostile that loses sight of you heads for where it last saw you for about 1.25 seconds without firing, then searches there. The tag reads **n HOSTILE(S) SEARCHING · LAST KNOWN POSITION** meanwhile.
 - **Hiding is not protection.** You can still be hit, and a hostile that rounds the body sees you again.
+
+### Ship Signature Abilities
+
+Every ship has one active ability of its own. Press **F** (rebindable in CONTROLS) or, on a touch screen, tap the ability button: it carries your ship's ability tag (BURST, FOCUS, CALIB, PULSE, BULWARK or SCAN). One press or tap is one try.
+
+- **The ability panel** (on a desktop, at the right above SILENT; on a phone, the button itself) names the ability and shows its state in words: **READY** (with the key on a desktop), **ACTIVE · 4.2 s** while it works, or **COOLDOWN · 18 s** until it can be used again. On a desktop it also gives a one-line explanation.
+- **Each ability has its own duration and cooldown** (table below). The cooldown starts when you use it.
+- **Pausing freezes** both the effect and the cooldown; nothing counts down while the pause menu is open.
+- **A refused press uses nothing up.** The log says why: `· ACTIVE`, `· COOLING 12 s`, `· NO TARGET`, `· NO SIGNAL`, `· NO SALVAGE` (none in reach), `· JAMMED` (inside interference) or `· DOCKED`.
+- **Scan results:** Salvage Pulse reports how many targets it found (`SALVAGE PULSE ACTIVE · 3 FOUND`) and Deep Scan counts markers and hostiles separately (`DEEP SCAN ACTIVE · 4 MARKERS · 1 HOSTILE`). While either is active, a dashed ring marks each result on screen, and a small arrow at the screen edge points to each one off screen. The marks go when the ability ends, when a result is gone (collected, destroyed) and when you leave the sector.
+- **Changing ships changes the ability.** Docking, a recall, RESTART FLIGHT, a ship change or leaving the sector ends an active ability. None of them resets the cooldown; a ship change keeps the same share of it.
+- **Silent Running:** Vector Burst, Salvage Pulse and Deep Scan are active emissions and end it (`SILENT RUNNING OFF — ABILITY INPUT`). Predator Focus, Signal Calibration and Bulwark leave it on.
+- **Limits:** no ability makes you invisible or immune to damage, collects or adds loot, or solves an anomaly signal for you. Nothing about abilities is saved; a new sector visit starts with the ability ready.
+
+| Ship | Ability | What it does | Lasts | Cooldown |
+|---|---|---|---|---|
+| Swift | Vector Burst | Briefly increases propulsion for quick repositioning | 1.75 s | 25 s |
+| Shrike | Predator Focus | Speeds up valid lock-on missile acquisition and improves lock retention while active | 5 s | 28 s |
+| Petrel | Signal Calibration | Improves the accuracy of signal bearings while active; normal observation requirements still apply | 7 s | 30 s |
+| Magpie | Salvage Pulse | Helps locate eligible existing salvage within an expanded range | 6 s | 30 s |
+| Condor | Bulwark | Reduces eligible incoming combat-hit damage briefly; it does not prevent all damage | 4 s | 40 s |
+| Albatross | Deep Scan | Performs a one-time expanded-range sweep of permitted markers and visible hostiles | 6.5 s | 35 s |
+
+In detail: Vector Burst raises thrust and top speed (you still steer). Predator Focus needs a hostile in range and in sight; the lock-on locks in half the time and holds in a wider cone. Signal Calibration needs a detected signal in sensor range and halves the error of bearings taken meanwhile. Salvage Pulse finds salvage, derelicts, salvage pods and your cargo wreck farther out. Bulwark takes 22% off damage from weapons, rams, collisions, mines and eruptions, not from a star's heat or hazard drain. Deep Scan reaches 50% beyond your sensors, revealing markers and spotting hostiles in that range.
 
 ### Flight mode (NORMAL or REALISTIC)
 

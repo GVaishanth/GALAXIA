@@ -35,7 +35,7 @@ export const RELEASE_ROOT = 'GALAXIA';
 
 /** What a release carries (relative to the repository). Same list as the earlier shell script. */
 export const INCLUDE_RE =
-  /^(src\/|public\/|tests\/|scripts\/|index\.html$|package\.json$|package-lock\.json$|vite\.config\.ts$|tsconfig\.json$|\.nvmrc$|\.gitignore$|LICENSE$|README\.md$|docs\/PLAYER_GUIDE\.md$|docs\/media\/[a-z0-9-]+\.png$|\.github\/workflows\/deploy\.yml$|docs\/freeroam\/CONTENT_AND_ASSET_LICENSES\.md$|docs\/freeroam\/ASTRONOMY_SOURCES\.md$|docs\/development\/playtest\/(release-smoke|release-p16|pause-resume|controller-sim|arcade-display|crew-bridge-p05|crew-advisor-p05|signal-p06|stealth-p07)\.mjs$)/;
+  /^(src\/|public\/|tests\/|scripts\/|index\.html$|package\.json$|package-lock\.json$|vite\.config\.ts$|tsconfig\.json$|\.nvmrc$|\.gitignore$|LICENSE$|README\.md$|docs\/PLAYER_GUIDE\.md$|docs\/media\/[a-z0-9-]+\.png$|\.github\/workflows\/deploy\.yml$|docs\/freeroam\/CONTENT_AND_ASSET_LICENSES\.md$|docs\/freeroam\/ASTRONOMY_SOURCES\.md$|docs\/development\/playtest\/(release-smoke|release-p16|pause-resume|controller-sim|arcade-display|crew-bridge-p05|crew-advisor-p05|signal-p06|stealth-p07|ship-abilities-p08)\.mjs$)/;
 
 /** The only files allowed under docs/ (player guide, player-facing licences / sources, release harnesses, README images). */
 export const ALLOWED_DOCS_RE = /^docs\/(PLAYER_GUIDE\.md|freeroam\/(CONTENT_AND_ASSET_LICENSES|ASTRONOMY_SOURCES)\.md|development\/playtest\/[a-z0-9-]+\.mjs|media\/[a-z0-9-]+\.png)$/;

@@ -5,6 +5,7 @@
  * Scales    the same scene at classic / fractional / native / large sizes.
  * Rewards   Stage 2 reward bench: scoring, HUD, rescue flow, save (rewardsBench.ts).
  */
+import './showcase.css'; // the tool's own styles (P08.2: not in the release stylesheet)
 import { COLORS } from '../config/palette.ts';
 import { PLAYFIELD_ART } from '../config/visual.ts';
 import { LOOKS, SPRITES, VARIANTS, type Look, type SpriteCategory } from '../assets/sprites/index.ts';

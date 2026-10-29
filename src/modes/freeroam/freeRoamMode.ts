@@ -132,7 +132,8 @@ import { engineLevel, momentCue, sectorCue, type HitContext, type MomentCue } fr
 import type { VolumeBus } from './audio/audioSettings.ts';
 import { createFlightHud, type FlightHud, type MarksReadout } from './ui/flightHud.ts';
 import { stealthStatus } from './combat/stealth.ts';
-import { cargoText, stealthHud, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
+import { abilityLine, abilityStatus, type AbilityStatus } from './combat/shipAbilities.ts';
+import { abilityHud, cargoText, stealthHud, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
 import { clearNotices, EMPTY_NOTICES, flushNotices, noticeLine, pushNotice, tickNotices, type Notice, type NoticeKind, type NoticeState } from './ui/notices.ts';
 import { browserAnimate, createMotion, type Motion } from './ui/motion.ts';
 import { createStationPanel, type StationPanel as StationHub } from './ui/stationPanel.ts';
@@ -148,6 +149,7 @@ import { createAdminPanel, type AdminPanel, type AdminPanelDeps } from './admin/
 import { createAdminLogin, type AdminLogin, type AdminLoginStatus } from './admin/loginScreen.ts';
 import { navigatorGalaxies, navigatorSystems } from './admin/navigator.ts';
 import { ADMIN_HOME, adminArrive, adminFleet, adminOnlyShips, adminSelectShip, beginAdmin, DESTINATION_TEXT, isAdmin, mayPersist, resolveDestination, stationApproach, travelCost, unlimitedAmmo, type AdminSession, type DestinationRef } from './admin/session.ts';
+import { el } from './progression/ui/common.ts';
 
 /** Pause menu groups (pause menu refinement). */
 type PauseGroup = 'progress' | 'settings' | 'navigation';
@@ -285,6 +287,8 @@ export interface FreeRoamStatus {
   readonly controls: () => FlightControls;
   /** FR-TD-83: the Gravity Flight test sector while it is active (dev / QA builds), else null. */
   readonly lab: () => LabStatus | null;
+  /** P08.1: the flown ship's ability status (read only; null outside a sector). */
+  readonly ability: () => AbilityStatus | null;
   /** Prompt 13: save slots panel and save state. */
   readonly saves: () => Readonly<Record<string, unknown>>;
   /** Client (CSS) px -> world, through the current camera (pointer mapping checks). */
@@ -364,13 +368,6 @@ declare global {
     /** Free Roam status (read-only diagnostics for Playwright) while Free Roam is active. */
     __galaxiaFreeRoam?: FreeRoamStatus;
   }
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
 }
 
 /** P04: the ship rows of the admin panel. */
@@ -608,8 +605,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let silentBtn: HTMLButtonElement;
   let stealthTag: HTMLElement;
   let silentKey = '';
+  /** P08.2: the ship ability control (HUD panel + touch button, the same column), painted from abilityStatus only. */
+  let abilityBtn: HTMLButtonElement;
+  let abilityKey = '';
   let stopPending = false;
   let silentPending = false;
+  let abilityPending = false; // P08.1: one ship-ability try per press
   /** P07.2: the hints name the tap until a flight pointer event says otherwise when the primary pointer is coarse (read once). */
   const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   const touchHints = (): boolean => (container.dataset['input'] ? container.dataset['input'] === 'touch' : coarsePointer);
@@ -680,11 +681,29 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     silentBtn.classList.toggle('is-active', touches > 0);
   };
-  const paintStopCtl = (r: SectorRun, touches: number, silentTouches: number): void => {
+  /** P08.2: the ability control mirrors the run's own status every frame (its ticks: frozen while paused), never a local timer. */
+  const paintAbility = (r: SectorRun, touches: number): void => {
+    const m = abilityHud(abilityStatus(r), keyLabel(controls.bindings.ability[0]), touchHints());
+    const k = `${m.label}|${m.hint}|${m.aria}`;
+    if (k !== abilityKey) {
+      abilityKey = k;
+      abilityBtn.hidden = !m.show;
+      abilityBtn.dataset['state'] = m.state;
+      abilityBtn.setAttribute('aria-pressed', `${m.state === 'on'}`);
+      abilityBtn.setAttribute('aria-disabled', `${m.state === 'cooling'}`);
+      abilityBtn.setAttribute('aria-label', m.aria);
+      const [st, hint] = abilityBtn.children as unknown as [HTMLElement, HTMLElement];
+      st.textContent = m.label;
+      hint.innerText = m.hint;
+    }
+    abilityBtn.classList.toggle('is-active', touches > 0);
+  };
+  const paintStopCtl = (r: SectorRun, touches: number, silentTouches: number, abilityTouches: number): void => {
     const show = r.flight === null;
     if (flightCtl.hidden === show) flightCtl.hidden = !show;
     if (!show) return;
     paintSilent(r, silentTouches);
+    paintAbility(r, abilityTouches);
     const real = r.flightMode === 'realistic';
     if (stopBtn.hidden === real) stopBtn.hidden = modeTag.hidden = !real;
     if (!real) return;
@@ -1798,6 +1817,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       } else if (e.type === 'silent') {
         // P07.1 / P07.2: one corner-log line per change; an automatic end names its input (the request, not a claim that it fired or boosted)
         notify(e.change === 'on' ? 'SILENT RUNNING ON' : `SILENT RUNNING OFF${e.change === 'off' ? '' : ` — ${e.change.toUpperCase()} INPUT`}`, undefined, 'info');
+      } else if (e.type === 'ability') {
+        notify(abilityLine(e), undefined, e.change === 'refused' ? 'warn' : 'info'); // one corner-log line per real change (the control shows the state)
       } else if (e.type === 'missileLock' || e.type === 'missileLockLost' || e.type === 'missileRefused' || e.type === 'missileLaunched' || e.type === 'missileReady' || e.type === 'weaponSwitched') {
         cue(e); // the HUD weapon row and the WPN button carry the text (NO TARGET, LOCK LOST, EMPTY...)
       } else if (e.type === 'ordnanceSpent') {
@@ -3099,6 +3120,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         if (run?.phase === 'flight' && (binds.stop[0] === code || binds.stop[1] === code)) stopPending = !stopPending;
         // P07.1: SILENT RUNNING is one toggle per press
         if (run?.phase === 'flight' && binds.silent.includes(code)) silentPending = !silentPending;
+        if (run?.phase === 'flight' && binds.ability.includes(code)) abilityPending = true;
         if (run?.phase === 'flight' && (binds.fire[0] === code || binds.fire[1] === code)) firePending = true;
       }
     }
@@ -3144,6 +3166,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (pointers.takeTargetPress() && live) targetPending = true;
     if (pointers.takeStopPress() && live) stopPending = !stopPending;
     if (pointers.takeSilentPress() && live) silentPending = !silentPending;
+    if (pointers.takeAbilityPress() && live) abilityPending = true;
     const padS = padSilent(snapshot);
     if (padS && !padSilentWas && live) silentPending = !silentPending;
     padSilentWas = padS;
@@ -3159,6 +3182,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       targetPending = false;
       stopPending = false;
       silentPending = false;
+      abilityPending = false;
     }
     const weaponKey = live && (keyboardWeapon(keys.heldCodes, binds) || padW || pointers.weaponHeld);
     let flight: SectorInput = aim ? { ...move, aimX: aim.x, aimY: aim.y, fire, boost } : { ...move, fire, boost };
@@ -3202,8 +3226,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       if (targetPending) f = { ...f, targetCycle: true };
       if (stopPending) f = { ...f, stopToggle: true };
       if (silentPending) f = { ...f, silentToggle: true };
+      if (abilityPending) f = { ...f, ability: true };
       stopPending = false;
       silentPending = false;
+      abilityPending = false;
       cyclePending = 0;
       firePending = false;
       lockPending = false;
@@ -3214,7 +3240,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (events.length > 0) handleEvents(r, events);
     if (run !== r || !art) return; // an event left the sector (exit beacon)
     // P07.2: STOP / SILENT and the stealth tag after this frame's ticks, so a FIRE or boost that ended Silent Running shows the same frame
-    paintStopCtl(r, pv.stopTouches, pv.silentTouches);
+    paintStopCtl(r, pv.stopTouches, pv.silentTouches, pv.abilityTouches);
     // P05.2: Ship Mind and crew advice on the simulation's own cadence (reads the run, never writes it)
     if (r.phase === 'flight' && !panel && r.docked === null) adviseTick(r);
     // Prompt 13: a timed autosave every AUTOSAVE_SECONDS of flight (with a safe resume point), so an
@@ -3436,7 +3462,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       silentBtn.append(el('span', 'fr-stop-state'), el('span', 'fr-stop-hint'));
       stealthTag = el('span', 'fr-flightmode-tag fr-stealth');
       stealthTag.hidden = true;
-      flightCtl.append(stopBtn, modeTag, silentBtn, stealthTag);
+      abilityBtn = el('button', 'fr-stop fr-ability');
+      abilityBtn.type = 'button';
+      abilityBtn.append(el('span', 'fr-stop-state'), el('span', 'fr-stop-hint'));
+      flightCtl.append(stopBtn, modeTag, silentBtn, abilityBtn, stealthTag);
       interactBtn = el('button', 'fr-interact');
       interactBtn.type = 'button';
       interactBtn.hidden = true;
@@ -3993,117 +4022,39 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         },
         { passive: false },
       );
-      scope.on<PointerEvent>(fireBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          fireBtn.setPointerCapture(e.pointerId); // the finger may slide off the button and keep firing
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.fireDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(fireBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(fireBtn, 'contextmenu', (e) => e.preventDefault());
-      scope.on<PointerEvent>(boostBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          boostBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.boostDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(boostBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(boostBtn, 'contextmenu', (e) => e.preventDefault());
-      scope.on<PointerEvent>(missileBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          missileBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.weaponDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(missileBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(missileBtn, 'contextmenu', (e) => e.preventDefault());
-      // P04.1 LOCK: its own pointer role (pointers.ts), so a finger on it never takes or drags the stick
-      scope.on<PointerEvent>(lockBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          lockBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.lockDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(lockBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(lockBtn, 'contextmenu', (e) => e.preventDefault());
-      // P04.1 polish NEXT TARGET: its own pointer role too (never the stick, never FIRE or BOOST)
-      scope.on<PointerEvent>(targetBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          targetBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.targetDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(targetBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(targetBtn, 'contextmenu', (e) => e.preventDefault());
-      // P04.3 STOP: its own pointer role (never the stick, FIRE, BOOST, WPN or LOCK); mouse clicks use the same path
-      scope.on<PointerEvent>(stopBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          stopBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.stopDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(stopBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(stopBtn, 'contextmenu', (e) => e.preventDefault());
-      // keyboard activation of the focused button (assistive tech; a pointer press already toggled on pointerdown)
-      scope.on<MouseEvent>(stopBtn, 'click', (e) => {
-        if (e.detail === 0 && !panel && run?.phase === 'flight') stopPending = !stopPending;
-        stopBtn.blur(); // keep Space / Enter for flight
-      });
-      // P07.2 SILENT: the same pointer role pattern and the same latch as the Silent Running key (one toggle per press)
-      scope.on<PointerEvent>(silentBtn, 'pointerdown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (panel || run?.phase !== 'flight') return;
-        try {
-          silentBtn.setPointerCapture(e.pointerId);
-        } catch {
-          /* synthetic pointers cannot be captured; window pointerup still releases them */
-        }
-        pointers.silentDown(e.pointerId);
-        container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
-      });
-      scope.on<PointerEvent>(silentBtn, 'lostpointercapture', (e) => pointers.release(e.pointerId));
-      scope.on<Event>(silentBtn, 'contextmenu', (e) => e.preventDefault());
-      scope.on<MouseEvent>(silentBtn, 'click', (e) => {
-        if (e.detail === 0 && !panel && run?.phase === 'flight') silentPending = !silentPending;
-        silentBtn.blur();
-      });
+      // the flight buttons share one pointer pattern: each press is its own pointer role (pointers.ts), so a finger on a
+      // button never takes or drags the stick; the pointer is captured (it may slide off and keep its role; synthetic
+      // pointers cannot be captured, and the window pointerup still releases them). `key`: keyboard activation of the
+      // focused button (assistive tech; a pointer press already acted on pointerdown), then the focus goes back to flight
+      const flightButton = (b: HTMLButtonElement, down: (id: number) => void, key?: () => void): void => {
+        scope.on<PointerEvent>(b, 'pointerdown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (panel || run?.phase !== 'flight') return;
+          try {
+            b.setPointerCapture(e.pointerId);
+          } catch {
+            /* see above */
+          }
+          down(e.pointerId);
+          container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
+        });
+        scope.on<PointerEvent>(b, 'lostpointercapture', (e) => pointers.release(e.pointerId));
+        scope.on<Event>(b, 'contextmenu', (e) => e.preventDefault());
+        if (key)
+          scope.on<MouseEvent>(b, 'click', (e) => {
+            if (e.detail === 0 && !panel && run?.phase === 'flight') key();
+            b.blur(); // keep Space / Enter for flight
+          });
+      };
+      flightButton(fireBtn, (id) => pointers.fireDown(id));
+      flightButton(boostBtn, (id) => pointers.boostDown(id));
+      flightButton(missileBtn, (id) => pointers.weaponDown(id));
+      flightButton(lockBtn, (id) => pointers.lockDown(id)); // P04.1 LOCK
+      flightButton(targetBtn, (id) => pointers.targetDown(id)); // P04.1 polish NEXT TARGET
+      flightButton(stopBtn, (id) => pointers.stopDown(id), () => (stopPending = !stopPending)); // P04.3 STOP
+      flightButton(silentBtn, (id) => pointers.silentDown(id), () => (silentPending = !silentPending)); // P07.2 SILENT: the same latch as its key
+      flightButton(abilityBtn, (id) => pointers.abilityDown(id), () => (abilityPending = true)); // P08.2: the same request as the ability key
       scope.on<PointerEvent>(container, 'pointerdown', (e) => {
         container.dataset['input'] = e.pointerType === 'touch' ? 'touch' : 'pointer';
       });
@@ -4203,6 +4154,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           ];
         },
         lab: () => (__GALAXIA_GRAVITY_LAB__ && lab ? lab.status() : null),
+        ability: () => (run ? abilityStatus(run) : null),
         gravity: () =>
           run
             ? {

@@ -33,6 +33,9 @@ import { EQUIPMENT_BY_ID } from './equipment.ts';
 import { loadoutOf, type FleetState } from './hangar.ts';
 import { SHIP_BY_ID } from './roster.ts';
 import type { DerivedShip } from './types.ts';
+import { el } from '../progression/ui/common.ts';
+
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
 
 export interface ArmoryDeps {
   readonly sprites: SpriteCache;
@@ -75,13 +78,6 @@ export interface ArmoryPanel {
   /** Shell frame loop: redraws the plot after a change or a resize (a no-op when hidden). */
   frame(ts: number): void;
   status(): ArmoryStatus;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
 }
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -622,6 +618,7 @@ export function createArmoryPanel(d: ArmoryDeps): ArmoryPanel {
       if ((plotState.dirty || resized) && ts - plotState.last >= TICK_DRAW_MIN_MS) drawPlot(ts);
     },
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       const f = d.fleet();
       const setup = setupOf(f, f.active);
       const states = {} as Record<WeaponId, WeaponState>;

@@ -18,6 +18,7 @@
  */
 import type { CombatLevel } from '../combat/state.ts';
 import type { StealthStatus } from '../combat/stealth.ts';
+import type { AbilityStatus } from '../combat/shipAbilities.ts';
 
 /** Ticks (60 per second). */
 export const HUD_TIMING = Object.freeze({
@@ -365,4 +366,45 @@ export function stealthHud(s: Pick<StealthStatus, 'silent' | 'tracking' | 'searc
   return s.silent
     ? { on: true, state: 'SILENT RUNNING', hint: touch ? 'LOW SIGNATURE\nSHIELD PAUSED\nFIRE/BOOST ENDS' : 'LOW SIGNATURE\nSHIELD RECHARGE PAUSED\nFIRE OR BOOST ENDS IT', aria: `Silent running is on${k}: low signature, shield recharge paused; firing or boosting ends it. Press to turn off`, tag }
     : { on: false, state: 'SILENT', hint: touch ? 'LOW SIGNATURE' : `${key} · LOW SIGNATURE`, aria: `Silent running${k}: off. Lowers your signature and pauses shield recharge`, tag };
+}
+
+/** P08.2: the ship ability control (HUD panel on a desktop, the touch button on a phone): one element, every frame. */
+export interface AbilityHud {
+  readonly show: boolean;
+  /** ready / on (the effect is active) / cooling: the words carry it too, never colour alone. */
+  readonly state: 'ready' | 'on' | 'cooling';
+  readonly label: string;
+  readonly hint: string;
+  readonly aria: string;
+}
+
+/** A line split at the space nearest its middle (two short lines in the narrow HUD column). */
+const halves = (t: string): string => {
+  const m = t.length / 2;
+  const i = [...t].reduce((b, c, j) => (c === ' ' && Math.abs(j - m) < Math.abs(b - m) ? j : b), -t.length);
+  return i < 0 ? t : `${t.slice(0, i)}\n${t.slice(i + 1)}`;
+};
+
+/**
+ * What the HUD says about the flown ship's ability, from combat/shipAbilities.ts
+ * abilityStatus only (the run's ticks; no clock here, so a paused run shows a
+ * frozen count). ACTIVE · 1.2 s while the effect runs (tenths), COOLDOWN · 18 s
+ * while it recharges (whole seconds, rounded up), else READY with the bound key
+ * (`key`, '' when unbound). `touch`: the short tag and no key or explanation (the
+ * button is tapped); a desktop shows the name and the one-line explanation.
+ * A refused press changes nothing here: the corner log says why.
+ */
+export function abilityHud(s: Pick<AbilityStatus, 'id' | 'name' | 'tag' | 'summary' | 'active' | 'activeTicks' | 'cooldownTicks'> | null, key: string, touch: boolean): AbilityHud {
+  const t = (n: number): number => Math.max(0, Number.isFinite(n) ? n : 0) / 60;
+  if (!s?.id) return { show: false, state: 'ready', label: '', hint: '', aria: '' };
+  const state = s.active ? 'on' : s.cooldownTicks > 0 ? 'cooling' : 'ready';
+  const now = state === 'on' ? `ACTIVE · ${(Math.ceil(t(s.activeTicks) * 10) / 10).toFixed(1)} s` : state === 'cooling' ? `COOLDOWN · ${Math.ceil(t(s.cooldownTicks))} s` : 'READY';
+  const k = key && !touch ? `, key ${key}` : '';
+  return {
+    show: true,
+    state,
+    label: touch ? s.tag : s.name.toUpperCase(),
+    hint: touch ? now : `${state === 'ready' && key ? `${key} · ` : ''}${now}\n${halves(s.summary)}`,
+    aria: `${s.name}, ship ability${k}: ${now.toLowerCase().replace(' · ', ', ').replace(' s', ' seconds')}. ${s.summary}`,
+  };
 }

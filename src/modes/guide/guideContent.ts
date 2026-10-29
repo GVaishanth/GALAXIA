@@ -10,6 +10,10 @@
  *    NEXT TARGET beside LOCK while locked).
  *  - Weapon fit comes from the armory rules (shipsFor) and the weapon
  *    catalogue; the Classic weapon switch follows the Wave 20 gate.
+ *  - Ship signature abilities (P08.2): the key from the bindings; the names
+ *    are pinned to the ability table (combat/shipAbilities.ts) by
+ *    tests/shipAbilities.test.ts. The table itself is not imported: it belongs
+ *    to the Free Roam chunk, and this guide also serves Classic.
  *  - Guild marks: only the sources and uses that exist (FR-TD-91,
  *    docs/freeroam/ECONOMY.md). No prices are invented here.
  *
@@ -20,6 +24,7 @@ import { PRIMARY_WEAPON, WEAPONS, type WeaponId } from '../../config/weapons.ts'
 import { ACTION_LABEL, DEFAULT_BINDINGS, keyLabel, type Bindings, type FlightAction } from '../freeroam/bindings.ts';
 import { shipsFor } from '../freeroam/ships/armory.ts';
 import { SHIP_BY_ID } from '../freeroam/ships/roster.ts';
+import type { ShipId } from '../freeroam/ships/types.ts';
 
 export type GuideMode = 'classic' | 'freeroam';
 export type GuideInput = 'keyboard' | 'touch' | 'controller';
@@ -117,6 +122,7 @@ export function freeRoamKeyboard(b: Bindings, mouseAim: boolean): ControlRow[] {
     { id: 'target', keys: alts(b, 'target'), action: ACTION_LABEL.target.toUpperCase(), text: 'Only while locked: move the lock to the next target.' },
     { id: 'stop', keys: alts(b, 'stop'), action: 'STOP · REALISTIC', text: 'Realistic flight only: brake, then hold position against momentum and gravity. Active thrust, not paused physics. Press again, thrust or brake to release.' },
     { id: 'silent', keys: alts(b, 'silent'), action: 'SILENT RUNNING', text: 'Toggle a low signature: hostiles must come much closer to spot you, and your shield stops recharging. Firing or boosting ends it. The SILENT control (right side) shows its state.' },
+    { id: 'ability', keys: alts(b, 'ability'), action: 'SHIP ABILITY', text: 'Use your ship\'s signature ability. The ability panel (right side, above SILENT) shows READY, ACTIVE with the seconds left, or COOLDOWN.' },
     { id: 'zoom', keys: [['WHEEL'], ['+', '−']], action: 'ZOOM', text: 'Zoom the camera in or out. The mouse wheel only zooms; it never switches weapons.' },
     { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect, take a signal bearing or use a gate when a prompt shows.' },
     { id: 'map', keys: alts(b, 'map'), action: 'SECTOR MAP', text: 'The map of this sector.' },
@@ -148,6 +154,7 @@ export function freeRoamTouch(): ControlRow[] {
     { id: 'target', keys: [['»']], action: 'NEXT TARGET', text: 'Appears beside LOCK while locked: tap for the next target.' },
     { id: 'stop', keys: [['STOP']], action: 'STOP · REALISTIC', text: 'Realistic flight only, above the weapon button: brake, then hold position. Tap again, or steer, to release.' },
     { id: 'silent', keys: [['SILENT']], action: 'SILENT RUNNING', text: 'Above the weapon button (top centre on a landscape phone; next to STOP in Realistic flight): tap to toggle a low signature. It reads SILENT RUNNING while on; firing or boosting ends it.' },
+    { id: 'ability', keys: [['SHIP TAG']], action: 'SHIP ABILITY', text: 'The button named with your ship\'s ability tag (for example CALIB on the Petrel): above SILENT, left of SILENT on a short phone, under MAP on a landscape phone. One tap is one try; it shows READY, ACTIVE or COOLDOWN with the seconds.' },
     { id: 'interact', keys: [['PROMPT']], action: 'INTERACT', text: 'A button appears near things you can use, for example DOCK · or USE GATE ·. Tap it.' },
     { id: 'hud', keys: [['MAP'], ['CARGO'], ['II']], action: 'TOP RIGHT', text: 'Sector map, cargo hold and pause.' },
     { id: 'zoom', keys: [['II', 'CONTROLS']], action: 'ZOOM', text: 'Pause, then CONTROLS: ZOOM − and ZOOM +.' },
@@ -281,11 +288,11 @@ function controls(ctx: GuideContext): GuideBlock[] {
   if (ctx.mode === 'freeroam' && ctx.input === 'keyboard') {
     out.push({ kind: 'note', text: `${customBindings(ctx.bindings) ? 'These are your keys. ' : ''}Change keys in PAUSE → SETTINGS & HELP → CONTROLS. Mouse aim (off by default) is there too: the cursor aims and the left button fires. FLIGHT MODE there switches NORMAL (the standard controls) and REALISTIC (momentum flight: left / right rotate, up thrusts, down reverses, plus STOP).` });
   } else if (ctx.mode === 'freeroam' && ctx.input === 'controller') {
-    out.push({ kind: 'note', text: 'Target lock and next target are on the keyboard (X, C) and the touch LOCK button.' });
+    out.push({ kind: 'note', text: 'Target lock and next target are on the keyboard (X, C) and the touch LOCK button. The ship ability has no controller button yet: use its key (F by default) or the touch button.' });
   } else if (ctx.mode === 'classic') {
     out.push({ kind: 'note', text: ctx.input === 'keyboard' ? 'Classic keys are fixed. In Classic, X fires; Classic has no boost, zoom or target lock.' : 'Classic has no boost, zoom or target lock.' });
   }
-  if (ctx.mode === 'freeroam') out.push(signals(ctx), ...stealth(ctx));
+  if (ctx.mode === 'freeroam') out.push(signals(ctx), ...stealth(ctx), ...abilities(ctx));
   return out;
 }
 
@@ -314,6 +321,36 @@ function stealth(ctx: GuideContext): GuideBlock[] {
         { label: 'NOT A SHIELD', text: 'Hiding is not protection: you can still be hit, and a hostile that rounds the body sees you again.' },
       ],
     },
+  ];
+}
+
+/** P08.2: each hull's ability in player terms, in roster order (the effects themselves: combat/shipAbilities.ts and FR-TD-95). */
+export const ABILITY_GUIDE: readonly (readonly [ShipId, string, string])[] = [
+  ['swift', 'Vector Burst', 'Briefly increases propulsion for quick repositioning.'],
+  ['shrike', 'Predator Focus', 'Speeds up valid lock-on missile acquisition and improves lock retention while active.'],
+  ['petrel', 'Signal Calibration', 'Improves the accuracy of signal bearings while active; normal observation requirements still apply.'],
+  ['magpie', 'Salvage Pulse', 'Helps locate eligible existing salvage within an expanded range.'],
+  ['condor', 'Bulwark', 'Reduces eligible incoming combat-hit damage briefly; it does not prevent all damage.'],
+  ['albatross', 'Deep Scan', 'Performs a one-time expanded-range sweep of permitted markers and visible hostiles.'],
+];
+
+/** P08.2: Ship Signature Abilities, straight after Silent Running (the same table the game runs; no extra screen). */
+function abilities(ctx: GuideContext): GuideBlock[] {
+  const key = keyLabel(ctx.bindings.ability[0]);
+  const press = ctx.input === 'touch' ? 'Tap the ability button (it carries your ship\'s tag, for example CALIB)' : ctx.input === 'controller' ? `There is no controller button yet: press ${key} on the keyboard or tap the touch button` : `Press ${key}`;
+  return [
+    {
+      kind: 'points',
+      items: [
+        { label: 'SHIP SIGNATURE ABILITIES', text: `Every ship has one active ability of its own. ${press} to use it. Change ships in the hangar and the ability changes with the ship.` },
+        { label: 'READY · ACTIVE · COOLDOWN', text: 'The ability panel shows READY, ACTIVE with the seconds left, or COOLDOWN with the seconds until it is ready. Each ability has its own duration and cooldown (from under 2 s to 7 s active; 25 to 40 s cooldown); the cooldown starts when you use it.' },
+        { label: 'REFUSED?', text: 'Nothing is used up: the log says why (cooling down, no target, no signal, no salvage in range, jammed, docked).' },
+        { label: 'PAUSED', text: 'Pausing freezes the effect and the cooldown. Docking, a recall or RESTART FLIGHT ends the effect; the cooldown stays.' },
+        { label: 'SILENT RUNNING', text: 'Vector Burst, Salvage Pulse and Deep Scan are active emissions: using one ends Silent Running. The others leave it on.' },
+        { label: 'LIMITS', text: 'No ability hides you completely or makes you immune to damage, and none collects or adds loot or solves an anomaly signal for you.' },
+      ],
+    },
+    { kind: 'points', items: ABILITY_GUIDE.map(([ship, name, text]) => ({ label: `${SHIP_BY_ID.get(ship)?.name.toUpperCase() ?? ship} · ${name.toUpperCase()}`, text })) },
   ];
 }
 

@@ -21,6 +21,7 @@ import { categoryCounts, holdUnits, inventoryRows, SORT_KEYS, SORT_LABEL, type C
 import { CATEGORY_INFO, LOOT_SOURCES, RARITY_LABEL, RESOURCE_CATEGORIES, RESOURCES, type LootSource } from '../resources.ts';
 import type { ResourceId } from '../../catalogue/types.ts';
 import { iconImg } from './iconImages.ts';
+import { el } from '../../progression/ui/common.ts';
 
 export interface InventoryDeps {
   readonly cargo: () => Hold;
@@ -57,13 +58,6 @@ const SOURCE_TEXT: Readonly<Record<LootSource, string>> = {
 };
 const USE_TEXT = { fabrication: 'station fabricator', licence: 'ship licences' } as const;
 const DEFAULT_NOTE = 'Finds that do not fit open a choice in flight: take what fits, swap cheaper cargo out, or leave it marked on the map.';
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
 
 export function createInventoryPanel(d: InventoryDeps): InventoryPanel {
   const root = el('section', 'fr-panel fr-panel-cargo');

@@ -48,7 +48,7 @@ import type { FamilyId } from '../combat/families.ts';
 import { inInterference, stepEruptions } from '../combat/hazards.ts';
 import { layFieldMines, stepEnemyShots, stepMines, triggerMine } from '../combat/projectiles.ts';
 import { freshGravity, pullOn, wellsOf, type GravityState, type Well } from './gravityWells.ts';
-import { freshMissileSkill, resetMissiles, stepMissiles, stepMissileSkill, switchWeapon, type MissileSkill, type PlayerMissile, type RefusalReason } from '../combat/playerMissile.ts';
+import { freshMissileSkill, resetMissiles, stepMissiles, stepMissileSkill, switchWeapon, validTarget, type MissileSkill, type PlayerMissile, type RefusalReason } from '../combat/playerMissile.ts';
 import { stepDilation, type DilationZone } from '../combat/dilation.ts';
 import { clearShipLock, cycleShipLock, endShipLock, freshShipLock, stepShipLock, toggleShipLock, type ShipLock, type ShipLockEnd } from '../combat/shipLock.ts';
 import { cleanOrdnance, initialOrdnance, type WeaponId as PilotWeaponId } from '../../../config/weapons.ts';
@@ -64,6 +64,8 @@ import { initialDropBudget, interactContainer, killDrop, leftFromSave, lootStrea
 import type { AgentRole } from '../combat/state.ts';
 import { NO_CONTROLS, type VectorControls } from './vectorFlight.ts';
 import { clearStationKeeping, createRealisticFlight, freshStationKeeping, stepRealistic, updateStationKeeping, vectorMoving, type FlightMode, type RealisticFlight, type StationKeeping } from './realisticFlight.ts';
+import { abilityGate, abilityOf, burstLevel, endAbility, freshAbility, tickAbility, type AbilityContact, type AbilityDef, type AbilityId, type AbilityRefusal, type AbilityState } from '../combat/shipAbilities.ts';
+import { SHIP_LOCK } from '../combat/shipLock.ts';
 import { cancelBearing, createSignals, resetSignals, signalReach, startBearing, stepSignal, type SignalResult, type SignalRunState } from './signal.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
 
@@ -169,6 +171,8 @@ export interface SectorInput extends FlightInput {
   readonly stopToggle?: boolean | undefined;
   /** P07.1: toggle Silent Running this tick (Z). An edge command like `stopToggle`. */
   readonly silentToggle?: boolean | undefined;
+  /** P08.1: use the ship's signature ability this tick (F; combat/shipAbilities.ts). An edge command: one press, one tick. */
+  readonly ability?: boolean | undefined;
 }
 
 /**
@@ -196,7 +200,9 @@ export type SectorEvent =
   /** P04.3 STOP: engaged, released (toggle), cancelled (movement input), or unavailable (NORMAL flight). */
   | { readonly type: 'stop'; readonly change: 'engaged' | 'released' | 'cancelled' | 'unavailable' }
   /** P07.1 Silent Running: toggled on / off, or dropped by a FIRE or boost request (which then runs once as usual). */
-  | { readonly type: 'silent'; readonly change: 'on' | 'off' | 'fire' | 'boost' }
+  | { readonly type: 'silent'; readonly change: 'on' | 'off' | 'fire' | 'boost' | 'ability' }
+  /** P08.1 ship ability: activated (scans report what they found), ended, cooled down, or a press refused (nothing consumed). */
+  | { readonly type: 'ability'; readonly id: AbilityId | null; readonly change: 'start' | 'end' | 'ready' | 'refused'; readonly why?: AbilityRefusal; readonly ticks?: number; readonly found?: number; readonly hostiles?: number }
   | { readonly type: 'recorded'; readonly id: string; readonly remaining: number }
   /** Salvage taken (`left` = what stays in the node; empty when it is done). */
   | { readonly type: 'collected'; readonly id: string; readonly loot: readonly LootEntry[]; readonly left: readonly LootEntry[] }
@@ -430,6 +436,8 @@ export interface SectorRun {
   readonly realistic: RealisticFlight;
   /** P06.1: signal triangulation of this visit's anomalies (temporary; never saved; sector/signal.ts). */
   readonly signal: SignalRunState;
+  /** P08.1: the flown ship's signature ability (temporary; never saved; combat/shipAbilities.ts). */
+  readonly ability: AbilityState;
 }
 
 export interface RunOptions {
@@ -551,6 +559,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     stop: freshStationKeeping(),
     realistic: createRealisticFlight(),
     signal: createSignals(layout, done, left),
+    ability: freshAbility(),
   };
   layFieldMines(run);
   spawnSavedCaches(run);
@@ -560,6 +569,11 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
 
 /** Put a different ship (or loadout) into the run: full hull, shield and energy; the pose is kept. */
 export function applyShip(run: SectorRun, craft: DerivedShip): void {
+  // P08.1: the effect ends; the cooldown carries over as the same share of the new hull's (never a free reset)
+  const ab = run.ability;
+  const was = abilityOf(run.craft.ship)?.cooldownTicks ?? 0;
+  if (craft.ship !== run.craft.ship) ab.cooldown = was > 0 ? Math.ceil((ab.cooldown / was) * (abilityOf(craft.ship)?.cooldownTicks ?? 0)) : 0;
+  endAbility(ab);
   run.craft = craft;
   run.tune = shipTuning(craft);
   run.shield = craft.stats.shield;
@@ -589,10 +603,9 @@ export function setRunFlightMode(run: SectorRun, mode: FlightMode): void {
   clearStationKeeping(run.stop);
 }
 
-/** Reveal the POIs within sensor range of the ship (jammed inside sensor interference). */
-function sense(run: SectorRun): void {
+/** Reveal the POIs within sensor range of the ship (jammed inside sensor interference); Deep Scan passes its own radius. */
+function sense(run: SectorRun, r = run.craft.stats.sensor): void {
   if (inInterference(run.layout, run.ship)) return;
-  const r = run.craft.stats.sensor;
   for (const p of run.layout.pois) if (!run.revealed.has(p.id) && dist(run.ship, p) <= r + p.r) run.revealed.add(p.id);
 }
 
@@ -759,6 +772,12 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     run.silent = false;
     events.push({ type: 'silent', change: input.fire === true ? 'fire' : 'boost' });
   }
+  /* P08.1 ship ability: the effect and cooldown count down, then a press (one tick per press) */
+  const abEdge = tickAbility(run.ability);
+  const abId = abilityOf(run.craft.ship)?.id ?? null;
+  if (abEdge.end) events.push({ type: 'ability', id: abId, change: 'end' });
+  if (abEdge.ready) events.push({ type: 'ability', id: abId, change: 'ready' });
+  if (input.ability === true) activateAbility(run, events);
   /* boost: spend energy while held with thrust; the level eases so the top speed never jumps */
   const st = run.craft.stats;
   const thrustIn = Math.hypot(Number.isFinite(input.moveX) ? input.moveX : 0, Number.isFinite(input.moveY) ? input.moveY : 0) > 0.05 && !(vec && run.stop.phase !== 'off');
@@ -772,7 +791,12 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
     if (run.sinceBoost > RUN.energyDelayTicks) run.energy = Math.min(st.energy, run.energy + st.energyRegen / 60);
     run.boost = Math.max(0, run.boost - RUN.boostFall);
   }
-  const tune = run.boost > 0 ? { ...run.tune, accel: run.tune.accel * (1 + (RUN.boostAccelMul - 1) * run.boost), maxSpeed: run.tune.maxSpeed * (1 + (RUN.boostSpeedMul - 1) * run.boost) } : run.tune;
+  // P08.1 Vector Burst rides the same tuning as boost: the larger multiplier wins (the two never stack)
+  const bl = burstLevel(run);
+  const bd = bl > 0 ? (abilityOf(run.craft.ship) as Extract<AbilityDef, { id: 'vector-burst' }>) : null;
+  const am = Math.max(1 + (RUN.boostAccelMul - 1) * run.boost, bd ? 1 + (bd.accelMul - 1) * bl : 1);
+  const vm = Math.max(1 + (RUN.boostSpeedMul - 1) * run.boost, bd ? 1 + (bd.speedMul - 1) * bl : 1);
+  const tune = am > 1 || vm > 1 ? { ...run.tune, accel: run.tune.accel * am, maxSpeed: run.tune.maxSpeed * vm } : run.tune;
   /* P04.1 ship lock: the toggle, then a re-check; a held lock becomes the aim of the one orientation rule
      (sim.ts stepShip), replacing mouse aim / right stick. Position, velocity and thrust are never touched. */
   if (input.lockToggle === true) toggleShipLock(run, events);
@@ -848,7 +872,10 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   /* the cargo wreck: fly through it to recover what was left there */
   const w = run.cargoWreck;
   if (w && dist(sh, w) <= COMBAT.wreckPickup + run.tune.radius) touchWreck(run, events, COMBAT.wreckPickup + run.tune.radius);
-  if (run.tick % 6 === 0) sense(run);
+  if (run.tick % 6 === 0) {
+    sense(run);
+    if (run.ability.active > 0) scanContacts(run);
+  }
 
   /* combat: warp-ins, encounters, patrols, enemy ships, their fire, mines and hazards */
   stepPending(run);
@@ -911,6 +938,77 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   return events;
 }
 
+/* ------------------------------------------------------- ship abilities */
+
+/** What a Salvage Pulse or Deep Scan sees now: existing, unfinished objects within its radius (jammed: nothing). */
+function scan(run: SectorRun, d: AbilityDef): AbilityContact[] {
+  const out: AbilityContact[] = [];
+  const L = run.layout;
+  const sh = run.ship;
+  if ((d.id !== 'salvage-pulse' && d.id !== 'deep-scan') || inInterference(L, sh)) return out;
+  const R = run.craft.stats.sensor * d.rangeMul;
+  const add = (id: string, kind: string, o: { readonly x: number; readonly y: number }): void => {
+    if (dist(sh, o) <= R) out.push({ id, kind, x: o.x, y: o.y });
+  };
+  const deep = d.id === 'deep-scan';
+  // POI markers (an anomaly's marker, never its hidden source); salvage: salvage nodes and derelicts only
+  for (const p of L.pois) if (!isDone(run, p) && (deep || p.kind === 'salvage' || p.kind === 'derelict')) add(p.id, p.kind, p);
+  if (deep) {
+    for (const a of run.hostiles) if (a.state !== 'destroyed' && !inInterference(L, a)) add(`hostile:${a.id}`, 'hostile', a);
+  } else {
+    for (const k of run.pickups) if (k.kind === 'pod') add(k.id, 'pod', k);
+    if (run.cargoWreck) add('wreck', 'wreck', run.cargoWreck);
+  }
+  return out;
+}
+
+/** Refresh the active scan (every 6 ticks, with the sensors); Deep Scan also reveals the POIs in its radius. */
+function scanContacts(run: SectorRun): void {
+  const d = abilityOf(run.craft.ship);
+  if (!d) return;
+  if (d.id === 'deep-scan') sense(run, run.craft.stats.sensor * d.rangeMul);
+  if (d.id === 'deep-scan' || d.id === 'salvage-pulse') run.ability.contacts = scan(run, d);
+}
+
+/** Why this ability has nothing to act on now (it refuses, consuming nothing), or null. */
+function abilityRefusal(run: SectorRun, d: AbilityDef): AbilityRefusal | null {
+  const sh = run.ship;
+  if (d.id === 'predator-focus') return run.hostiles.some((a) => validTarget(run, a, SHIP_LOCK.range, Math.PI)) ? null : 'noTarget';
+  if (d.id === 'signal-calibration') {
+    for (const [id, t] of run.signal.tracks) {
+      const p = poiById(run.layout, id);
+      if (p && !t.fix && !run.done.has(id) && run.revealed.has(id) && dist(sh, p) <= run.craft.stats.sensor) return null;
+    }
+    return 'noSignal';
+  }
+  if ((d.id === 'salvage-pulse' || d.id === 'deep-scan') && inInterference(run.layout, sh)) return 'jammed';
+  return d.id === 'salvage-pulse' && scan(run, d).length === 0 ? 'noSalvage' : null;
+}
+
+/** One ability press: the general gate, the ability's own check, then the effect and the cooldown start together. */
+function activateAbility(run: SectorRun, events: SectorEvent[]): void {
+  const d = abilityOf(run.craft.ship);
+  const st = run.ability;
+  const why = abilityGate(run) ?? (d ? abilityRefusal(run, d) : 'unavailable');
+  if (why || !d) {
+    st.refused = why ?? 'unavailable';
+    events.push({ type: 'ability', id: d?.id ?? null, change: 'refused', why: st.refused, ticks: st.cooldown });
+    return;
+  }
+  st.active = d.durationTicks;
+  st.cooldown = d.cooldownTicks;
+  st.refused = null;
+  st.uses += 1;
+  if (d.emits && run.silent) {
+    run.silent = false; // an active emission ends Silent Running, like a boost or FIRE request
+    events.push({ type: 'silent', change: 'ability' });
+  }
+  const scans = d.id === 'salvage-pulse' || d.id === 'deep-scan';
+  if (scans) scanContacts(run);
+  const c = st.contacts;
+  events.push(!scans ? { type: 'ability', id: d.id, change: 'start' } : d.id === 'deep-scan' ? { type: 'ability', id: d.id, change: 'start', found: c.length, hostiles: c.filter((k) => k.kind === 'hostile').length } : { type: 'ability', id: d.id, change: 'start', found: c.length });
+}
+
 function focusOf(run: SectorRun): string | null {
   // P06.2: the signal being observed keeps the prompt (its hold progress) until the bearing ends
   const obs = run.signal.obs;
@@ -954,6 +1052,7 @@ function recall(run: SectorRun): void {
   run.boost = 0;
   run.boosting = false;
   run.silent = false; // P07.1
+  endAbility(run.ability); // P08.1: the effect ends; the cooldown is kept (like the weapons')
   run.shieldHit = null;
   run.docked = null;
   run.offer = null; // pickups stay where they are; the budget is not refilled
@@ -1015,6 +1114,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     run.ship.vy = 0;
     run.docked = p.id;
     run.silent = false; // P07.1: the station holds the ship at its normal signature
+    endAbility(run.ability); // P08.1: the effect ends; docked flight is paused, so the cooldown waits
     cancelBearing(run); // P06.1: docking ends a signal observation
     clearShipLock(run); // docked: no combat lock
     clearStationKeeping(run.stop); // docked: the station holds the ship
@@ -1077,6 +1177,7 @@ export function disposeSectorRun(run: SectorRun): void {
   cancelBearing(run);
   run.focus = null;
   run.silent = false;
+  endAbility(run.ability);
   run.disposed = true;
 }
 

@@ -30,6 +30,8 @@ import { computeSystemLayout, laneCurve, systemGrid, type LaneCurve, type System
 import { CATEGORY_COLOR, drawSystemMap, type SystemLaneDraw, type SystemNodeDraw } from './systemMapRender.ts';
 import { HAZARD_LABEL, PATTERN_LABEL, deriveSystemView, type Knowledge, type Lane, type RoutePlan, type SystemState, type SystemTravelResult, type SystemView } from './systems.ts';
 
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
+
 type Services = ModeContext['services'];
 
 declare const __GALAXIA_GRAVITY_LAB__: boolean; // vite.config.ts `define` (FR-TD-83: dev / QA builds only)
@@ -814,6 +816,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     frame,
     refresh,
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       const knowledge: Record<string, Knowledge> = {};
       const states: Record<string, SystemState> = {};
       for (const id of sv.visible) {

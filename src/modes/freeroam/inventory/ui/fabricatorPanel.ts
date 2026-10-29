@@ -18,6 +18,7 @@ import { addLoot, holdUnits, lootUnits, type Hold, type ModuleStore } from '../i
 import { MILESTONES, milestoneState, type MilestoneProgress } from '../milestones.ts';
 import { resourceName } from '../resources.ts';
 import { iconImg } from './iconImages.ts';
+import { el } from '../../progression/ui/common.ts';
 
 export interface FabricatorDeps {
   readonly cargo: () => Hold;
@@ -45,13 +46,6 @@ export interface FabricatorPanel {
 }
 
 const costText = (cost: readonly { readonly resource: string; readonly amount: number }[]): string => cost.map((c) => `${resourceName(c.resource).toUpperCase()} ${c.amount}`).join(' + ');
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
 
 export function createFabricatorPanel(d: FabricatorDeps): FabricatorPanel {
   const root = el('section', 'fr-panel fr-panel-fabricator');

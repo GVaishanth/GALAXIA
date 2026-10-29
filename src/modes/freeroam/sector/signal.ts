@@ -32,6 +32,7 @@
 import { createRng } from '../../../core/rng.ts';
 import { fnv1a32 } from '../catalogue/build.ts';
 import { inInterference } from '../combat/hazards.ts';
+import { calibration } from '../combat/shipAbilities.ts';
 import { sweptHit } from '../combat/world.ts';
 import { STAT_BOUNDS } from '../ships/equipment.ts';
 import { bestSeparation, closestOnRay, DEG, inFront, leastSquaresFix, TAU, validRay, wrapAngle } from './bearing.ts';
@@ -168,11 +169,14 @@ const quality = (sensor: number): number => {
 /** Radius of the uncertainty ring around the marker for a sensor range: longer sensors, tighter ring. */
 export const ringRadius = (sensor: number): number => SIGNAL.sourceRadius + SIGNAL.ringSlack * (1 - quality(sensor));
 
-/** Bearing error half-width (degrees): sensors, then the Surveyor factor (0.5..1), then interference; bounded. */
-export function bearingSpread(sensor: number, assist: number, jammed: boolean): number {
+/**
+ * Bearing error half-width (degrees): sensors, then the Surveyor factor (0.5..1), then interference, then
+ * P08.1 Signal Calibration (`calib`, the Petrel's ability: 0.5 while active, exactly 1 otherwise); bounded.
+ */
+export function bearingSpread(sensor: number, assist: number, jammed: boolean, calib = 1): number {
   const [a, b] = SIGNAL.spreadDeg;
   const k = Number.isFinite(assist) ? Math.min(1, Math.max(0.5, assist)) : 1;
-  const e = (a + (b - a) * quality(sensor)) * k * (jammed ? SIGNAL.jamMul : 1);
+  const e = (a + (b - a) * quality(sensor)) * k * (jammed ? SIGNAL.jamMul : 1) * (calib > 0 && calib <= 1 ? calib : 1);
   return Math.min(SIGNAL.maxSpreadDeg, Math.max(SIGNAL.minSpreadDeg, e));
 }
 
@@ -339,7 +343,7 @@ export function stepSignal(run: SectorRun, events: SectorEvent[]): void {
   const L = run.layout;
   const sh = run.ship;
   const sensor = run.craft.stats.sensor;
-  const spread = bearingSpread(sensor, st.assist, inInterference(L, sh));
+  const spread = bearingSpread(sensor, st.assist, inInterference(L, sh), calibration(run));
   const bearing: Bearing = Object.freeze({ x: sh.x, y: sh.y, angle: measureBearing(L, p, t.bearings.length, sh.x, sh.y, spread), spread });
   t.bearings.push(bearing);
   t.refusal = null;
@@ -409,7 +413,7 @@ export function signalView(run: SectorRun, p: Poi): SignalView | null {
     observing: o?.id === p.id ? o.ticks / SIGNAL.holdTicks : null,
     refusal: t.refusal,
     blocker: t.blocker,
-    spread: bearingSpread(sensor, run.signal.assist, jammed),
+    spread: bearingSpread(sensor, run.signal.assist, jammed, calibration(run)),
     jammed,
     inRange: dist(sh, p) <= sensor,
     slow: Math.hypot(sh.vx, sh.vy) < SIGNAL.maxSpeed,

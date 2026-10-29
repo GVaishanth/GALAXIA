@@ -18,6 +18,8 @@ import type { ShipId } from '../../ships/types.ts';
 import type { BridgeAction, BridgeModel, MemberCard } from '../bridgeView.ts';
 import type { NavDoctrine } from '../types.ts';
 
+declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
+
 export type BridgeAct =
   | { readonly kind: 'hire'; readonly id: string }
   | { readonly kind: 'assign'; readonly id: string; readonly ship: ShipId }
@@ -298,6 +300,7 @@ export function createBridgeSection(d: BridgeDeps, onMessage: (text: string) => 
     },
     message: () => msg,
     status() {
+      if (!__GALAXIA_TEST_HOOKS__) return null as never; // P08.1 (TD-78): a browser-check reader only; release builds keep a stub
       const m = last;
       return {
         ship,

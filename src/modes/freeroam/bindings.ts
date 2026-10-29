@@ -18,9 +18,12 @@
  * `lock` (P04.1) toggles the ship target lock (X): the nose faces the locked
  * ship; it never moves, thrusts or fires. `target` (P04.1 polish) moves the
  * lock to the next eligible ship (C), only while a lock holds. `silent`
- * (P07.1) toggles Silent Running (Z; combat/stealth.ts).
+ * (P07.1) toggles Silent Running (Z; combat/stealth.ts). `ability` (P08.1) uses the
+ * flown ship's signature ability (F; combat/shipAbilities.ts): one press, one try.
+ * F was chosen after a conflict audit: no flight, panel, zoom, gravity-lab,
+ * title-screen or hidden-sequence key uses it.
  */
-export const FLIGHT_ACTIONS = ['up', 'down', 'left', 'right', 'fire', 'boost', 'missile', 'lock', 'target', 'stop', 'silent', 'interact', 'map', 'cargo', 'pause'] as const;
+export const FLIGHT_ACTIONS = ['up', 'down', 'left', 'right', 'fire', 'boost', 'missile', 'lock', 'target', 'stop', 'silent', 'ability', 'interact', 'map', 'cargo', 'pause'] as const;
 export type FlightAction = (typeof FLIGHT_ACTIONS)[number];
 
 /** Two key slots per action; slot 0 is always filled. */
@@ -39,6 +42,7 @@ export const DEFAULT_BINDINGS: Bindings = Object.freeze({
   target: ['KeyC', null],
   stop: ['KeyB', null],
   silent: ['KeyZ', null],
+  ability: ['KeyF', null],
   interact: ['KeyE', 'Enter'],
   map: ['KeyM', null],
   cargo: ['KeyI', null],
@@ -57,6 +61,7 @@ export const ACTION_LABEL: Readonly<Record<FlightAction, string>> = Object.freez
   target: 'Next target',
   stop: 'Stop / hold (Realistic)',
   silent: 'Silent running',
+  ability: 'Ship ability',
   interact: 'Interact',
   map: 'Sector map',
   cargo: 'Cargo',
@@ -143,7 +148,7 @@ export function clearBinding(b: Bindings, action: FlightAction, slot: 0 | 1): Re
 }
 
 /** Actions added after bindings were first saved; a save without them gets free keys (not a repair). */
-const ADDED_ACTIONS: readonly FlightAction[] = ['boost', 'missile', 'lock', 'target', 'stop', 'silent'];
+const ADDED_ACTIONS: readonly FlightAction[] = ['boost', 'missile', 'lock', 'target', 'stop', 'silent', 'ability'];
 /**
  * Spare keys for an added action whose default keys a player already uses
  * (so an old save is never reset just because Q and K were taken). They avoid
@@ -177,7 +182,7 @@ export function sanitizeBindings(raw: unknown): { bindings: Bindings; repaired: 
     out[a] = [keys[0]!, keys[1] ?? null];
   }
   for (const a of added) {
-    // an action added after the save was written (boost, Prompt 8; missile, Combat P03; lock, P04.1; target, P04.1 polish; stop, P04.3; silent, P07.1): its default keys if free, else a spare key
+    // an action added after the save was written (boost, Prompt 8; missile, Combat P03; lock, P04.1; target, P04.1 polish; stop, P04.3; silent, P07.1; ability, P08.1): its default keys if free, else a spare key
     const keys: string[] = [];
     for (const k of DEFAULT_BINDINGS[a]) if (k !== null && !used.has(k)) keys.push(k);
     if (keys.length === 0) {
