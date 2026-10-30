@@ -14,9 +14,10 @@ import { SHIP_IDS, type ShipId } from '../ships/types.ts';
 import { cleanLevels, UPGRADE_LICENCES } from '../ships/upgrades.ts';
 import { CONTRACT_ID, contractDef } from './contracts.ts';
 import { EMPTY_LOG, type ExplorationLog } from './discovery.ts';
-import { STORY_BY_ID } from './missionData.ts';
+import { MISSION_BY_ID } from './missionData.ts';
+import { heatToSaved, type HeatBook } from '../combat/factionHeat.ts';
 import { MISSION_TYPES, type ActiveMission, type ContractSpec, type MissionState, type MissionType } from './missionTypes.ts';
-import { EMPTY_LEDGER, ledgerFromSaved, ledgerToSaved, type Ledger } from './ledger.ts';
+import { ledgerFromSaved, ledgerToSaved, type Ledger } from './ledger.ts';
 import { pruneBounties, type BountyBook } from './marksRewards.ts';
 
 export interface FuelBook {
@@ -27,8 +28,6 @@ export interface FuelBook {
 
 /** The marks history beside the balance (ledger.ts Ledger without `balance`: the balance is `marks`). */
 export type LedgerBook = Omit<Ledger, 'balance'>;
-
-export const EMPTY_BOOK: LedgerBook = Object.freeze({ seq: EMPTY_LEDGER.seq, history: EMPTY_LEDGER.history, recent: EMPTY_LEDGER.recent });
 
 export interface ProgressionState {
   /** The one authoritative Guild marks balance (every screen reads it; ledger.ts changes it). */
@@ -52,7 +51,7 @@ export const withLedger = (p: ProgressionState, l: Ledger): ProgressionState => 
 
 export const PROGRESSION_FORMAT = 1;
 
-const knownMission = (id: string): boolean => STORY_BY_ID.has(id) || CONTRACT_ID.test(id);
+const knownMission = (id: string): boolean => MISSION_BY_ID.has(id) || CONTRACT_ID.test(id);
 const isType = (x: string): x is MissionType => (MISSION_TYPES as readonly string[]).includes(x);
 const isShip = (x: string): x is ShipId => (SHIP_IDS as readonly string[]).includes(x);
 
@@ -68,7 +67,7 @@ export function progressionFromSaved(saved: SavedProgression): ProgressionState 
     if (!knownMission(a.id)) continue;
     const contract = a.contract ? spec(a.contract) : null;
     if (a.id.startsWith('c:') && !contract) continue;
-    const def = STORY_BY_ID.get(a.id) ?? (contract ? contractDef(a.id, contract) : undefined);
+    const def = MISSION_BY_ID.get(a.id) ?? (contract ? contractDef(a.id, contract) : undefined);
     if (!def || def.objectives.length !== a.progress.length) continue;
     const progress = def.objectives.map((o, i) => Math.min(o.count, a.progress[i] ?? 0));
     active.push(contract ? { id: a.id, at: a.at, progress, targets: [...a.targets], contract } : { id: a.id, at: a.at, progress, targets: [...a.targets] });
@@ -102,7 +101,8 @@ export function progressionFromSaved(saved: SavedProgression): ProgressionState 
 }
 
 /** Structural copy into the profile shape (ids and numbers are already valid). */
-export function progressionToSaved(p: ProgressionState): SavedProgression {
+export function progressionToSaved(p: ProgressionState, heat?: HeatBook): SavedProgression {
+  const h = heat && heatToSaved(heat);
   return {
     marks: p.marks,
     missions: { jumps: p.missions.jumps, active: p.missions.active.map((a) => ({ ...a })), completed: [...p.missions.completed], claimed: [...p.missions.claimed], failed: [...p.missions.failed], ready: { ...p.missions.ready } },
@@ -112,5 +112,6 @@ export function progressionToSaved(p: ProgressionState): SavedProgression {
     fuel: { ...p.fuel },
     ...(p.ledger.seq > 0 || p.ledger.recent.length ? { ledger: ledgerToSaved(ledgerOf(p)) } : {}),
     ...(Object.keys(p.bounty).length ? { bounty: { ...p.bounty } } : {}),
+    ...(h ? { heat: h } : {}),
   };
 }

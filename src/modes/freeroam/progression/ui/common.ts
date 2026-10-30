@@ -7,7 +7,7 @@ import type { QuoteLine } from '../economy.ts';
 
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const n = document.createElement(tag);
-  n.className = className;
+  if (className) n.className = className;
   if (text !== undefined) n.textContent = text;
   return n;
 }

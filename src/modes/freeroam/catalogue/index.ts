@@ -12,28 +12,30 @@ import { GALAXIES } from './data/galaxies.ts';
 import { MILESTONES, PROGRESSION } from './data/milestones.ts';
 import { ROUTES } from './data/routes.ts';
 import { SOURCES } from './data/sources.ts';
+import { SOURCE_TITLES } from './data/sourceTitles.ts';
 import { SYSTEM_DATA } from './data/systems/index.ts';
-import type { Catalogue, GalaxyId, GalaxyRecord, MilestoneRecord, RouteRecord, SourceRecord, SystemRecord } from './types.ts';
+import type { Catalogue, GalaxyId, GalaxyRecord, MilestoneRecord, RouteRecord, SourceRef, SystemRecord } from './types.ts';
 import { validateCatalogue, type CatalogueIssue } from './validate.ts';
 
 let cached: Catalogue | null = null;
 
 /** The built catalogue (memoised; deterministic and deep-frozen). */
 export function getCatalogue(): Catalogue {
-  cached ??= buildCatalogue({ sources: SOURCES, galaxies: GALAXIES, systems: SYSTEM_DATA, archetypes: ARCHETYPES, routes: ROUTES, milestones: MILESTONES, progression: PROGRESSION });
+  cached ??= buildCatalogue({ sources: SOURCE_TITLES, galaxies: GALAXIES, systems: SYSTEM_DATA, archetypes: ARCHETYPES, routes: ROUTES, milestones: MILESTONES, progression: PROGRESSION });
   return cached;
 }
 
 /** Every validation problem in the shipped catalogue (empty when healthy). */
 export function catalogueIssues(): CatalogueIssue[] {
-  return validateCatalogue(getCatalogue());
+  // the shipped catalogue holds source ids and titles; the full records (publisher, URL, date, tier) are validated here
+  return validateCatalogue({ ...getCatalogue(), sources: SOURCES });
 }
 
 export interface CatalogueIndex {
   readonly catalogue: Catalogue;
   galaxy(id: string): GalaxyRecord | undefined;
   system(id: string): SystemRecord | undefined;
-  source(id: string): SourceRecord | undefined;
+  source(id: string): SourceRef | undefined;
   systemsIn(galaxyId: GalaxyId): readonly SystemRecord[];
   route(id: string): RouteRecord | undefined;
   milestone(id: string): MilestoneRecord | undefined;

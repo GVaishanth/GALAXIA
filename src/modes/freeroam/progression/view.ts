@@ -3,10 +3,12 @@
  * definitions and the world into display rows, so the panel stays DOM only
  * and never decides anything.
  */
+import { FACTIONS } from '../combat/factions.ts';
 import { resourceName } from '../inventory/resources.ts';
 import type { Board } from './contracts.ts';
-import { deliveryNeed, galaxyOf, missionDef, missionStatus, readyMissions, targetLocal, targetSystem, type MissionWorld, type PrereqContext } from './missions.ts';
-import { MISSION_TYPE_LABEL, TARGET_DONE, type MissionDef, type MissionState } from './missionTypes.ts';
+import { CHAINS, MISSION_BY_ID } from './missionData.ts';
+import { deliveryNeed, galaxyOf, missionDef, missionStatus, prereqMet, readyMissions, targetLocal, targetSystem, type MissionStatus, type MissionWorld, type PrereqContext } from './missions.ts';
+import { MISSION_TYPE_LABEL, TARGET_DONE, type MissionDef, type MissionState, type Prerequisite } from './missionTypes.ts';
 import { rewardLines } from './station.ts';
 
 export interface ObjectiveRow {
@@ -29,7 +31,85 @@ export interface MissionRow {
   readonly jumpsLeft: number | null;
   /** Delivery handed over here (docked at the target station) and how much the hold has. */
   readonly delivery: { readonly resource: string; readonly left: number; readonly have: number; readonly here: boolean } | null;
+  /** P09.2: "GLEANER ACCORD · STAGE 2 OF 3" for a chain stage, else null. */
+  readonly chain: string | null;
 }
+
+/** P09.1 read-only chain snapshot (for P09.2 presentation; derived from mission state, never stored). */
+export interface ChainStageView {
+  readonly id: string;
+  readonly title: string;
+  readonly status: MissionStatus;
+  /** The first unmet prerequisite while locked (data, e.g. { kind: 'heat', faction, below }), else null. */
+  readonly lockedBy: Prerequisite | null;
+  /** The authored consequence applied once at turn-in, or null. */
+  readonly heat: MissionDef['heat'] | null;
+  /** P09.2: objectives with progress ("Deliver scrap 2/6"), from the mission state. */
+  readonly objective: string;
+  readonly rewards: readonly string[];
+  /** P09.2: lockedBy in player words (lockText), else null. */
+  readonly why: string | null;
+  /** P09.2: the consequence as "GLEANERS HEAT −20" (heatText), else null. */
+  readonly consequence: string | null;
+}
+
+export interface ChainView {
+  readonly id: string;
+  readonly title: string;
+  /** Stages turned in. */
+  readonly completed: number;
+  /** The first stage not yet turned in (null = the chain is finished). */
+  readonly current: string | null;
+  readonly stages: readonly ChainStageView[];
+}
+
+/**
+ * P09.2: why a prerequisite is unmet, in player words. A heat gate is checked
+ * when the stage is accepted (missionStatus: an accepted stage stays active).
+ */
+export function lockText(p: Prerequisite, ctx: PrereqContext): string {
+  if (p.kind === 'mission') return `${p.claimed ? 'turn in' : 'finish'} ${MISSION_BY_ID.get(p.id)?.title ?? p.id} first`;
+  if (p.kind === 'heat') return `${FACTIONS[p.faction].short} heat must be below ${p.below} when you accept (now ${ctx.heat?.[p.faction] ?? 0})`;
+  return 'finish what it builds on first';
+}
+
+/** P09.2: "RED TALLY HEAT +15" (the canonical faction label and the authored amount). */
+export const heatText = (h: NonNullable<MissionDef['heat']>): string => `${FACTIONS[h.faction].short.toUpperCase()} HEAT ${h.delta > 0 ? '+' : '−'}${Math.abs(h.delta)}`;
+
+export const chainViews = (state: MissionState, ctx: PrereqContext): ChainView[] =>
+  CHAINS.map((c) => {
+    const stages = c.stages.map((id): ChainStageView => {
+      const d = MISSION_BY_ID.get(id)!;
+      const status = missionStatus(state, d, ctx);
+      const lockedBy = status === 'locked' ? (d.prerequisites.find((p) => !prereqMet(p, state, ctx)) ?? null) : null;
+      const m = state.active.find((x) => x.id === id);
+      const done = status === 'ready' || status === 'claimed';
+      return {
+        id,
+        title: d.title,
+        status,
+        lockedBy,
+        heat: d.heat ?? null,
+        objective: d.objectives.map((o, i) => `${o.label} ${done ? o.count : Math.min(o.count, m?.progress[i] ?? 0)}/${o.count}`).join(' · '),
+        rewards: rewardLines(d.rewards),
+        why: lockedBy && lockText(lockedBy, ctx),
+        consequence: d.heat ? heatText(d.heat) : null,
+      };
+    });
+    return { id: c.id, title: c.title, completed: stages.filter((s) => s.status === 'claimed').length, current: stages.find((s) => s.status !== 'claimed')?.id ?? null, stages };
+  });
+
+/** P09.2: what a confirmed change opened (stages now on the dispatch, chains finished), from two snapshots. */
+export const chainNews = (before: readonly ChainView[], after: readonly ChainView[]): string[] =>
+  after.flatMap((c, i) => [
+    ...c.stages.filter((s, j) => s.status === 'available' && before[i]?.stages[j]?.status === 'locked').map((s) => `Next: ${s.title} is on the Guild dispatch.`),
+    ...(c.current === null && before[i]?.current ? [`${c.title} complete.`] : []),
+  ]);
+
+const chainLabel = (def: MissionDef): string | null => {
+  const c = CHAINS.find((x) => x.id === def.chain);
+  return c ? `${c.title.toUpperCase()} · STAGE ${c.stages.indexOf(def.id) + 1} OF ${c.stages.length}` : null;
+};
 
 const LOCAL_LABEL: Readonly<Record<string, string>> = { derelict: 'derelict', anomaly: 'anomaly', salvage: 'salvage', installation: 'outpost', defence: 'wreck under attack', cache: 'cache' };
 
@@ -58,6 +138,7 @@ export function offerRow(def: MissionDef, world: Pick<MissionWorld, 'name'>, gal
     rewards: rewardLines(def.rewards),
     jumpsLeft: def.failure.deadlineJumps ?? null,
     delivery: null,
+    chain: chainLabel(def),
   };
 }
 
@@ -82,6 +163,8 @@ export interface MissionsModel {
   readonly board: readonly MissionRow[];
   readonly boardNote: string;
   readonly completed: readonly string[];
+  /** P09.2: the connected chains (chainViews). */
+  readonly chains: readonly ChainView[];
   /** Systems with an active target -> mission titles (system map markers). */
   readonly targets: ReadonlyMap<string, readonly string[]>;
 }
@@ -105,7 +188,7 @@ export function missionsModel(
   const offers = board ? board.offers.map((o) => offerRow(o.def, world, galaxyName, [o.spec.target])) : [];
   const boardNote = !dockedAt ? '' : !board || board.offers.length === 0 ? 'No contracts posted here any more. Other stations still have work.' : `${board.offers.length} open · ${board.remaining} more later at this station`;
   const completed = state.claimed.map((id) => missionDef(state, id)?.title ?? (id.startsWith('c:') ? 'Contract' : id));
-  return { ready, active, dispatch, board: offers, boardNote, completed, targets: missionTargets(state) };
+  return { ready, active, dispatch, board: offers, boardNote, completed, chains: chainViews(state, ctx), targets: missionTargets(state) };
 }
 
 /** Systems with an active mission target (for the system map). */

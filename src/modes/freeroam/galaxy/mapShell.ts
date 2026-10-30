@@ -11,14 +11,16 @@ import type { ModeContext } from '../../types.ts';
 import type { DisposableScope } from '../../../shared/lifecycle/scope.ts';
 import { CanvasSurface } from '../../../shared/rendering/canvasSurface.ts';
 import { MenuList } from '../../../shared/ui/menuList.ts';
+import type { MapCommand } from '../input.ts';
+import type { Direction } from './layout.ts';
 import type { RequirementInfo } from './progress.ts';
 
-export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
-  const n = document.createElement(tag);
-  if (className) n.className = className;
-  if (text !== undefined) n.textContent = text;
-  return n;
-}
+import { el } from '../progression/ui/common.ts';
+
+export { el };
+
+/** The fuel advice both maps give when a jump costs more cells than the hold carries. */
+export const DOCK_FOR_CELLS = 'Dock at a station for free emergency cells or buy cells at an exchange.';
 
 export function button(className: string, text: string, onClick: () => void): HTMLButtonElement {
   const b = el('button', className, text);
@@ -97,6 +99,31 @@ export interface MapShell {
   announce(text: string): void;
   /** Make everything behind the dialog inert (or not). */
   setInert(on: boolean): void;
+  /** Show or hide the travel confirmation (closing with `restore` returns focus to the detail actions). */
+  confirm(open: boolean, restore?: boolean): void;
+  /** The travel animation: the node list and details stay inert while it plays. */
+  travelling(on: boolean): void;
+  /** Hide the map: confirmation closed, travel animation dropped, hover cleared. */
+  hide(): void;
+  /** The node under the mouse (null when none). */
+  hovered: string | null;
+  /** A map node button: click / focus select it through `n` (never while travelling), mouse hover sets `hovered`. */
+  node(className: string, attr: string, id: string, name: string, n: MapNav): HTMLButtonElement;
+  /** The one keyboard / pad command router of both maps (FR-TD-98). */
+  route(c: MapCommand, confirming: boolean, close: (restore: boolean) => void, n: MapNav): void;
+}
+
+/** What the shared router needs from a map screen (node ids are the screen's own). */
+export interface MapNav {
+  readonly selected: () => string | null;
+  readonly focused: () => string | null;
+  readonly select: (id: string) => void;
+  readonly focusNode: (id: string | null) => void;
+  readonly exit: () => void;
+  /** CONFIRM on a node with no action: announce why it cannot be reached. */
+  readonly unreachable: (id: string) => void;
+  /** The neighbour in that direction (undefined before the first layout). */
+  readonly next: (from: string, c: Direction) => string | null | undefined;
 }
 
 export const DET_ART_SIZE = 48;
@@ -170,10 +197,13 @@ export function createMapShell(o: MapShellOptions): MapShell {
   const live = el('p', 'fr-sr-only');
   live.setAttribute('aria-live', 'polite');
 
+  const setInert = (on: boolean): void => {
+    for (const n of [head, fieldBox, details]) n.inert = on;
+  };
   root.append(head, fieldBox, details, confirmLayer, live);
   o.parent.append(root);
 
-  return {
+  const api: MapShell = {
     root,
     head,
     back,
@@ -199,8 +229,93 @@ export function createMapShell(o: MapShellOptions): MapShell {
     announce(text) {
       live.textContent = text;
     },
-    setInert(on) {
-      for (const n of [head, fieldBox, details]) n.inert = on;
+    setInert,
+    confirm(open, restore) {
+      confirmLayer.hidden = !open;
+      if (open) root.dataset['confirm'] = 'open';
+      else delete root.dataset['confirm'];
+      setInert(open);
+      if (open) confirmMenu.focus(0);
+      else if (restore) {
+        moveSound();
+        actionMenu.focus(0);
+      }
+    },
+    hide() {
+      api.confirm(false);
+      api.travelling(false);
+      root.hidden = true;
+      api.hovered = null;
+    },
+    hovered: null,
+    node(className, attr, id, name, n) {
+      const b = button(className, '', () => {
+        if (nodesNav.inert) return;
+        if (n.selected() !== id) moveSound();
+        n.select(id);
+        b.focus({ preventScroll: true }); // Safari does not focus buttons on click
+      });
+      b.dataset[attr] = id;
+      b.setAttribute('aria-controls', details.id);
+      b.append(el('span', 'fr-node-name', name), el('span', 'fr-node-sub'));
+      b.addEventListener('focus', () => {
+        if (!nodesNav.inert && n.selected() !== id) n.select(id);
+      });
+      b.addEventListener('pointerenter', (e) => {
+        if (e.pointerType === 'mouse') api.hovered = id;
+      });
+      b.addEventListener('pointerleave', () => {
+        if (api.hovered === id) api.hovered = null;
+      });
+      return b;
+    },
+    travelling(on) {
+      if (on) root.dataset['travel'] = 'on';
+      else delete root.dataset['travel'];
+      nodesNav.inert = on;
+      details.inert = on;
+    },
+    route(c, confirming, close, n) {
+      if (confirming) {
+        if (c === 'up' || c === 'left') confirmMenu.move(-1);
+        else if (c === 'down' || c === 'right') confirmMenu.move(1);
+        else if (c === 'confirm') confirmMenu.activate();
+        else if (c === 'back') close(true);
+        return;
+      }
+      const a = document.activeElement;
+      // a focused header control (◀ MENU, SAVES, the Admin chip) or detail action: Enter / Space / A presses it
+      if (a instanceof HTMLElement && (details.contains(a) || (a !== head && head.contains(a)))) {
+        if (c === 'back') {
+          n.focusNode(n.selected());
+          moveSound();
+        } else if (c === 'confirm') a.click();
+        else if (detActions.contains(a) && actionMenu.buttons().length > 1 && (c === 'up' || c === 'down')) actionMenu.move(c === 'up' ? -1 : 1);
+        else n.focusNode(n.selected());
+        return;
+      }
+      if (c === 'back') return n.exit();
+      const id = n.focused() ?? n.selected();
+      if (!id) return;
+      if (c === 'confirm') {
+        if (id !== n.selected()) n.select(id);
+        if (actionMenu.buttons().length > 0) {
+          moveSound();
+          actionMenu.focus(0);
+        } else {
+          n.unreachable(id);
+          n.focusNode(id);
+        }
+        return;
+      }
+      const next = n.next(id, c);
+      if (next === undefined) return;
+      if (next) {
+        moveSound();
+        n.select(next);
+        n.focusNode(next);
+      } else n.focusNode(id);
     },
   };
+  return api;
 }

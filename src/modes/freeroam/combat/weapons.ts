@@ -82,5 +82,3 @@ export const WEAPONS: Readonly<Record<WeaponId, WeaponDef>> = Object.freeze({
   launch: { ...base, id: 'launch', name: 'Launch bay', kind: 'launch', telegraph: 'bay', damage: 0, speed: 0, life: 0, cooldown: 360, windup: 50, range: 900, arc: Math.PI, maxLive: 4 },
 });
 
-/** Field mines (minefield hazards) use the mine weapon's blast, trigger and fuse. */
-export const FIELD_MINE = WEAPONS.mine;

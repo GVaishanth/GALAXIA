@@ -159,7 +159,7 @@ class BodyGravity implements GravitySource {
     return gravityAt(this.body.x + this.body.vx * h * k, this.body.y + this.body.vy * h * k, x, y, this.field, out);
   }
 }
-const bodyGravity = new BodyGravity();
+const bodyGravity = /* @__PURE__ */ new BodyGravity();
 const gScratch: Vec = { x: 0, y: 0 };
 const mScratch: Vec = { x: 0, y: 0 };
 

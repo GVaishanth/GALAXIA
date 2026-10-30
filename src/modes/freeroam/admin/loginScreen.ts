@@ -17,6 +17,7 @@
  * everything. The password is never logged or stored; the field is cleared
  * on every submit.
  */
+import { el } from '../progression/ui/common.ts';
 import { OWNER_IDENTITY, REVEAL_TIMING, WELCOME_LINE, createGlitch, isAdminPassword, renderSlots, revealOrder, revealSlots, revealTimeline, seededRng, type Slot } from './login.ts';
 
 export interface AdminLoginDeps {
@@ -64,12 +65,6 @@ export interface AdminLogin {
   destroy(): void;
 }
 
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] => {
-  const n = document.createElement(tag);
-  if (cls) n.className = cls;
-  if (text !== undefined) n.textContent = text;
-  return n;
-};
 
 export function createAdminLogin(d: AdminLoginDeps): AdminLogin {
   const root = el('section', 'adm-login');

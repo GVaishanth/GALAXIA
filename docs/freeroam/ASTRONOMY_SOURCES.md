@@ -1,6 +1,6 @@
 # Free Roam: Astronomy Sources
 
-> **Status: implemented data (Free Roam Prompt 3, 2026-10-19).** This file mirrors `src/modes/freeroam/catalogue/data/sources.ts`, `data/galaxies.ts` and the verified rows in `data/systems/*.ts`. The tables in §2 to §4 are generated from that data by `npm run catalogue:doc`. `tests/catalogue.test.ts` checks that every source URL appears here, so the two cannot silently drift apart.
+> **Status: implemented data (Free Roam Prompt 3, 2026-10-19).** This file mirrors `src/modes/freeroam/catalogue/data/sources.ts`, `data/galaxies.ts` and the verified rows in `data/systems/*.ts`. The tables in §2 to §4 are generated from that data by `npm run catalogue:doc`. `tests/catalogue.test.ts` checks that every source URL appears here, so the two cannot silently drift apart. Since P09.1 the game ships only each source's id and title (`data/sourceTitles.ts`). The publisher, URL, date and tier below come from `data/sources.ts`, which stays in the repository for validation and this document.
 
 ## 1. How the sources were used
 

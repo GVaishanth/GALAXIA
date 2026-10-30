@@ -196,6 +196,8 @@ export interface SavedProgression {
   readonly ledger?: SavedLedger;
   /** Economy pass (additive): system id -> bounty paid in the current period and the jump count it opened at. */
   readonly bounty?: Readonly<Record<string, { readonly paid: number; readonly since: number }>>;
+  /** P09.1 (additive): faction id -> heat 1..100 (quiet factions omitted; absent = all quiet). */
+  readonly heat?: Readonly<Record<string, number>>;
 }
 
 export const EMPTY_PROGRESSION: SavedProgression = Object.freeze({
@@ -592,7 +594,7 @@ function ordnanceField(f: Fix, v: unknown): Readonly<Record<string, number>> {
 }
 
 /* v9 progression (shapes only) */
-const MISSION_ID = /^story-[a-z]+(?:-[a-z]+)*$|^c:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*:[0-9]:[0-9]$/;
+const MISSION_ID = /^(?:story|chain)-[a-z]+(?:-[a-z]+)*$|^c:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*:[0-9]:[0-9]$/;
 const TARGET_REF = /^$|^-$|^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*(?:#[a-z]+(?:-[0-9]+(?:\.[0-9]+)?)?)?$/;
 const WORD_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const LOG_KEY = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*(?:#[a-z]+(?:-[0-9]+(?:\.[0-9]+)?)?)?)?$/;
@@ -732,6 +734,20 @@ function upgradesField(f: Fix, v: unknown): Readonly<Record<string, Readonly<Rec
   return out;
 }
 
+/** P09.1 faction heat (shapes only: Free Roam drops unknown factions on load). */
+function heatField(f: Fix, v: unknown): Record<string, number> | null {
+  if (v === undefined) return null;
+  const out: Record<string, number> = {};
+  const es = isObj(v) ? Object.entries(v) : [];
+  if (!isObj(v) || es.length > 8) f.repaired = true;
+  for (const [k, n] of es.slice(0, 8)) {
+    const x = int(n, 0, 100);
+    if (x === null || !WORD_ID.test(k)) f.repaired = true;
+    else if (x) out[k] = x;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function progressionField(f: Fix, v: unknown): SavedProgression {
   const D = EMPTY_PROGRESSION;
   if (v === undefined) return D;
@@ -742,6 +758,7 @@ function progressionField(f: Fix, v: unknown): SavedProgression {
   const missions = missionsField(f, v['missions']);
   const ledger = ledgerField(f, v['ledger']);
   const bounty = bountyField(f, v['bounty'], missions.jumps);
+  const heat = heatField(f, v['heat']);
   return {
     marks: int(v['marks'], 0, MAX_MARKS) ?? ((f.repaired ||= v['marks'] !== undefined), 0),
     missions,
@@ -751,6 +768,7 @@ function progressionField(f: Fix, v: unknown): SavedProgression {
     fuel: fuelOk ? { starter: fuel['starter'] as boolean, arrivals: fuel['arrivals'] as number, aidAt: Math.min(fuel['aidAt'] as number, fuel['arrivals'] as number) } : D.fuel,
     ...(ledger ? { ledger } : {}),
     ...(bounty ? { bounty } : {}),
+    ...(heat ? { heat } : {}),
   };
 }
 

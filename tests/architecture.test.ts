@@ -294,7 +294,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps Free Roam combat pure and independent of Classic (Prompt 9)', () => {
     const dir = join(src, 'modes/freeroam/combat');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'dilation.ts', 'encounters.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'shipAbilities.ts', 'shipLock.ts', 'state.ts', 'stealth.ts', 'weapons.ts', 'world.ts']);
+    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'dilation.ts', 'encounters.ts', 'factionHeat.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'shipAbilities.ts', 'shipLock.ts', 'state.ts', 'stealth.ts', 'weapons.ts', 'world.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // deterministic simulation: no DOM, wall clock, unseeded randomness or storage

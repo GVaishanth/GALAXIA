@@ -18,6 +18,7 @@
  * Pure data and rules: no DOM, no storage.
  */
 import { deriveShip, MODULE_MUL_RANGE, STAT_BOUNDS, WEAPON_TUNING_RANGE, type ShipExtras, type WeaponTuning } from './equipment.ts';
+import { missingFor } from './hangar.ts';
 import { SHIP_BY_ID } from './roster.ts';
 import { STAT_KEYS, type DerivedShip, type Loadout, type ResourceCost, type ShipArchetype, type ShipId, type StatKey, type StatModifiers } from './types.ts';
 
@@ -220,7 +221,7 @@ export function checkUpgrade(ship: ShipId, levels: UpgradeLevels, trackId: strin
   if (cap === 0) return { ...base, ok: false, reason: 'incompatible', to: 0, cost: null, missing: [], licence: null };
   if (from >= cap) return { ...base, ok: false, reason: 'max', to: 0, cost: null, missing: [], licence: null };
   const step = UPGRADE_BY_TRACK.get(trackId)!.steps[from]!;
-  const missing = step.cost.materials.filter((m) => (wallet.hold[m.resource] ?? 0) < m.amount).map((m) => ({ resource: m.resource, amount: m.amount - (wallet.hold[m.resource] ?? 0) }));
+  const missing = missingFor(step.cost.materials, wallet.hold);
   const out = { ...base, to: step.level, cost: step.cost, missing, licence: step.licence };
   if (step.licence && !licences.includes(step.licence)) return { ...out, ok: false, reason: 'licence' };
   if (wallet.marks < step.cost.marks) return { ...out, ok: false, reason: 'marks' };

@@ -267,6 +267,9 @@ export interface LootContext {
   readonly secondary: ResourceId | null;
 }
 
+/** The loot context of a system record or a sector layout (both carry the same four fields). */
+export const lootContextOf = (s: { readonly difficulty: number; readonly resources: Omit<LootContext, 'difficulty'> }): LootContext => ({ difficulty: s.difficulty, richness: s.resources.richness, primary: s.resources.primary, secondary: s.resources.secondary });
+
 /** Extra weights for enemy salvage pods by faction and by ship family (added to the enemy table). */
 export const FACTION_LOOT_BIAS: Readonly<Record<FactionId, Partial<Record<ResourceId, number>>>> = Object.freeze({
   tessellate: { circuits: 3, components: 2, crystal: 1 },

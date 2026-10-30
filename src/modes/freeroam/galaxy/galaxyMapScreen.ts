@@ -20,7 +20,7 @@ import type { MapCommand } from '../input.ts';
 import { GalaxyArtCache } from './galaxyArt.ts';
 import type { NavEdge, NavGraph } from './graph.ts';
 import { computeMapLayout, nodeBox, spatialNext, type MapLayout } from './layout.ts';
-import { button, createMapShell, el, reqList } from './mapShell.ts';
+import { button, createMapShell, DOCK_FOR_CELLS, el, reqList, type MapNav } from './mapShell.ts';
 import { deriveSystemView } from './systems.ts';
 import { drawGalaxyMap, type TravelAnim } from './mapRender.ts';
 import {
@@ -150,7 +150,6 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
   let states = {} as Record<GalaxyId, NodeState>;
   let edgeStates = new Map<string, EdgeState>();
   let selected: GalaxyId = view.progress.current;
-  let hovered: GalaxyId | null = null;
   let layout: MapLayout | null = null;
   let confirmTarget: GalaxyId | null = null;
   let travel: { from: GalaxyId; to: GalaxyId; start: number | null; dur: number } | null = null;
@@ -181,33 +180,9 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
       onCancel: () => closeConfirm(true),
     },
   });
-  const { root, back, sub, surface, nodesNav, details, detArt, detKicker, detName, detClass, detBody, detActions, actionMenu, confirmLayer, cTitle, cRoute, cStats, confirmMenu } = shell;
+  const { root, sub, surface, nodesNav, details, detArt, detKicker, detName, detClass, detBody, detActions, cTitle, cRoute, cStats } = shell;
 
   const nodeButtons = new Map<GalaxyId, HTMLButtonElement>();
-  for (const node of graph.nodes) {
-    const b = el('button', 'fr-node');
-    b.type = 'button';
-    b.dataset['galaxy'] = node.id;
-    b.setAttribute('aria-controls', details.id);
-    b.append(el('span', 'fr-node-name', node.galaxy.shortName), el('span', 'fr-node-sub'));
-    b.addEventListener('click', () => {
-      if (travel) return;
-      if (selected !== node.id) services.sound.play('uiMove');
-      select(node.id);
-      b.focus({ preventScroll: true }); // Safari does not focus buttons on click
-    });
-    b.addEventListener('focus', () => {
-      if (!travel && selected !== node.id) select(node.id);
-    });
-    b.addEventListener('pointerenter', (e) => {
-      if (e.pointerType === 'mouse') hovered = node.id;
-    });
-    b.addEventListener('pointerleave', () => {
-      if (hovered === node.id) hovered = null;
-    });
-    nodesNav.append(b);
-    nodeButtons.set(node.id, b);
-  }
 
   /* ---------------------------------------------------- rendering */
   const announce = (text: string): void => shell.announce(text);
@@ -290,7 +265,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
       if (deps.fuel) {
         const need = deps.fuel.jump(check.edge);
         const have = deps.fuel.held();
-        const line = el('p', `fr-det-note${have < need ? ' fr-fuel-warn' : ''}`, `JUMP COST ${need} REACTOR CELLS · YOU HAVE ${have}${have < need ? '. Dock at a station for free emergency cells or buy cells at an exchange.' : ''}`);
+        const line = el('p', `fr-det-note${have < need ? ' fr-fuel-warn' : ''}`, `JUMP COST ${need} REACTOR CELLS · YOU HAVE ${have}${have < need ? `. ${DOCK_FOR_CELLS}` : ''}`);
         body.push(line);
       }
     } else if (check.reason === 'locked') {
@@ -384,8 +359,6 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
   };
 
   /* -------------------------------------------------- confirm + travel */
-  const setInert = (on: boolean): void => shell.setInert(on);
-
   function openConfirm(id: GalaxyId): void {
     const check = checkTravel(view, id);
     if (!check.ok) {
@@ -400,22 +373,13 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     cTitle.textContent = to.name.toUpperCase();
     cRoute.textContent = `${from.shortName} → ${to.shortName} via ${r.name}`;
     cStats.textContent = `${ROUTE_LABEL[r.routeClass].toUpperCase()} · RISK ${RISK_LABEL[r.risk].toUpperCase()} · ${deps.fuel ? `COST ${deps.fuel.jump(check.edge)} CELLS · YOU HAVE ${deps.fuel.held()}${deps.fuel.fee ? ` · ${deps.fuel.fee()}` : ''}` : `CHARGE ${r.cost}`}`;
-    confirmLayer.hidden = false;
-    root.dataset['confirm'] = 'open';
-    setInert(true);
-    confirmMenu.focus(0);
+    shell.confirm(true);
   }
 
   function closeConfirm(restoreFocus: boolean): void {
     if (confirmTarget === null) return;
     confirmTarget = null;
-    confirmLayer.hidden = true;
-    delete root.dataset['confirm'];
-    setInert(false);
-    if (restoreFocus) {
-      services.sound.play('uiMove');
-      actionMenu.focus(0);
-    }
+    shell.confirm(false, restoreFocus);
   }
 
   function engage(): void {
@@ -448,9 +412,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     services.sound.play('uiSelect');
     travel = { from, to, start: null, dur: deps.reducedMotion() ? 240 : 720 };
     travelT = 0;
-    root.dataset['travel'] = 'on';
-    nodesNav.inert = true;
-    details.inert = true;
+    shell.travelling(true);
     announce(`Jumping to ${graph.node(to)!.galaxy.name}.`);
   }
 
@@ -458,9 +420,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     if (!travel) return;
     const to = travel.to;
     travel = null;
-    delete root.dataset['travel'];
-    nodesNav.inert = false;
-    details.inert = false;
+    shell.travelling(false);
     refresh();
     select(to, false);
     focusNode(to);
@@ -470,53 +430,25 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
   }
 
   /* ------------------------------------------------------- commands */
+  const nav: MapNav = {
+    selected: () => selected,
+    focused: focusedNode,
+    select: (id) => select(id as GalaxyId),
+    focusNode: (id) => focusNode(id as GalaxyId),
+    exit: () => deps.exit(),
+    unreachable: (id) => {
+      const check = checkTravel(view, id as GalaxyId);
+      announce(`${graph.node(id as GalaxyId)!.galaxy.name} cannot be reached from here${!check.ok && check.reason === 'locked' ? ': it is locked' : ''}. See the details panel.`);
+    },
+    next: (from, c) => (layout ? spatialNext(layout.nodes, from, c) : undefined),
+  };
+  for (const node of graph.nodes) {
+    const b = shell.node('fr-node', 'galaxy', node.id, node.galaxy.shortName, nav);
+    nodesNav.append(b);
+    nodeButtons.set(node.id, b);
+  }
   function command(c: MapCommand): void {
-    if (!visible || travel) return;
-    if (confirmTarget !== null) {
-      if (c === 'up' || c === 'left') confirmMenu.move(-1);
-      else if (c === 'down' || c === 'right') confirmMenu.move(1);
-      else if (c === 'confirm') confirmMenu.activate();
-      else if (c === 'back') closeConfirm(true);
-      return;
-    }
-    const a = document.activeElement;
-    // a focused header control (◀ MENU, SAVES) or detail action: Enter / Space / A presses it
-    const inHead = a instanceof HTMLElement && a !== shell.head && shell.head.contains(a);
-    if (a instanceof HTMLElement && (details.contains(a) || a === back || inHead)) {
-      if (c === 'back') {
-        focusNode(selected);
-        services.sound.play('uiMove');
-      } else if (c === 'confirm') a.click();
-      else if (details.contains(a) && actionMenu.buttons().length > 1 && (c === 'up' || c === 'down')) actionMenu.move(c === 'up' ? -1 : 1);
-      else focusNode(selected);
-      return;
-    }
-    if (c === 'back') {
-      deps.exit();
-      return;
-    }
-    if (c === 'confirm') {
-      const id = focusedNode() ?? selected;
-      if (id !== selected) select(id);
-      if (actionMenu.buttons().length > 0) {
-        services.sound.play('uiMove');
-        actionMenu.focus(0);
-      } else {
-        const g = graph.node(id)!.galaxy;
-        const check = checkTravel(view, id);
-        announce(`${g.name} cannot be reached from here${!check.ok && check.reason === 'locked' ? ': it is locked' : ''}. See the details panel.`);
-        focusNode(id);
-      }
-      return;
-    }
-    if (!layout) return;
-    const from = focusedNode() ?? selected;
-    const next = spatialNext(layout.nodes, from, c) as GalaxyId | null;
-    if (next) {
-      services.sound.play('uiMove');
-      select(next);
-      focusNode(next);
-    } else focusNode(from);
+    if (visible && !travel) shell.route(c, confirmTarget !== null, closeConfirm, nav);
   }
 
   /* ---------------------------------------------------------- frame */
@@ -566,8 +498,8 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
         edgeStates,
         current: travel ? travel.from : view.progress.current,
         selected: travel ? null : selected,
-        hovered: travel ? null : hovered,
-        highlight: travel ? new Set(graph.edgeBetween(travel.from, travel.to) ? [graph.edgeBetween(travel.from, travel.to)!.id] : []) : course(hovered ?? selected),
+        hovered: travel ? null : (shell.hovered as GalaxyId | null),
+        highlight: travel ? new Set(graph.edgeBetween(travel.from, travel.to) ? [graph.edgeBetween(travel.from, travel.to)!.id] : []) : course((shell.hovered as GalaxyId | null) ?? selected),
         travel: anim,
         arrival: flash,
       },
@@ -594,16 +526,10 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
     },
     hide() {
       visible = false;
-      closeConfirm(false);
-      if (travel) {
-        travel = null; // progress was already committed; only the cosmetic animation is dropped
-        delete root.dataset['travel'];
-        nodesNav.inert = false;
-        details.inert = false;
-      }
+      confirmTarget = null;
+      travel = null; // progress was already committed; only the cosmetic animation is dropped
       arrival = null;
-      root.hidden = true;
-      hovered = null;
+      shell.hide();
     },
     command,
     frame,
@@ -614,7 +540,7 @@ export function createGalaxyMap(deps: GalaxyMapDeps): GalaxyMapScreen {
         visible,
         selected,
         focused: focusedNode(),
-        hovered,
+        hovered: shell.hovered as GalaxyId | null,
         current: view.progress.current,
         confirmOpen: confirmTarget !== null,
         transition: travel !== null,

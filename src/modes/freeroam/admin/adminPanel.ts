@@ -16,7 +16,7 @@
  */
 import { MenuList } from '../../../shared/ui/menuList.ts';
 import type { GalaxyId } from '../catalogue/types.ts';
-import { btn, el } from '../progression/ui/common.ts';
+import { btn, el, focusedKey } from '../progression/ui/common.ts';
 import { NORMAL_TEXT, type NavGalaxyRow, type NavSystemRow } from './navigator.ts';
 import type { DestinationRef } from './session.ts';
 
@@ -118,7 +118,7 @@ export function createAdminPanel(d: AdminPanelDeps): AdminPanel {
       b.scrollIntoView({ block: 'nearest' });
     }
   };
-  const currentKey = (): string | undefined => (document.activeElement instanceof HTMLElement && box.contains(document.activeElement) ? document.activeElement.dataset['key'] : undefined);
+  const currentKey = (): string | undefined => focusedKey(box);
 
   // the search field: element-owned listener; typing never reaches the game (the key tracker ignores text fields)
   const search = el('input', 'fr-admin-search');

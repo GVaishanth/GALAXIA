@@ -17,7 +17,7 @@
  */
 import { contractDef, patrolShips } from './contracts.ts';
 import type { GameEvent } from './events.ts';
-import { STORY_BY_ID } from './missionData.ts';
+import { MISSION_BY_ID } from './missionData.ts';
 import { TARGET_DONE, type ActiveMission, type ContractSpec, type MissionDef, type MissionState, type ObjectiveDef, type Prerequisite } from './missionTypes.ts';
 
 export const MAX_ACTIVE = 6;
@@ -51,6 +51,8 @@ export interface MissionWorld {
 export interface PrereqContext {
   readonly visitedGalaxies: readonly string[];
   readonly charted: number;
+  /** P09.1: faction heat values (absent faction = 0). */
+  readonly heat?: Readonly<Partial<Record<string, number>>> | undefined;
 }
 
 export const galaxyOf = (systemId: string): string => systemId.split('/')[0] ?? '';
@@ -61,15 +63,16 @@ export const targetLocal = (target: string): string => target.split('#')[1] ?? '
 
 /** The definition of a mission id: story missions from the table, contracts from their saved spec. */
 export function missionDef(state: MissionState, id: string): MissionDef | undefined {
-  const story = STORY_BY_ID.get(id);
+  const story = MISSION_BY_ID.get(id);
   if (story) return story;
   const spec = state.active.find((m) => m.id === id)?.contract ?? state.ready[id];
   return spec ? contractDef(id, spec) : undefined;
 }
 
 export function prereqMet(p: Prerequisite, state: MissionState, ctx: PrereqContext): boolean {
-  if (p.kind === 'mission') return state.completed.includes(p.id);
+  if (p.kind === 'mission') return (p.claimed ? state.claimed : state.completed).includes(p.id);
   if (p.kind === 'galaxy') return ctx.visitedGalaxies.includes(p.id);
+  if (p.kind === 'heat') return (ctx.heat?.[p.faction] ?? 0) < p.below;
   return ctx.charted >= p.count;
 }
 
@@ -84,7 +87,7 @@ export function missionStatus(state: MissionState, def: MissionDef, ctx: PrereqC
 }
 
 /** Story missions the pilot can accept now (a failed story mission can be accepted again). */
-export function availableStory(state: MissionState, ctx: PrereqContext, all: Iterable<MissionDef> = STORY_BY_ID.values()): MissionDef[] {
+export function availableStory(state: MissionState, ctx: PrereqContext, all: Iterable<MissionDef> = MISSION_BY_ID.values()): MissionDef[] {
   return [...all].filter((d) => missionStatus(state, d, ctx) === 'available');
 }
 
@@ -190,7 +193,7 @@ export function objectiveGain(o: ObjectiveDef, target: string, missionId: string
     case 'clear':
       return e.type === 'encounter-cleared' && e.kind === o.encounter && inScope(e.systemId) && (!local || e.encounterId === local) ? 1 : 0;
     case 'destroy':
-      return e.type === 'hostile-destroyed' && inScope(e.systemId) && (!o.patrol || e.role === 'patrol') ? 1 : 0;
+      return e.type === 'hostile-destroyed' && inScope(e.systemId) && (!o.patrol || e.role === 'patrol') && (!o.faction || e.faction === o.faction) ? 1 : 0;
     case 'acquire':
       return e.type === 'resource-acquired' && (o.resources ?? []).includes(e.resource) ? e.amount : 0;
     case 'deliver':

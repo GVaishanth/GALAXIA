@@ -79,6 +79,8 @@ export interface Agent {
   target: Target | null;
   /** Last known target position (investigate). */
   lastSeen: { x: number; y: number } | null;
+  /** P09.1: tick of this ship's last heat-counted player hit (combat/factionHeat.ts). */
+  heatAt?: number;
   /** Post: patrol waypoint index / guard position. */
   waypoint: number;
   readonly homeX: number;

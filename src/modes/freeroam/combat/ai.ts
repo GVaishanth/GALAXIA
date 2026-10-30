@@ -45,6 +45,7 @@ import { COMBAT } from './difficulty.ts';
 import { CAPITAL_LAUNCH_TOTAL, CAPITAL_PHASE_TWO, FAMILIES, PHASE_TWO_WEAPONS, type FamilyId } from './families.ts';
 import type { FactionId } from '../catalogue/types.ts';
 import { inInterference } from './hazards.ts';
+import { HEAT, heatOf, heatTier } from './factionHeat.ts';
 import { dropMine, spawnShot, stepBeam } from './projectiles.ts';
 import type { Agent, AgentRole, AiState, Target } from './state.ts';
 import { bodyBetween, effectiveRange, signature, STEALTH } from './stealth.ts';
@@ -160,12 +161,14 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
   a.shadow = false;
   if (playerOk) {
     const d = dist(a, P);
-    const range = effectiveRange(detectRange(run, a, P), signature(run)) * (keep === 'player' ? 1.3 : 1);
+    // P09.1: this faction's heat tier widens its detect range before the signature scales it, and lengthens its memory
+    const t = heatTier(heatOf(run.factionHeat, a.faction));
+    const range = effectiveRange(detectRange(run, a, P) * HEAT.rangeMul[t]!, signature(run)) * (keep === 'player' ? 1.3 : 1);
     a.shadow = d <= range && !!(blocked ? blocked(a.x, a.y, P.x, P.y) : bodyBetween(run.layout.landmarks, a.x, a.y, P.x, P.y));
     if (d <= range && !a.shadow) {
       best = 'player';
       bestScore = d * 0.85;
-    } else mem = !blocked && keep === 'player' && a.lost < STEALTH.memoryTicks;
+    } else mem = !blocked && keep === 'player' && a.lost < STEALTH.memoryTicks + HEAT.memory[t]!;
   }
   const mayInfight = typeof keep === 'number' || infighters < COMBAT.maxInfighters;
   if (mayInfight) {

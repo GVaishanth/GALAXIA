@@ -13,6 +13,9 @@ import { MenuList } from '../../../shared/ui/menuList.ts';
 import { btn, el } from '../progression/ui/common.ts';
 import { formatPlayTime, type SlotInfo, type SlotNo } from '../saveSlots.ts';
 
+/** One wording for a failed write (this panel and the shell's SAVE NOW). */
+export const SAVE_RETRY = 'The game keeps running and tries again at the next save.';
+
 /** Names for the ids a slot stores (resolved by the chunk against the catalogue). */
 export interface SlotNames {
   galaxy(id: string): string;
@@ -117,7 +120,7 @@ export function storageLines(v: SavesView): readonly { readonly text: string; re
   const out: { text: string; warn: boolean }[] = [];
   if (!v.persistent) out.push({ text: 'Browser storage is unavailable: progress lasts only until this tab closes.', warn: true });
   else if (!v.writable) out.push({ text: 'The slot in use is read-only here (newer save data, or no backup copy could be made): progress is not saved.', warn: true });
-  else if (v.lastSaveFailed) out.push({ text: 'The last save FAILED (browser storage full or blocked). The game keeps running and tries again at the next save.', warn: true });
+  else if (v.lastSaveFailed) out.push({ text: `The last save FAILED (browser storage full or blocked). ${SAVE_RETRY}`, warn: true });
   else if (v.lastSaveAt > 0) out.push({ text: `Slot ${v.active} saved ${formatSavedAt(v.lastSaveAt)}.`, warn: false });
   out.push({ text: 'Saves stay in this browser on this device only: they do not sync to other devices or browsers, and clearing site data erases them.', warn: false });
   return out;

@@ -26,6 +26,7 @@
  */
 import type { NavGraph } from './galaxy/graph.ts';
 import { progressFromSaved } from './galaxy/progress.ts';
+import { heatBook } from './combat/factionHeat.ts';
 import { MILESTONE_BY_ID } from './inventory/milestones.ts';
 import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
 import { withCrew, withNavigation, type FreeRoamProfile, type SectorRecord } from './profile.ts';
@@ -91,7 +92,8 @@ export function auditProfile(graph: NavGraph, p: FreeRoamProfile): AuditResult {
   if (crew.changes > 0) out = withCrew(out, crewToSaved(crew.state));
 
   /* progression */
-  const prog = progressionToSaved(progressionFromSaved(p.progression));
+  // P09.1: the faction heat goes through the same book the game uses (unknown factions dropped, values kept)
+  const prog = progressionToSaved(progressionFromSaved(p.progression), heatBook(p.progression.heat));
   const m0 = p.progression.missions;
   const m1 = prog.missions;
   note(

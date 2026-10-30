@@ -42,7 +42,7 @@ import { freshGravity, pullOn, type GravityState, type Well } from './gravityWel
 import { freshTelemetry, stepVector, type FlightParams, type GravitySource, type ManoeuvreSource, type StepTelemetry, type VectorControls } from './vectorFlight.ts';
 
 export type FlightMode = 'normal' | 'realistic';
-export const FLIGHT_MODES: readonly FlightMode[] = Object.freeze(['normal', 'realistic']);
+export const FLIGHT_MODES: readonly FlightMode[] = /* @__PURE__ */ Object.freeze(['normal', 'realistic']);
 export const DEFAULT_FLIGHT_MODE: FlightMode = 'normal';
 export const isFlightMode = (v: unknown): v is FlightMode => v === 'normal' || v === 'realistic';
 

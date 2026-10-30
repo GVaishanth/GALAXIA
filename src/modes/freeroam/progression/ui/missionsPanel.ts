@@ -9,6 +9,7 @@
  * it means: rewards, deadline, or what is lost).
  */
 import { MenuList } from '../../../../shared/ui/menuList.ts';
+import { HEAT_HELP, type HeatView } from '../../combat/factionHeat.ts';
 import type { MissionRow, MissionsModel } from '../view.ts';
 import { btn, el, focusedKey, panelShell, restoreFocus } from './common.ts';
 
@@ -18,6 +19,8 @@ export interface MissionsDeps {
   /** Display name of the station docked at. */
   readonly stationName: () => string;
   readonly model: () => MissionsModel;
+  /** P09.2: the four factions' heat (read-only snapshot). */
+  readonly standing: () => readonly HeatView[];
   readonly accept: (id: string) => string;
   readonly abandon: (id: string) => string;
   readonly claim: (id: string) => { readonly ok: boolean; readonly text: string };
@@ -35,6 +38,9 @@ export interface MissionsPanel {
   status(): { readonly pending: string | null; readonly message: string; readonly keys: readonly string[] };
 }
 
+/** P09.2: a chain stage's status in words (the real MissionStatus; never colour or a glyph alone). */
+const STAGE: Readonly<Record<string, string>> = { locked: 'LOCKED', available: 'ON THE GUILD DISPATCH', active: 'ACTIVE', ready: 'TURN IN AT ANY STATION', claimed: 'TURNED IN', failed: 'FAILED' };
+
 export function createMissionsPanel(d: MissionsDeps): MissionsPanel {
   const s = panelShell('missions', 'Missions', 'MISSIONS');
   const menuList = new MenuList(s.menu, () => d.sound('uiMove'));
@@ -48,7 +54,7 @@ export function createMissionsPanel(d: MissionsDeps): MissionsPanel {
     const li = el('li', `fr-fab-row fr-mission is-${r.source}`);
     li.dataset['mission'] = r.id;
     const info = el('div', 'fr-fab-info');
-    info.append(el('span', 'fr-fab-name', `${r.title.toUpperCase()} · ${r.source === 'story' ? 'GUILD STORY' : 'CONTRACT'}`), el('span', 'fr-mission-type', r.type), el('span', 'fr-fab-desc', r.description));
+    info.append(el('span', 'fr-fab-name', `${r.title.toUpperCase()} · ${r.chain ?? (r.source === 'story' ? 'GUILD STORY' : 'CONTRACT')}`), el('span', 'fr-mission-type', r.type), el('span', 'fr-fab-desc', r.description));
     const obj = el('ul', 'fr-mission-obj');
     for (const o of r.objectives) obj.append(el('li', o.value >= o.count ? 'is-done' : '', `${o.value >= o.count ? '✓' : '○'} ${o.label} ${o.value}/${o.count} · ${o.where}`));
     info.append(obj);
@@ -147,6 +153,42 @@ export function createMissionsPanel(d: MissionsDeps): MissionsPanel {
       if (m.board.length && m.boardNote) boardRows.splice(1, 0, el('p', 'fr-fab-desc fr-board-note', m.boardNote));
       out.push(...boardRows);
     }
+    // P09.2: connected chains (stage, status, lock reason; details for the current stage) and faction standing
+    const card = (key: string, name: string, ...body: HTMLElement[]): HTMLElement => {
+      const li = el('li', 'fr-fab-row');
+      li.dataset['key'] = key;
+      const info = el('div', 'fr-fab-info');
+      info.append(el('span', 'fr-fab-name', name), ...body);
+      li.append(info);
+      return li;
+    };
+    out.push(
+      ...section(
+        'GUILD CHAINS',
+        m.chains.map((c) => {
+          const ul = el('ul', 'fr-mission-obj');
+          c.stages.forEach((st, i) => {
+            const cur = st.id === c.current;
+            ul.append(el('li', st.status === 'claimed' ? 'is-done' : '', `${st.status === 'claimed' ? '✓' : cur ? '▸' : '○'} ${i + 1} · ${st.title.toUpperCase()} · ${STAGE[st.status]}${st.why ? `: ${st.why}` : ''}`));
+            if (cur) ul.append(el('li', '', `${st.objective} · REWARD ${st.rewards.join(' · ')}${st.consequence ? ` · ${st.consequence} ON TURN-IN` : ''}`));
+          });
+          return card(c.id, `${c.title.toUpperCase()} · ${c.current ? `STAGE ${c.completed + 1}` : 'COMPLETE'} OF ${c.stages.length}`, ul);
+        }),
+        '',
+      ),
+      ...section(
+        'FACTION STANDING',
+        d.standing().map((h) => {
+          const bar = el('meter', '');
+          bar.max = 100;
+          bar.value = h.value;
+          bar.setAttribute('aria-label', `${h.label} heat`);
+          return card(h.faction, `${h.label.toUpperCase()} · HEAT ${h.value}/100 · ${h.tierName.toUpperCase()}`, bar, el('span', 'fr-fab-desc', h.effect));
+        }),
+        '',
+      ),
+      el('p', 'fr-fab-desc', HEAT_HELP),
+    );
     if (m.completed.length) out.push(el('p', 'fr-kicker fr-fab-head', 'COMPLETED'), el('p', 'fr-fab-desc fr-mission-done', m.completed.slice(-8).reverse().join(' · ')));
     const actions = el('div', 'fr-fab-actions');
     actions.append(btn('', station ? 'HANGAR' : 'BACK', 'back', () => d.back()));

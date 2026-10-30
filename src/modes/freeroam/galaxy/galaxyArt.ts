@@ -11,21 +11,14 @@
  * from the galaxy id). Rendering cost is a few thousand point splats per icon,
  * done once per size and cached.
  */
+import { createRng } from '../../../core/rng.ts';
 import { fnv1a32 } from '../catalogue/build.ts';
 import type { GalaxyRecord, MapShape } from '../catalogue/types.ts';
 
 export type ArtVariant = 'color' | 'mono';
 
-function rng(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+/** The shared mulberry32 stream (core/rng.ts), as a bare float generator. */
+const rng = (seed: number): (() => number) => createRng(seed).next;
 
 interface Field {
   readonly n: number;

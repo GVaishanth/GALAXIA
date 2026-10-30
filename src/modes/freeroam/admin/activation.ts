@@ -44,6 +44,9 @@ export interface KeyStroke {
   readonly t: number;
 }
 
+/** The stroke of a keydown event (one copy for the title screen and Free Roam). */
+export const keyStroke = (e: KeyboardEvent): KeyStroke => ({ code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, repeat: e.repeat, t: e.timeStamp });
+
 export interface SequenceDetector {
   /** Feed one keydown; true exactly once, on the key that completes the sequence. */
   feed(k: KeyStroke): boolean;

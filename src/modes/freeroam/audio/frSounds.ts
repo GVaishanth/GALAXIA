@@ -312,7 +312,7 @@ export const FR_SOUNDS = deepFreeze({
 } satisfies Record<`fr.${string}`, SoundRecipe>);
 
 export type FrSoundId = keyof typeof FR_SOUNDS;
-export const FR_SOUND_IDS = Object.freeze(Object.keys(FR_SOUNDS) as FrSoundId[]);
+export const FR_SOUND_IDS = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.keys(FR_SOUNDS) as FrSoundId[]);
 
 /** The key of the engine loop in the SoundSystem. */
 export const ENGINE_LOOP = 'fr-engine';

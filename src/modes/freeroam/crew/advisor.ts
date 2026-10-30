@@ -489,7 +489,7 @@ export const RULES: readonly AnyRule[] = Object.freeze([
   }),
 ] satisfies AnyRule[]);
 
-export const RULE_IDS: readonly string[] = Object.freeze(RULES.map((r) => r.id));
+export const RULE_IDS: readonly string[] = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ RULES.map((r) => r.id));
 const RULE_BY_ID: ReadonlyMap<string, AnyRule> = new Map(RULES.map((r) => [r.id, r]));
 const RULE_INDEX: ReadonlyMap<string, number> = new Map(RULES.map((r, i) => [r.id, i]));
 

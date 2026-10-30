@@ -205,6 +205,15 @@ An anomaly you have not investigated yet gives off only a faint signal. Its mark
 
 Bearings are not saved; leave the system and the signal starts again (a finished anomaly stays finished). **Simple Signals** (pause → **SETTINGS & HELP** → **CONTROLS** → **SIGNALS** → **SIMPLE**, off by default) makes one good bearing enough. You still need sensor range, under 60 speed, the steady hold and a clear line, and the reward is the same.
 
+### Guild chains and Faction Heat
+
+- **Guild chains:** two short chains of Guild missions, **Gleaner Accord** and **Faint Lanterns**, three stages each. Each stage opens after you turn in the one before it (the first after a story mission). Accept and turn in stages on the station **MISSIONS** tab like any Guild mission.
+- The **GUILD CHAINS** section of that tab shows each chain's stage (for example STAGE 2 OF 3), each stage's status in words, the current stage's objective, reward and any heat change it causes, and why a stage is locked.
+- **Faction Heat:** hitting or destroying a faction's ships raises that faction's heat (0 to 100: Quiet, Wary, Alert, Pursuit, Hunt). Higher heat makes only that faction's ships spot you a little farther away and search your last position a little longer. Silent Running and planets still hide you. Heat is not a difficulty level.
+- Heat cools by 1 point every 12 seconds of flight while none of that faction's ships is hunting you; it does not change while paused or docked. Some chain stages raise or lower a faction's heat once, when you turn them in.
+- **FACTION STANDING** (MISSIONS tab, or pause → MISSIONS) lists the four factions with their heat, tier and what it changes.
+- **Fair Shares** (Gleaner Accord, stage 2) can only be accepted while Gleaner heat is below 40. The check is made when you accept: once accepted, the stage stays yours even if the heat rises.
+
 ### Travel and staying safe
 
 - Selecting a destination never travels by itself; every jump is confirmed.

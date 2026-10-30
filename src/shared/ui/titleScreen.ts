@@ -20,6 +20,7 @@ import { logoCanvas } from '../rendering/pixelArt.ts';
 import { TITLE_STARS, TitleStarfield } from '../rendering/titleStarfield.ts';
 import { classicArt, freeRoamArt } from './modeArt.ts';
 import { MenuList } from './menuList.ts';
+import { mediaMatches } from './media.ts';
 
 export type TitleChoice = 'classic' | 'freeroam';
 
@@ -169,7 +170,7 @@ export class TitleScreen {
 
   private reduced(): boolean {
     if (this.cb.reducedMotion) return this.cb.reducedMotion();
-    return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return mediaMatches('(prefers-reduced-motion: reduce)');
   }
 
   private attach(): void {

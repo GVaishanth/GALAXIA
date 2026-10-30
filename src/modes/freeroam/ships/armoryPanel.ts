@@ -21,11 +21,10 @@
  *  - The inspected weapon is panel state and never saved.
  */
 import type { SpriteId } from '../../../assets/sprites/index.ts';
-import { FLEET_FLAME_ROWS } from '../../../assets/sprites/fleet.ts';
 import { PRIMARY_WEAPON, WEAPON_BY_ID, WEAPONS, type WeaponDef, type WeaponId } from '../../../config/weapons.ts';
 import { drawFrame } from '../../../render/sprite/drawSprite.ts';
 import type { SpriteCache } from '../../../render/sprite/spriteCache.ts';
-import type { Viewport } from '../../../render/viewport.ts';
+import { drawShipThumb, fitCanvas, viewport } from './canvasFit.ts';
 import { MenuList } from '../../../shared/ui/menuList.ts';
 import { canStartWith, refusalText, setInRotation, setStart, setupOf, type ArmoryResult } from './armory.ts';
 import { ammoLine, availability, blastCatch, compatibility, flightDistance, gunRows, ordnanceComparison, ordnanceRows, runtimeLine, STATE_TEXT, weaponState, type DetailRow, type WeaponState } from './armoryView.ts';
@@ -237,28 +236,9 @@ export function createArmoryPanel(d: ArmoryDeps): ArmoryPanel {
   let inspected: WeaponId = PRIMARY_WEAPON;
 
   /* --------------------------------------------------------- canvases */
-  const viewport = (w: number, h: number, scale: number): Viewport => ({ scale, offsetX: 0, offsetY: 0, deviceWidth: w, deviceHeight: h, artWidth: w / scale, artHeight: h / scale });
-  const dpr = (): number => Math.min(Math.max(1, Math.round(window.devicePixelRatio || 1)), 3);
-  const fitCanvas = (c: HTMLCanvasElement, cssW: number, cssH: number): { w: number; h: number; ratio: number } => {
-    const ratio = dpr();
-    const w = Math.max(1, Math.round(cssW * ratio));
-    const h = Math.max(1, Math.round(cssH * ratio));
-    if (c.width !== w) c.width = w;
-    if (c.height !== h) c.height = h;
-    return { w, h, ratio };
-  };
   const shipSprite = (): SpriteId => SHIP_BY_ID.get(d.fleet().active)!.sprite as SpriteId;
 
-  const drawThumb = (): void => {
-    const { w, h } = fitCanvas(thumb, thumb.clientWidth || 52, thumb.clientHeight || 52);
-    const g = thumb.getContext('2d');
-    if (!g) return;
-    g.setTransform(1, 0, 0, 1, 0, 0);
-    g.clearRect(0, 0, w, h);
-    const fr = d.sprites.frame(shipSprite(), 'idle', 0);
-    const scale = Math.max(1, Math.floor(Math.min(w / fr.raster.sprite.width, h / Math.max(1, fr.raster.sprite.height - 2 * FLEET_FLAME_ROWS))));
-    drawFrame(g, d.sprites, fr, viewport(w, h, scale), w / 2 / scale, h / 2 / scale, { glow: d.glow() });
-  };
+  const drawThumb = (): void => drawShipThumb(thumb, d.sprites, shipSprite(), d.glow());
 
   /**
    * The tactical plot: distances to scale (px of the game world), sprites at a

@@ -27,10 +27,9 @@
  *    opens on SHIP. Without `bridge` deps the switch is not shown.
  */
 import type { SpriteId } from '../../../assets/sprites/index.ts';
-import { FLEET_FLAME_ROWS } from '../../../assets/sprites/fleet.ts';
 import { drawFrame } from '../../../render/sprite/drawSprite.ts';
 import type { SpriteCache } from '../../../render/sprite/spriteCache.ts';
-import type { Viewport } from '../../../render/viewport.ts';
+import { drawShipThumb, fitCanvas, viewport } from './canvasFit.ts';
 import { MenuList } from '../../../shared/ui/menuList.ts';
 import type { UnlockRequirement } from '../catalogue/types.ts';
 import { MISSILE } from '../combat/playerMissile.ts';
@@ -375,33 +374,11 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
   let visible: ShipId[] = SHIPS.map((s) => s.id);
 
   /* --------------------------------------------------------- canvases */
-  const viewport = (w: number, h: number, scale: number): Viewport => ({ scale, offsetX: 0, offsetY: 0, deviceWidth: w, deviceHeight: h, artWidth: w / scale, artHeight: h / scale });
-  const dpr = (): number => Math.min(Math.max(1, Math.round(window.devicePixelRatio || 1)), 3);
-  const fitCanvas = (c: HTMLCanvasElement, cssW: number, cssH: number): { w: number; h: number; ratio: number } => {
-    const ratio = dpr();
-    const w = Math.max(1, Math.round(cssW * ratio));
-    const h = Math.max(1, Math.round(cssH * ratio));
-    if (c.width !== w) c.width = w;
-    if (c.height !== h) c.height = h;
-    return { w, h, ratio };
-  };
   const spriteOf = (id: ShipId): SpriteId => SHIP_BY_ID.get(id)!.sprite as SpriteId;
 
   const drawThumbs = (): void => {
     const glow = d.glow();
-    for (const [id, c] of cards) {
-      const { w, h } = fitCanvas(c.thumb, c.thumb.clientWidth || 52, c.thumb.clientHeight || 52);
-      const g = c.thumb.getContext('2d');
-      if (!g) continue;
-      g.setTransform(1, 0, 0, 1, 0, 0);
-      g.clearRect(0, 0, w, h);
-      const fr = d.sprites.frame(spriteOf(id), 'idle', 0);
-      const fw = fr.raster.sprite.width;
-      const fh = fr.raster.sprite.height;
-      // the idle frame carries blank flame rows above and below the hull: size the hull itself
-      const scale = Math.max(1, Math.floor(Math.min(w / fw, h / Math.max(1, fh - 2 * FLEET_FLAME_ROWS))));
-      drawFrame(g, d.sprites, fr, viewport(w, h, scale), w / 2 / scale, h / 2 / scale, { glow });
-    }
+    for (const [id, c] of cards) drawShipThumb(c.thumb, d.sprites, spriteOf(id), glow);
   };
 
   const drawStrip = (id: ShipId): void => {

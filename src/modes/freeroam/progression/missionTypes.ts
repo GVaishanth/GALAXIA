@@ -9,6 +9,7 @@
  * rewards. Its runtime state (accepted, progress, completed, claimed,
  * failed) lives in MissionState and is saved with the profile.
  */
+import type { FactionId } from '../catalogue/types.ts';
 import type { EncounterKind, LootEntry, PoiKind } from '../sector/model.ts';
 
 export const MISSION_TYPES = [
@@ -65,6 +66,8 @@ export interface ObjectiveDef {
   readonly encounter?: EncounterKind | undefined;
   /** destroy objectives: only ships flying a patrol route count. */
   readonly patrol?: boolean | undefined;
+  /** destroy objectives (P09.1): only ships of this faction count. */
+  readonly faction?: FactionId | undefined;
   /** acquire (any of these) and deliver (the first). */
   readonly resources?: readonly string[] | undefined;
   /** reach-galaxy objectives. */
@@ -72,9 +75,12 @@ export interface ObjectiveDef {
 }
 
 export type Prerequisite =
-  | { readonly kind: 'mission'; readonly id: string }
+  /** `claimed` (P09.1 chain stages): the reward must have been turned in, not just the objectives met. */
+  | { readonly kind: 'mission'; readonly id: string; readonly claimed?: true }
   | { readonly kind: 'galaxy'; readonly id: string }
-  | { readonly kind: 'charted'; readonly count: number };
+  | { readonly kind: 'charted'; readonly count: number }
+  /** P09.1: that faction's heat (combat/factionHeat.ts) is below `below` (it decays, so the gate always reopens). */
+  | { readonly kind: 'heat'; readonly faction: FactionId; readonly below: number };
 
 export interface FailureRules {
   /** Lane hops allowed after acceptance (counted in jumps, never in real time). */
@@ -106,6 +112,10 @@ export interface MissionDef {
   readonly objectives: readonly ObjectiveDef[];
   readonly failure: FailureRules;
   readonly rewards: MissionReward;
+  /** P09.1: the connected chain this mission is a stage of (missionData.ts CHAINS). */
+  readonly chain?: string | undefined;
+  /** P09.1: authored consequence, applied once when the reward is paid (the claim records the id). */
+  readonly heat?: { readonly faction: FactionId; readonly delta: number } | undefined;
 }
 
 /** Target already satisfied when the mission was accepted (nothing left to find): counts as done. */
@@ -152,4 +162,4 @@ export interface MissionState {
   readonly ready: Readonly<Record<string, ContractSpec>>;
 }
 
-export const EMPTY_MISSIONS: MissionState = Object.freeze({ jumps: 0, active: Object.freeze([]), completed: Object.freeze([]), claimed: Object.freeze([]), failed: Object.freeze([]), ready: Object.freeze({}) });
+export const EMPTY_MISSIONS: MissionState = /* @__PURE__ */ Object.freeze({ jumps: 0, active: /* @__PURE__ */ Object.freeze([]), completed: /* @__PURE__ */ Object.freeze([]), claimed: /* @__PURE__ */ Object.freeze([]), failed: /* @__PURE__ */ Object.freeze([]), ready: /* @__PURE__ */ Object.freeze({}) });

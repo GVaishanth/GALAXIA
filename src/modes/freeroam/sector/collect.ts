@@ -26,7 +26,7 @@ import type { FamilyId } from '../combat/families.ts';
 import type { AgentRole } from '../combat/state.ts';
 import type { FactionId } from '../catalogue/types.ts';
 import { lootUnits, normalizeLoot, planTake } from '../inventory/inventory.ts';
-import { dropBudget, JETTISON_LIFE_TICKS, KILL_DROPS, MINING, PICKUP_RADIUS, rollKillDrop, type LootContext } from '../inventory/lootTables.ts';
+import { dropBudget, JETTISON_LIFE_TICKS, KILL_DROPS, lootContextOf, MINING, PICKUP_RADIUS, rollKillDrop } from '../inventory/lootTables.ts';
 import { dist } from './grid.ts';
 import type { LootEntry, OreVein, Poi, SectorLayout, SectorSave } from './model.ts';
 import type { SectorEvent, SectorRun } from './run.ts';
@@ -73,7 +73,7 @@ export const lootStream = (seed: number): Rng => createRng((Math.imul(seed >>> 0
 export const chipId = (v: OreVein, k: number): string => `${v.id}.${k}`;
 export const cacheId = (encounterId: string): string => `${encounterId}.1`;
 
-export const lootContextOf = (L: SectorLayout): LootContext => ({ difficulty: L.difficulty, richness: L.resources.richness, primary: L.resources.primary, secondary: L.resources.secondary });
+export { lootContextOf };
 
 /** Every id a save may hold for this layout: POIs, sites, ore chips and reward caches. */
 export function persistentIds(L: SectorLayout): Set<string> {

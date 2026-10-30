@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getCatalogue } from '../src/modes/freeroam/catalogue/index.ts';
+import { SOURCES } from '../src/modes/freeroam/catalogue/data/sources.ts';
 
 const docPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'freeroam', 'ASTRONOMY_SOURCES.md');
 const c = getCatalogue();
@@ -30,9 +31,9 @@ for (const g of c.galaxies) {
 out += '## 3. Real objects used as systems\n\nOnly the **fact** column is astronomy. The playable sector at each of these locations is a GALAXIA simulation (see `CONTENT_PROVENANCE.md`).\n\n| System id | Name | Category | Fact used | Sources |\n|---|---|---|---|---|\n';
 for (const s of c.systems.filter((x) => x.provenance.status === 'verified-object')) out += `| \`${s.id}\` | ${s.name} | ${s.category} | ${esc(s.fact!)} | ${s.provenance.sourceIds.map((x) => '`' + x + '`').join(', ')} |\n`;
 out += '\n## 4. Source register\n\nAll pages retrieved **2026-10-19**. `primary` = space agency, observatory, laboratory or peer-reviewed journal; `secondary` = encyclopedia, used only for cross-checks and published morphology codes, and always labelled “(secondary reference)” where it is the only citation.\n\n| Id | Tier | Publisher | Title | URL | Cited by |\n|---|---|---|---|---|---|\n';
-for (const s of c.sources) out += `| \`${s.id}\` | ${s.tier} | ${esc(s.publisher)} | ${esc(s.title)} | <${s.url}> | ${(usedBy.get(s.id) ?? []).join(', ')} |\n`;
+for (const s of SOURCES) out += `| \`${s.id}\` | ${s.tier} | ${esc(s.publisher)} | ${esc(s.title)} | <${s.url}> | ${(usedBy.get(s.id) ?? []).join(', ')} |\n`;
 const doc = readFileSync(docPath, 'utf8');
 const marker = doc.indexOf('## 2. Galaxies');
 if (marker < 0) throw new Error('ASTRONOMY_SOURCES.md: "## 2. Galaxies" marker not found');
 writeFileSync(docPath, doc.slice(0, marker) + out);
-console.log(`ASTRONOMY_SOURCES.md: ${c.galaxies.length} galaxies, ${c.systems.filter((s) => s.provenance.status === 'verified-object').length} verified objects, ${c.sources.length} sources`);
+console.log(`ASTRONOMY_SOURCES.md: ${c.galaxies.length} galaxies, ${c.systems.filter((s) => s.provenance.status === 'verified-object').length} verified objects, ${SOURCES.length} sources`);

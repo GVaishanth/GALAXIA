@@ -24,7 +24,7 @@ import { RESOURCES } from '../inventory/resources.ts';
 import type { MapCommand } from '../input.ts';
 import type { NavGraph } from './graph.ts';
 import { spatialNext, type Point } from './layout.ts';
-import { button, createMapShell, DET_ART_SIZE, el, reqList } from './mapShell.ts';
+import { button, createMapShell, DET_ART_SIZE, DOCK_FOR_CELLS, el, reqList, type MapNav } from './mapShell.ts';
 import { deriveView, describeRequirement, theName, type ExplorationProgress, type RequirementInfo } from './progress.ts';
 import { computeSystemLayout, laneCurve, systemGrid, type LaneCurve, type SystemMapLayout } from './systemLayout.ts';
 import { CATEGORY_COLOR, drawSystemMap, type SystemLaneDraw, type SystemNodeDraw } from './systemMapRender.ts';
@@ -168,7 +168,6 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
   let galaxy: GalaxyId = deps.progress().current;
   let sv: SystemView = deriveSystemView(deriveView(graph, deps.progress()), galaxy);
   let selected: string | null = null;
-  let hovered: string | null = null;
   let layout: SystemMapLayout | null = null;
   let curves = new Map<string, LaneCurve>();
   let confirmTarget: string | null = null;
@@ -221,7 +220,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
       onCancel: () => closeConfirm(true),
     },
   });
-  const { root, title, sub, surface, nodesNav, details, detArt, detKicker, detName, detClass, detBody, detActions, actionMenu, confirmLayer, cTitle, cRoute, cStats, confirmMenu } = shell;
+  const { root, title, sub, surface, nodesNav, details, detArt, detKicker, detName, detClass, detBody, detActions, cTitle, cRoute, cStats } = shell;
   const announce = (t: string): void => shell.announce(t);
 
   let nodeButtons = new Map<string, HTMLButtonElement>();
@@ -235,26 +234,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     nodeButtons = new Map();
     const buttons: HTMLButtonElement[] = [];
     for (const s of sv.graph.systems) {
-      const b = el('button', 'fr-node fr-sysnode');
-      b.type = 'button';
-      b.dataset['system'] = s.id;
-      b.setAttribute('aria-controls', details.id);
-      b.append(el('span', 'fr-node-name'), el('span', 'fr-node-sub'));
-      b.addEventListener('click', () => {
-        if (travel) return;
-        if (selected !== s.id) services.sound.play('uiMove');
-        select(s.id);
-        b.focus({ preventScroll: true });
-      });
-      b.addEventListener('focus', () => {
-        if (!travel && selected !== s.id) select(s.id);
-      });
-      b.addEventListener('pointerenter', (e) => {
-        if (e.pointerType === 'mouse') hovered = s.id;
-      });
-      b.addEventListener('pointerleave', () => {
-        if (hovered === s.id) hovered = null;
-      });
+      const b = shell.node('fr-node fr-sysnode', 'system', s.id, '', nav);
       buttons.push(b);
       nodeButtons.set(s.id, b);
     }
@@ -519,7 +499,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
       const need = routeCharge(plan.lanes);
       const have = deps.fuel ? deps.fuel.held() : Infinity;
       if (have < need) {
-        body.push(el('p', 'fr-det-note fr-fuel-warn', `NEEDS ${need} REACTOR CELLS · YOU HAVE ${have}. Dock at a station for free emergency cells or buy cells at an exchange.`));
+        body.push(el('p', 'fr-det-note fr-fuel-warn', `NEEDS ${need} REACTOR CELLS · YOU HAVE ${have}. ${DOCK_FOR_CELLS}`));
       } else {
         const t = button('fr-btn', 'TRAVEL HERE', () => openConfirm(id));
         t.setAttribute('aria-label', `Travel to ${intel.name}: ${plan.jumps} jumps, ${unit().toLowerCase()} ${need}`);
@@ -580,22 +560,13 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     const hazards = [...new Set(plan.lanes.map(laneHazardText).filter((t) => t !== 'clear'))];
     const fee = deps.fuel?.fee?.();
     cStats.textContent = `${plan.jumps} ${plan.jumps === 1 ? 'JUMP' : 'JUMPS'} · ${costText(plan.lanes)}${fee ? ` · ${fee}` : ''} · ${hazards.length ? hazards.join(', ').toUpperCase() : 'NO KNOWN HAZARDS'}`;
-    confirmLayer.hidden = false;
-    root.dataset['confirm'] = 'open';
-    shell.setInert(true);
-    confirmMenu.focus(0);
+    shell.confirm(true);
   }
 
   function closeConfirm(restoreFocus: boolean): void {
     if (confirmTarget === null) return;
     confirmTarget = null;
-    confirmLayer.hidden = true;
-    delete root.dataset['confirm'];
-    shell.setInert(false);
-    if (restoreFocus) {
-      services.sound.play('uiMove');
-      actionMenu.focus(0);
-    }
+    shell.confirm(false, restoreFocus);
   }
 
   const curveFor = (from: string, to: string): LaneCurve | null => {
@@ -636,9 +607,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     const hopCurves = path.slice(1).map((id, i) => curveFor(path[i]!, id)).filter((c): c is LaneCurve => c !== null);
     travel = { path, curves: hopCurves, start: null, dur: systemTravelMs(path.length - 1, deps.reducedMotion()) };
     travelT = 0;
-    root.dataset['travel'] = 'on';
-    nodesNav.inert = true;
-    details.inert = true;
+    shell.travelling(true);
     announce(`Course laid in for ${name(to)}.`);
   }
 
@@ -646,9 +615,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     if (!travel) return;
     const to = travel.path[travel.path.length - 1]!;
     travel = null;
-    delete root.dataset['travel'];
-    nodesNav.inert = false;
-    details.inert = false;
+    shell.travelling(false);
     refresh();
     select(to, false);
     focusNode(to);
@@ -658,56 +625,26 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
   }
 
   /* ------------------------------------------------------- commands */
+  const nav: MapNav = {
+    selected: () => selected,
+    focused: focusedNode,
+    select: (id) => select(id),
+    focusNode,
+    exit: () => deps.back(),
+    unreachable: (id) => {
+      const plan = sv.plan(id);
+      const why = plan.ok ? '' : plan.reason === 'locked' ? ': it is locked' : plan.reason === 'elsewhere' ? ': you are in another galaxy' : plan.reason === 'no-route' ? ': no open route' : '';
+      announce(`${name(id)} cannot be reached from here${why}. See the details panel.`);
+    },
+    next: (from, c) => {
+      if (!layout) return undefined;
+      const pts: Record<string, Point> = {};
+      for (const id of sv.visible) pts[id] = layout.nodes[id]!;
+      return spatialNext(pts, from, c);
+    },
+  };
   function command(c: MapCommand): void {
-    if (!visible || travel) return;
-    if (confirmTarget !== null) {
-      if (c === 'up' || c === 'left') confirmMenu.move(-1);
-      else if (c === 'down' || c === 'right') confirmMenu.move(1);
-      else if (c === 'confirm') confirmMenu.activate();
-      else if (c === 'back') closeConfirm(true);
-      return;
-    }
-    const a = document.activeElement;
-    if (a instanceof HTMLElement && (details.contains(a) || a === shell.back)) {
-      const inActions = detActions.contains(a);
-      if (c === 'back') {
-        focusNode(selected);
-        services.sound.play('uiMove');
-      } else if (c === 'confirm') a.click();
-      else if (inActions && actionMenu.buttons().length > 1 && (c === 'up' || c === 'down')) actionMenu.move(c === 'up' ? -1 : 1);
-      else focusNode(selected);
-      return;
-    }
-    if (c === 'back') {
-      deps.back();
-      return;
-    }
-    if (c === 'confirm') {
-      const id = focusedNode() ?? selected;
-      if (!id) return;
-      if (id !== selected) select(id);
-      if (actionMenu.buttons().length > 0) {
-        services.sound.play('uiMove');
-        actionMenu.focus(0);
-      } else {
-        const plan = sv.plan(id);
-        const why = plan.ok ? '' : plan.reason === 'locked' ? ': it is locked' : plan.reason === 'elsewhere' ? ': you are in another galaxy' : plan.reason === 'no-route' ? ': no open route' : '';
-        announce(`${name(id)} cannot be reached from here${why}. See the details panel.`);
-        focusNode(id);
-      }
-      return;
-    }
-    if (!layout) return;
-    const pts: Record<string, Point> = {};
-    for (const id of sv.visible) pts[id] = layout.nodes[id]!;
-    const from = focusedNode() ?? selected;
-    if (!from) return;
-    const next = spatialNext(pts, from, c);
-    if (next) {
-      services.sound.play('uiMove');
-      select(next);
-      focusNode(next);
-    } else focusNode(from);
+    if (visible && !travel) shell.route(c, confirmTarget !== null, closeConfirm, nav);
   }
 
   /* ---------------------------------------------------------- frame */
@@ -750,7 +687,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
       travelT = Math.min(1, (ts - travel.start) / travel.dur);
       anim = { path: travel.path, curves: travel.curves, t: travelT };
     }
-    const focus = travel ? null : (hovered ?? selected);
+    const focus = travel ? null : (shell.hovered ?? selected);
     const plan = focus && focus !== sv.current ? sv.plan(focus) : null;
     const course = new Set<string>(plan && plan.ok ? plan.lanes.map((l) => l.id) : []);
     const nodes: SystemNodeDraw[] = sv.visible.map((id) => ({
@@ -772,7 +709,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
         course,
         current: travel ? null : sv.current,
         selected: travel ? null : selected,
-        hovered: travel ? null : hovered,
+        hovered: travel ? null : shell.hovered,
         travel: anim,
         arrival: flash,
       },
@@ -801,16 +738,10 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
     },
     hide() {
       visible = false;
-      closeConfirm(false);
-      if (travel) {
-        travel = null; // progress was already committed; only the animation is dropped
-        delete root.dataset['travel'];
-        nodesNav.inert = false;
-        details.inert = false;
-      }
+      confirmTarget = null;
+      travel = null; // progress was already committed; only the animation is dropped
       arrival = null;
-      root.hidden = true;
-      hovered = null;
+      shell.hide();
     },
     command,
     frame,
@@ -829,7 +760,7 @@ export function createSystemMap(deps: SystemMapDeps): SystemMapScreen {
         here: sv.here,
         selected,
         focused: focusedNode(),
-        hovered,
+        hovered: shell.hovered,
         current: sv.current,
         confirmOpen: confirmTarget !== null,
         transition: travel !== null,

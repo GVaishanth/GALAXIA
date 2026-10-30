@@ -19,7 +19,7 @@ import { checkUpgrade, LEVEL_NAME, UPGRADE_BY_TRACK, upgradedShip, type UpgradeL
 import { addMarks, rewardFits, type Quote, type QuoteLine, type Wallet } from './economy.ts';
 import type { GameEvent } from './events.ts';
 import { deliveryNeed, markClaimed, missionDef } from './missions.ts';
-import type { MissionReward } from './missionTypes.ts';
+import type { MissionDef, MissionReward } from './missionTypes.ts';
 import type { ProgressionState } from './persistence.ts';
 import { FUEL } from './fuel.ts';
 import { formatMarks, insufficientText } from './ledger.ts';
@@ -40,7 +40,7 @@ export function rewardChartTargets(graph: NavGraph, progress: ExplorationProgres
 /* ------------------------------------------------------------------ claims */
 
 export type ClaimResult =
-  | { readonly ok: true; readonly progression: ProgressionState; readonly wallet: Wallet; readonly charted: readonly string[]; readonly reward: MissionReward; readonly lines: readonly string[]; readonly title: string }
+  | { readonly ok: true; readonly progression: ProgressionState; readonly wallet: Wallet; readonly charted: readonly string[]; readonly reward: MissionReward; readonly lines: readonly string[]; readonly title: string; readonly heat: MissionDef['heat'] }
   | { readonly ok: false; readonly reason: 'not-ready' | 'hold' | 'storage'; readonly text: string };
 
 /** What a reward pays, as display lines. */
@@ -84,6 +84,7 @@ export function claimReward(p: ProgressionState, id: string, w: Wallet, chartPic
     reward: r,
     lines: rewardLines(r),
     title: def.title,
+    heat: def.heat,
   };
 }
 

@@ -21,13 +21,14 @@ import { ARCHETYPES } from '../src/modes/freeroam/catalogue/data/archetypes.ts';
 import { GALAXIES } from '../src/modes/freeroam/catalogue/data/galaxies.ts';
 import { MILESTONES, PROGRESSION } from '../src/modes/freeroam/catalogue/data/milestones.ts';
 import { ROUTES } from '../src/modes/freeroam/catalogue/data/routes.ts';
-import { SOURCES } from '../src/modes/freeroam/catalogue/data/sources.ts';
+import { SOURCE_META, SOURCES } from '../src/modes/freeroam/catalogue/data/sources.ts';
+import { SOURCE_TITLES } from '../src/modes/freeroam/catalogue/data/sourceTitles.ts';
 import { SYSTEM_DATA } from '../src/modes/freeroam/catalogue/data/systems/index.ts';
 import { levenshtein } from '../src/modes/freeroam/catalogue/validate.ts';
 
-/* Mutable deep copy of the shipped catalogue for negative tests. */
+/* Mutable deep copy of the shipped catalogue, with the full source records (P09.1: the shipped catalogue holds ids and titles), for negative tests. */
 type Loose = { sources: Record<string, any>[]; galaxies: Record<string, any>[]; systems: any[]; routes: Record<string, any>[]; milestones: Record<string, any>[]; progression: Record<string, any> };
-const fresh = (): Loose => structuredClone(getCatalogue()) as unknown as Loose;
+const fresh = (): Loose => structuredClone({ ...getCatalogue(), sources: SOURCES }) as unknown as Loose;
 const sys = (c: Loose, id: string): Record<string, any> => {
   const s = c.systems.find((x: Record<string, any>) => x['id'] === id);
   if (!s) throw new Error(`no system ${id}`);
@@ -93,7 +94,7 @@ describe('catalogue: shipped data', () => {
   });
 
   it('cites a primary source for every verified object and keeps invented systems free of facts and citations', () => {
-    const primary = new Set(cat.sources.filter((s) => s.tier === 'primary').map((s) => s.id));
+    const primary = new Set(SOURCES.filter((s) => s.tier === 'primary').map((s) => s.id));
     for (const s of cat.systems) {
       if (s.provenance.status === 'verified-object') {
         expect(s.fact, s.id).toBeTruthy();
@@ -125,11 +126,20 @@ describe('catalogue: shipped data', () => {
   });
 
   it('stores source metadata locally with retrieval dates and https URLs', () => {
-    expect(cat.sources.length).toBeGreaterThan(40);
-    for (const s of cat.sources) {
+    expect(SOURCES.length).toBeGreaterThan(40);
+    for (const s of SOURCES) {
       expect(s.url, s.id).toMatch(/^https:\/\//);
       expect(s.retrieved, s.id).toBe('2026-10-19');
+      expect(s.publisher, s.id).toBeTruthy();
     }
+    // every displayed source has its metadata and no metadata is orphaned
+    expect(Object.keys(SOURCE_META).sort()).toEqual(SOURCE_TITLES.map((s) => s.id).sort());
+  });
+
+  it('ships only source ids and titles: the full records stay out of the game catalogue (P09.1)', () => {
+    expect(cat.sources).toEqual(SOURCES.map(({ id, title }) => ({ id, title })));
+    expect(cat.sources.every((s) => Object.keys(s).join() === 'id,title')).toBe(true);
+    expect(JSON.stringify(cat.sources)).not.toMatch(/https?:/);
   });
 
   it('is deterministic, frozen and pinned by a golden digest', () => {
@@ -145,11 +155,13 @@ describe('catalogue: shipped data', () => {
     for (const s of cat.systems) expect(s.seed).toBe(systemSeed(s.id));
     // Content digest: update deliberately (and note it in the changelog) when data changes.
     expect(catalogueDigest(cat)).toBe(DIGEST);
+    // with the full source records put back, the content is byte-for-byte the pre-P09.1 catalogue
+    expect(catalogueDigest({ ...cat, sources: SOURCES } as Catalogue)).toBe(DIGEST_FULL_SOURCES);
   });
 
   it('is mirrored in docs/freeroam/ASTRONOMY_SOURCES.md (every source URL and verified object)', () => {
     const doc = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'freeroam', 'ASTRONOMY_SOURCES.md'), 'utf8');
-    for (const s of cat.sources) expect(doc, s.id).toContain(s.url);
+    for (const s of SOURCES) expect(doc, s.id).toContain(s.url);
     for (const s of cat.systems.filter((x) => x.provenance.status === 'verified-object')) expect(doc, s.id).toContain(`\`${s.id}\``);
   });
 
@@ -163,7 +175,8 @@ describe('catalogue: shipped data', () => {
     const idx = indexCatalogue(cat);
     expect(idx.system('milky-way/hollowmere')!.connections).toEqual(['milky-way/alpha-centauri', 'milky-way/saltmarch']);
     expect(idx.galaxy('lmc')!.gameplay.gatewaySystemId).toBe('lmc/southwind-landing');
-    expect(idx.source('nasa-m31')!.publisher).toMatch(/NASA/);
+    expect(idx.source('nasa-m31')!.title).toMatch(/Messier 31/);
+    expect(SOURCES.find((s) => s.id === 'nasa-m31')!.publisher).toMatch(/NASA/);
     expect(idx.system('nope/nothing')).toBeUndefined();
     expect(idx.route('andromeda~milky-way')!.unlock).toEqual([{ kind: 'milestone', milestoneId: 'lantern-gate' }]);
     expect(idx.milestone('first-survey')!.kind).toBe('starter-objective');
@@ -444,4 +457,6 @@ describe('catalogue validation: detects broken content', () => {
 
 // Prompt 9: factions renamed (tessellate / red-tally / cordon, gleaners added to 62 salvage-rich systems) -> new digest.
 // Prompt 15: the Cartwheel Core fact reworded (it followed ESA/Webb's CC BY text too closely) -> new digest.
-const DIGEST = '17a5f124';
+// P09.1: the shipped catalogue keeps only source ids and titles (was 17a5f124 with the full records, still checked below)
+const DIGEST = '21b05d44';
+const DIGEST_FULL_SOURCES = '17a5f124';

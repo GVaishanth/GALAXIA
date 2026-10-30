@@ -24,6 +24,7 @@ import type { SectorLayout } from '../sector/model.ts';
 import { COMBAT } from './difficulty.ts';
 import { isHostile, type Side } from './factions.ts';
 import { FAMILIES } from './families.ts';
+import { heatHit } from './factionHeat.ts';
 import { incomingDamageMul } from './shipAbilities.ts';
 import type { Agent, Target } from './state.ts';
 
@@ -145,6 +146,7 @@ export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side |
       if (a.state === 'idle' || a.state === 'patrol') setState(a, 'investigate');
     }
   }
+  if (by === 'player') heatHit(run, a, a.hull <= 0, events); // P09.1: the one attribution point
   if (a.hull <= 0) {
     setState(a, 'destroyed');
     a.vx *= 0.3;

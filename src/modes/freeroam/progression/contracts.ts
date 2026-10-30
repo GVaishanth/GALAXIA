@@ -13,6 +13,7 @@
  * Pure (no DOM, no storage).
  */
 import { createRng, type Rng } from '../../../core/rng.ts';
+import { fnv1a32 } from '../catalogue/build.ts';
 import { missionReward } from '../inventory/lootTables.ts';
 import type { LootEntry } from '../sector/model.ts';
 import type { MissionWorld } from './missions.ts';
@@ -24,14 +25,7 @@ export const CONTRACT_ID = /^c:[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)
 export const contractId = (station: string, cycle: number, slot: number): string => `c:${station}:${cycle}:${slot}`;
 
 /** FNV-1a 32-bit (stable seeds from ids). */
-export function hashId(text: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
+export const hashId = fnv1a32;
 
 const DELIVERY_GOODS = ['scrap', 'alloy', 'ice'] as const;
 const RARE_GOODS = ['components', 'crystal'] as const;

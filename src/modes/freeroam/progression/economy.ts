@@ -27,7 +27,7 @@
 import { EQUIPMENT_BY_ID } from '../ships/equipment.ts';
 import type { ResourceCost, ShipDef } from '../ships/types.ts';
 import { addLoot, freeSpace, removeLoot, storeModule, storedTotal, MAX_STORED_MODULES, type Hold, type ModuleStore } from '../inventory/inventory.ts';
-import { RESOURCES, isResourceId, resourceName, resourceValue } from '../inventory/resources.ts';
+import { RESOURCE_CATEGORIES, RESOURCES, isResourceId, resourceName, resourceValue } from '../inventory/resources.ts';
 import type { LootEntry } from '../sector/model.ts';
 import { hashId } from './contracts.ts';
 import { formatMarks, groupDigits, insufficientText, MARKS } from './ledger.ts';
@@ -86,7 +86,7 @@ const marksLine = (before: number, after: number, free = false): QuoteLine => ({
 
 /** Demand of a station: the category it pays more for and the one it has too much of (seeded by the system id). */
 export function stationDemand(station: string): { readonly demand: string; readonly surplus: string } {
-  const cats = ['alloys', 'reactor', 'circuitry', 'crystals', 'samples', 'navdata', 'artefacts', 'components'].filter((c) => c !== 'reactor');
+  const cats: string[] = RESOURCE_CATEGORIES.filter((c) => c !== 'reactor');
   const h = hashId(`market:${station}`);
   const demand = cats[h % cats.length]!;
   const rest = cats.filter((c) => c !== demand);

@@ -15,7 +15,7 @@
  * story step can always be completed (a POI the pilot already emptied is
  * never chosen; with nothing left, the step counts as done).
  */
-import type { MissionDef, MissionReward } from './missionTypes.ts';
+import type { MissionDef, MissionReward, Prerequisite } from './missionTypes.ts';
 
 const R = (marks: number, extra: Partial<MissionReward> = {}): MissionReward => ({ marks, resources: [], modules: [], charts: 0, licences: [], ...extra });
 
@@ -143,3 +143,90 @@ export const STORY: readonly MissionDef[] = Object.freeze([
 ] satisfies MissionDef[]);
 
 export const STORY_BY_ID: ReadonlyMap<string, MissionDef> = new Map(STORY.map((m) => [m.id, m]));
+
+/**
+ * P09.1 connected chains: short Guild arcs beside the main story. Each stage is
+ * an ordinary story-source mission (same accept, objective, reward and save
+ * path); chain() adds "the previous stage turned in" (claimed) to every stage
+ * after the first, so the order lives in one place and a stage can never be accepted,
+ * progressed or paid before the one before it.
+ */
+export interface ChainDef {
+  readonly id: string;
+  readonly title: string;
+  /** Stage mission ids in order. */
+  readonly stages: readonly string[];
+}
+
+type Stage = Omit<MissionDef, 'source' | 'galaxy' | 'failure' | 'chain' | 'prerequisites'> & { readonly prerequisites?: readonly Prerequisite[] };
+
+const chained: MissionDef[] = [];
+const chain = (id: string, title: string, stages: readonly Stage[]): ChainDef => {
+  stages.forEach((st, i) =>
+    chained.push({ ...st, source: 'story', galaxy: 'milky-way', failure: {}, chain: id, prerequisites: [...(i ? [{ kind: 'mission' as const, id: stages[i - 1]!.id, claimed: true as const }] : []), ...(st.prerequisites ?? [])] }),
+  );
+  return { id, title, stages: stages.map((st) => st.id) };
+};
+
+export const CHAINS: readonly ChainDef[] = [
+  chain('gleaner-accord', 'Gleaner Accord', [
+    {
+      id: 'chain-accord-claims',
+      type: 'destroy-patrol',
+      title: 'Claim Jumpers',
+      description: 'Red Tally raiders are robbing Gleaner salvage claims. Destroy three Red Tally ships anywhere in the Milky Way and the Guild will vouch for you.',
+      prerequisites: [{ kind: 'mission', id: 'story-silent-hull' }],
+      objectives: [{ kind: 'destroy', label: 'Destroy Red Tally ships', count: 3, target: 'any', faction: 'red-tally' }],
+      rewards: R(120),
+    },
+    {
+      id: 'chain-accord-shares',
+      type: 'deliver-resources',
+      title: 'Fair Shares',
+      description: 'The Gleaner families talk to pilots who share. Deliver six scrap to the marked station. They will not deal with a pilot who has been shooting at them lately.',
+      prerequisites: [{ kind: 'heat', faction: 'gleaners', below: 40 }],
+      objectives: [{ kind: 'deliver', label: 'Deliver scrap', count: 6, target: 'nearest', resources: ['scrap'] }],
+      rewards: R(100, { resources: [{ resource: 'circuits', amount: 2 }] }),
+      heat: { faction: 'gleaners', delta: -20 },
+    },
+    {
+      id: 'chain-accord-ledger',
+      type: 'investigate-derelict',
+      title: 'The Red Ledger',
+      description: 'The Gleaners name the wreck where the Red Tally hides its raid ledger. Inspect it. The Tally will know who took it.',
+      objectives: [{ kind: 'poi', label: 'Inspect the derelict', count: 1, target: 'nearest', poiKind: 'derelict' }],
+      rewards: R(160, { resources: [{ resource: 'nav-data', amount: 2 }] }),
+      heat: { faction: 'red-tally', delta: 15 },
+    },
+  ]),
+  chain('faint-lanterns', 'Faint Lanterns', [
+    {
+      id: 'chain-lanterns-echo',
+      type: 'investigate-anomaly',
+      title: 'Faint Lanterns',
+      description: 'Guild listeners hear a faint pattern under the beacon traffic. Investigate the marked anomaly.',
+      prerequisites: [{ kind: 'mission', id: 'story-first-light' }],
+      objectives: [{ kind: 'poi', label: 'Investigate the anomaly', count: 1, target: 'nearest', poiKind: 'anomaly' }],
+      rewards: R(80),
+    },
+    {
+      id: 'chain-lanterns-charts',
+      type: 'survey-region',
+      title: 'Lantern Charts',
+      description: 'The pattern repeats across the lanes. Chart two Milky Way systems so the Guild can compare readings.',
+      objectives: [{ kind: 'chart', label: 'Chart Milky Way systems', count: 2, target: 'any' }],
+      rewards: R(120, { resources: [{ resource: 'fuel', amount: 4 }] }),
+    },
+    {
+      id: 'chain-lanterns-coolant',
+      type: 'deliver-resources',
+      title: 'Cold Listening',
+      description: 'The listening array runs hot. Deliver four ice to the marked station to keep it cold.',
+      objectives: [{ kind: 'deliver', label: 'Deliver ice', count: 4, target: 'nearest', resources: ['ice'] }],
+      rewards: R(140, { resources: [{ resource: 'nav-data', amount: 2 }] }),
+    },
+  ]),
+];
+
+/** Every Guild mission (story + chain stages) by id: the one lookup accept, progress, claim and load use. */
+export const MISSION_BY_ID: ReadonlyMap<string, MissionDef> = new Map([...STORY, ...chained].map((m) => [m.id, m]));

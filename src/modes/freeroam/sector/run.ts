@@ -42,6 +42,7 @@ import { deriveShip } from '../ships/equipment.ts';
 import type { DerivedShip } from '../ships/types.ts';
 import type { FactionId } from '../catalogue/types.ts';
 import { stepAgents } from '../combat/ai.ts';
+import { heatBook, stepHeat, type HeatBook } from '../combat/factionHeat.ts';
 import { COMBAT, difficultyRow, type DifficultyRow } from '../combat/difficulty.ts';
 import { combatLevel, createEncounters, resetEncounters, salvageTaken, stepEncounters, stepPatrols, stepPending } from '../combat/encounters.ts';
 import type { FamilyId } from '../combat/families.ts';
@@ -260,6 +261,8 @@ export type SectorEvent =
   | { readonly type: 'disabled'; readonly hostile: number; readonly x: number; readonly y: number }
   | { readonly type: 'escaped'; readonly hostile: number; readonly source: string }
   | { readonly type: 'provoked'; readonly faction: FactionId; readonly why: 'shot' | 'claim' }
+  /** P09.1: one faction's heat crossed a tier boundary (combat/factionHeat.ts), once per crossing. */
+  | { readonly type: 'heat'; readonly faction: FactionId; readonly tier: number; readonly from: number }
   | { readonly type: 'reinforcements'; readonly source: string; readonly count: number; readonly x: number; readonly y: number }
   | { readonly type: 'bossPhase'; readonly hostile: number; readonly x: number; readonly y: number }
   | { readonly type: 'blast'; readonly kind: 'mine' | 'eruption'; readonly x: number; readonly y: number; readonly r: number }
@@ -368,6 +371,8 @@ export interface SectorRun {
   nextMine: number;
   /** Wary factions the pilot has provoked in this visit (hostile until the pilot leaves). */
   readonly provoked: Set<FactionId>;
+  /** P09.1: the save's faction heat (one object per slot, shared with the shell; combat/factionHeat.ts). */
+  readonly factionHeat: HeatBook;
   /** Regional difficulty row (combat/difficulty.ts). */
   readonly row: DifficultyRow;
   /** Ticks left of the arrival grace: no enemy fires and no encounter starts. */
@@ -464,6 +469,8 @@ export interface RunOptions {
   readonly unlimitedAmmo?: boolean | undefined;
   /** P04.3: the pilot's flight mode preference (default NORMAL). */
   readonly flightMode?: FlightMode | undefined;
+  /** P09.1: the save's faction heat book (default: all quiet, owned by this run). */
+  readonly heat?: HeatBook | undefined;
 }
 
 /** POIs every pilot knows on arrival: the station, the gates and the exit beacon (navigation beacons). */
@@ -478,6 +485,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
   const sp = at ? { ...spawnPoint, x: at.x, y: at.y, heading: at.heading } : spawnPoint;
   const ids = persistentIds(layout);
   const craft = o.ship ?? deriveShip('petrel');
+  const heat = o.heat ?? heatBook();
   const revealed = new Set(layout.pois.filter((p) => save.surveyed || BEACON_KINDS.includes(p.kind)).map((p) => p.id));
   const done = new Set(save.done.filter((id) => ids.has(id)));
   const left = leftFromSave(layout, save, done);
@@ -525,6 +533,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     mines: [],
     nextMine: 1,
     provoked: new Set(),
+    factionHeat: heat,
     row,
     grace: row.grace,
     combat: 'calm',
@@ -883,6 +892,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   stepPatrols(run);
   run.flight?.beforeAgents?.(run);
   stepAgents(run, events);
+  if (!run.docked) stepHeat(run, events);
   stepEnemyShots(run, events);
   stepMines(run, events);
   stepEruptions(run, events);

@@ -19,7 +19,7 @@ import { createRng, type Rng } from '../../../core/rng.ts';
 import { fnv1a32 } from '../catalogue/build.ts';
 import { FACTIONS } from '../combat/factions.ts';
 import { HOSTILE_FACTIONS, WARY_FACTIONS, RESOURCE_IDS, type FactionId, type HazardId, type ResourceId, type SystemRecord } from '../catalogue/types.ts';
-import { LOOT_TABLES, MINING, rareChanceOf, rollLoot, type LootContext, type LootTableId } from '../inventory/lootTables.ts';
+import { LOOT_TABLES, lootContextOf, MINING, rareChanceOf, rollLoot, type LootTableId } from '../inventory/lootTables.ts';
 import { CATEGORY_STARS, SECTOR_FEATURES, STAR_SIZE, type Range } from './features.ts';
 import { buildGrid, canReach, dist, reachable, segmentDistance, solidsOf, type Circle } from './grid.ts';
 import {
@@ -120,7 +120,7 @@ class Placer {
 /** POI kind -> central loot table (inventory/lootTables.ts). */
 const POI_TABLE: Readonly<Partial<Record<PoiKind, LootTableId>>> = { salvage: 'salvage', cache: 'container', derelict: 'wreck', anomaly: 'anomaly', installation: 'outpost' };
 
-const lootContext = (s: SystemRecord): LootContext => ({ difficulty: s.difficulty, richness: s.resources.richness, primary: s.resources.primary, secondary: s.resources.secondary });
+const lootContext = lootContextOf;
 
 /** Chance that one loot pick is a rare resource (central tables). 0 at difficulty 1; never certain. */
 export function rareChance(kind: PoiKind, difficulty: number, rareRich: boolean): number {

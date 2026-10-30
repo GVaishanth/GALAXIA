@@ -169,10 +169,14 @@ export const LIMITS = Object.freeze({
 
 /* --------------------------------------------------------------- sources */
 
-/** One cited reference. Stored locally; the game never fetches it. */
-export interface SourceRecord {
+/** What the game shows of a reference: its id and title (data/sourceTitles.ts; the shipped catalogue holds only these). */
+export interface SourceRef {
   readonly id: string;
   readonly title: string;
+}
+
+/** One cited reference. Stored locally; the game never fetches it (data/sources.ts: validation, tests, docs). */
+export interface SourceRecord extends SourceRef {
   readonly publisher: string;
   readonly url: string;
   /** ISO date the page was read for this catalogue. */
@@ -367,7 +371,7 @@ export interface ProgressionConfig {
 
 export interface Catalogue {
   readonly version: number;
-  readonly sources: readonly SourceRecord[];
+  readonly sources: readonly SourceRef[];
   readonly galaxies: readonly GalaxyRecord[];
   readonly systems: readonly SystemRecord[];
   readonly routes: readonly RouteRecord[];

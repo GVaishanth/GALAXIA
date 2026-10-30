@@ -15,6 +15,7 @@
  * Client-side only: the password is in the shipped JavaScript. It is a
  * stylised hidden gate, not authentication.
  */
+import { createRng } from '../../../core/rng.ts';
 
 /** The single accepted password: one ordinary ASCII space. */
 const PASSWORD = '\u0020';
@@ -30,16 +31,7 @@ export const WELCOME_LINE = 'WELCOME, MASTER';
 /* ------------------------------------------------------------- randomness */
 
 /** mulberry32: a small seeded generator (deterministic for tests). */
-export function seededRng(seed: number): () => number {
-  let a = seed >>> 0 || 0x9e3779b9;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export const seededRng = (seed: number): (() => number) => createRng(seed >>> 0 || 0x9e3779b9).next;
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const DIGITS = '0123456789';

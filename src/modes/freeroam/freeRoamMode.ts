@@ -52,7 +52,7 @@ import { FlightPointers } from './pointers.ts';
 import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint, withSimpleSignals } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
 import { auditProfile, auditText } from './saveAudit.ts';
-import { createSavesPanel, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
+import { createSavesPanel, SAVE_RETRY, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
 import { backupKey } from '../../shared/persistence/namespaces.ts';
 import { planSwap, removeLoot, lootUnits } from './inventory/inventory.ts';
 import { applyCollection } from './inventory/persistence.ts';
@@ -81,7 +81,8 @@ import { upgradedShip, cleanLevels, LEVEL_NAME, UPGRADE_BY_TRACK, type UpgradeLe
 import { createEventBus, type GameEvent } from './progression/events.ts';
 import { sectorGameEvents } from './progression/fromSector.ts';
 import { abandonMission, acceptMission, consumeEvent, galaxyOf, type MissionWorld, type PrereqContext } from './progression/missions.ts';
-import { STORY_BY_ID } from './progression/missionData.ts';
+import { MISSION_BY_ID } from './progression/missionData.ts';
+import { addHeat, HEAT_TIER_NAMES, heatBook, heatEffect, heatOf, heatTier, heatView, type HeatBook, type HeatView } from './combat/factionHeat.ts';
 import type { ContractSpec, MissionDef } from './progression/missionTypes.ts';
 import { stationBoard } from './progression/contracts.ts';
 import { buildMissionWorld } from './progression/missionWorld.ts';
@@ -92,7 +93,7 @@ import { ledgerOf, progressionFromSaved, progressionToSaved, withLedger, type Pr
 import { award, formatDelta, formatMarks, groupDigits, MARKS, record, spokenMarks, tickerValue, type EntryKind } from './progression/ledger.ts';
 import { bountyClaim, bountyLeft, bountyRefillIn, eventClaim, REWARDS, type MarksClaim } from './progression/marksRewards.ts';
 import { claimReward, deliver, grantCells, rewardChartTargets } from './progression/station.ts';
-import { missionsModel, missionTargets, trackedObjective } from './progression/view.ts';
+import { chainNews, chainViews, heatText, missionsModel, missionTargets, trackedObjective, type ChainView } from './progression/view.ts';
 import { createMissionsPanel, type MissionsPanel } from './progression/ui/missionsPanel.ts';
 import { createExchangePanel, type ExchangePanel } from './progression/ui/exchangePanel.ts';
 import { createUpgradesPanel, type UpgradesPanel } from './progression/ui/upgradesPanel.ts';
@@ -144,7 +145,8 @@ import { armingDelayMs, InputArming } from './ui/panelArming.ts';
 import { createSoundPanel, type SoundPanel } from './ui/soundPanel.ts';
 import { isEditableTarget } from '../../input/keyboard.ts';
 import type { ResumeAt } from './sector/resume.ts';
-import { createSequenceDetector, takeAdminRequest } from './admin/activation.ts';
+import { createSequenceDetector, keyStroke, takeAdminRequest } from './admin/activation.ts';
+import { mediaMatches } from '../../shared/ui/media.ts';
 import { createAdminPanel, type AdminPanel, type AdminPanelDeps } from './admin/adminPanel.ts';
 import { createAdminLogin, type AdminLogin, type AdminLoginStatus } from './admin/loginScreen.ts';
 import { navigatorGalaxies, navigatorSystems } from './admin/navigator.ts';
@@ -289,6 +291,9 @@ export interface FreeRoamStatus {
   readonly lab: () => LabStatus | null;
   /** P08.1: the flown ship's ability status (read only; null outside a sector). */
   readonly ability: () => AbilityStatus | null;
+  /** P09.1: faction heat, recent tier changes and the connected chains (read-only snapshots). */
+  readonly heat: () => { readonly factions: readonly HeatView[]; readonly log: readonly unknown[] };
+  readonly chains: () => readonly ChainView[];
   /** Prompt 13: save slots panel and save state. */
   readonly saves: () => Readonly<Record<string, unknown>>;
   /** Client (CSS) px -> world, through the current camera (pointer mapping checks). */
@@ -612,7 +617,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let silentPending = false;
   let abilityPending = false; // P08.1: one ship-ability try per press
   /** P07.2: the hints name the tap until a flight pointer event says otherwise when the primary pointer is coarse (read once). */
-  const coarsePointer = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const coarsePointer = mediaMatches('(pointer: coarse)');
   const touchHints = (): boolean => (container.dataset['input'] ? container.dataset['input'] === 'touch' : coarsePointer);
   let cyclePending: 1 | -1 | 0 = 0;
   let firePending = false;
@@ -738,6 +743,19 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let dockLabel = 'Station';
   /* Prompt 11: progression (marks, missions, upgrades, licences, log, fuel book) and its panels */
   let prog: ProgressionState;
+  /** P09.1: the slot's faction heat (one live book: the sector run and mission consequences change it; saved with the progression). */
+  let heatBk: HeatBook | undefined;
+  /** P09.1: the latest heat tier changes (transient, bounded, never saved): a read-only feed for presentation. */
+  const heatLog: { readonly faction: string; readonly tier: number; readonly from: number; readonly cause: 'flight' | 'mission' }[] = [];
+  /** P09.2: one corner-log line per real tier crossing (addHeat reports each crossing once; values inside a tier say nothing). */
+  const logHeat = (evs: readonly SectorEvent[], cause: 'flight' | 'mission'): void => {
+    for (const e of evs) {
+      if (e.type !== 'heat') continue;
+      if (heatLog.push({ faction: e.faction, tier: e.tier, from: e.from, cause }) > 8) heatLog.shift();
+      const up = e.tier > e.from;
+      missionNote(`${FACTIONS[e.faction].short.toUpperCase()} HEAT ${up ? 'UP' : 'EASED'} · ${HEAT_TIER_NAMES[e.tier]!.toUpperCase()} · ${heatEffect(e.tier)}`, up ? 'warn' : 'info');
+    }
+  };
   const bus = createEventBus();
   let missionsPanel: MissionsPanel;
   let exchangePanel: ExchangePanel;
@@ -765,7 +783,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
 
   const reducedMotion = (): boolean => {
     const pref = services.prefs.get().display.reducedMotion;
-    return pref === 'on' || (pref === 'system' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    return pref === 'on' || (pref === 'system' && mediaMatches('(prefers-reduced-motion: reduce)'));
   };
 
   /* --------------------------------- sound --------------------------------- */
@@ -787,6 +805,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     // P04: the admin sandbox is never written (the single save gateway; exiting reloads the untouched slot)
     if (!mayPersist(admin)) return true;
     if (!writable) return false;
+    if (heatBk) saveProg(); // heat changes in flight without a progression step
     const next = { ...profile, savedAt: Date.now() };
     const ok = saveSlot(services.store, saveSlotNo, next);
     if (ok) {
@@ -858,7 +877,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** Upgrade levels of a ship, cleaned against its caps (never invalid stats). */
   const levelsOf = (id: ShipId): UpgradeLevels => cleanLevels(id, prog.upgrades[id]);
   const saveProg = (): void => {
-    profile = withProgression(profile, progressionToSaved(prog));
+    profile = withProgression(profile, progressionToSaved(prog, heatBk));
   };
   const held = (): number => cellsHeld(profile.cargo);
   const wallet = (): Wallet => ({ marks: prog.marks, hold: profile.cargo, holdCap: holdCap(), modules: profile.modules });
@@ -976,7 +995,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (!worldCache || worldCache.key !== key) worldCache = { key, world: buildMissionWorld(graph, progress, profile.sectors) };
     return worldCache.world;
   };
-  const prereqCtx = (): PrereqContext => ({ visitedGalaxies: progress.visited, charted: progress.charted.length });
+  const prereqCtx = (): PrereqContext => ({ visitedGalaxies: progress.visited, charted: progress.charted.length, heat: heatBk?.v });
   /** Mission notices: on the flight view now, otherwise when it is next shown. */
   const missionNote = (text: string, tone: 'gain' | 'warn' | 'info'): void => {
     if (screen === 'flight' && feed) notify(text, undefined, tone);
@@ -1026,15 +1045,15 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     prog = { ...prog, missions: res.state, log };
     saveProg();
     for (const u of res.updates) {
-      if (u.kind === 'progress') missionNote(`MISSION · ${u.title.toUpperCase()} · ${u.value}/${u.count}`, 'info');
-      else if (u.kind === 'completed') {
-        moment('missionComplete');
-        if (screen === 'flight' && run) showNotice('mission', 'MISSION COMPLETE', `${u.title.toUpperCase()} · TURN IN AT ANY STATION`);
-        else missionNote(`MISSION COMPLETE · ${u.title.toUpperCase()} · TURN IN AT ANY STATION`, 'gain');
-      } else if (u.why !== 'abandoned') {
-        moment('missionFailed');
-        if (screen === 'flight' && run) showNotice('warn', 'MISSION FAILED', `${u.title.toUpperCase()} · ${u.why === 'deadline' ? 'OUT OF TIME' : 'TARGET LOST'}`);
-        else missionNote(`MISSION FAILED · ${u.title.toUpperCase()} · ${u.why === 'deadline' ? 'OUT OF TIME' : 'TARGET LOST'}`, 'warn');
+      const t = u.title.toUpperCase();
+      if (u.kind === 'progress') missionNote(`MISSION · ${t} · ${u.value}/${u.count}`, 'info');
+      else if (u.kind === 'completed' || u.why !== 'abandoned') {
+        const done = u.kind === 'completed';
+        const head = done ? 'MISSION COMPLETE' : 'MISSION FAILED';
+        const detail = `${t} · ${done ? 'TURN IN AT ANY STATION' : u.why === 'deadline' ? 'OUT OF TIME' : 'TARGET LOST'}`;
+        moment(done ? 'missionComplete' : 'missionFailed');
+        if (screen === 'flight' && run) showNotice(done ? 'mission' : 'warn', head, detail);
+        else missionNote(`${head} · ${detail}`, done ? 'gain' : 'warn');
       }
     }
     if (res.updates.length) refreshMissionHud();
@@ -1134,7 +1153,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const at = dockedAt();
     if (!at) return 'Missions are accepted at a station.';
     const world = missionWorld();
-    let def: MissionDef | undefined = STORY_BY_ID.get(id);
+    let def: MissionDef | undefined = MISSION_BY_ID.get(id);
     let spec: ContractSpec | undefined;
     if (!def) {
       const offer = stationBoard(prog.missions, at, world).offers.find((o) => o.def.id === id);
@@ -1165,30 +1184,40 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const res = claimReward(prog, id, wallet(), (galaxy, n) => rewardChartTargets(graph, progress, galaxy, n));
     if (!res.ok) return { ok: false, text: res.text };
     const before = prog;
+    const chainsBefore = chainViews(prog.missions, prereqCtx());
     // the reward's marks go through the ledger (recorded once by mission id) in commitWallet below
     prog = { ...res.progression, marks: before.marks };
     if (res.wallet.marks !== before.marks && !record(ledgerOf(prog), res.wallet.marks, 'mission', `Mission · ${res.title}`, `mission:${id}`).ok) {
       prog = before;
       return { ok: false, text: 'This reward was already paid.' };
     }
-    let news = '';
+    // P09.1: the stage's authored consequence, once (the claim above is recorded by id and saved below with it)
+    const notes: string[] = [];
+    if (res.heat && heatBk) {
+      const evs: SectorEvent[] = [];
+      addHeat(heatBk, res.heat.faction, res.heat.delta, evs);
+      logHeat(evs, 'mission');
+      const v = heatOf(heatBk, res.heat.faction);
+      notes.push(`${heatText(res.heat)} (now ${v}, ${HEAT_TIER_NAMES[heatTier(v)]}).`);
+    }
     const fresh = res.charted.filter((c) => !progress.charted.includes(c));
     if (fresh.length) {
       const next: ExplorationProgress = { ...progress, charted: [...progress.charted, ...fresh] };
       const diff = progressDiff(graph, deriveView(graph, progress), next);
       commitProgress(next);
       if (run) run.gates = gateInfos(run.layout);
-      news = [
+      notes.push(
         `Charted ${fresh.map((c) => graph.system(c)?.name ?? c).join(', ')}.`,
         ...diff.newRoutes.map((rid) => `Route open: ${graph.edges.find((e) => e.id === rid)?.route.name ?? rid}.`),
         ...diff.newGalaxies.map((g) => `Unlocked: ${graph.node(g)!.galaxy.name}.`),
-      ].join(' ');
+      );
       publish(routeEvents(diff.newRoutes));
     }
     commitWallet(res.wallet, `Mission · ${res.title}`, 'mission', `mission:${id}`);
     setFleet(fleet); // licences change nothing fitted; re-derive anyway so stats are always current
     refreshMissionHud();
-    return { ok: true, text: `Reward claimed: ${res.lines.join(' · ')}.${news ? ` ${news}` : ''}` };
+    notes.push(...chainNews(chainsBefore, chainViews(prog.missions, prereqCtx())));
+    return { ok: true, text: [`Reward claimed: ${res.lines.join(' · ')}.`, ...notes].join(' ') };
   };
   const deliverMission = (id: string): string => {
     const at = dockedAt();
@@ -1263,7 +1292,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     // P04: an admin arrival may start beside the station (a point checked like a resume point)
     const at = place ? place(layout) : pendingResume && pendingResume.systemId === systemId && spawn === undefined ? pendingResume : null;
     pendingResume = null;
-    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode });
+    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode, heat: heatBk });
     resumedAt = !place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     besideStation = !!place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     if (!resumedAt) profile = withResume(profile, null);
@@ -1943,6 +1972,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       return;
     }
     const kindOf = (id: string) => r.layout.pois.find((p) => p.id === id)?.kind;
+    logHeat(events, 'flight');
     for (const e of events) {
       const before = profile;
       handleEvent(r, sys, e);
@@ -2251,7 +2281,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     saveNow: () => {
       if (isAdmin(admin)) return ADMIN_SAVES;
       if (!writable) return 'This slot is read-only here: nothing was saved.';
-      if (!persist()) return `Saving FAILED (${BLOCKED}). The game keeps running and tries again at the next save.`;
+      if (!persist()) return `Saving FAILED (${BLOCKED}). ${SAVE_RETRY}`;
       return services.store.persistent ? `Saved to slot ${saveSlotNo}.` : `Saved to slot ${saveSlotNo} for this tab only (browser storage is unavailable).`;
     },
     load: (n) => {
@@ -2321,7 +2351,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       adminKeys.reset();
       return;
     }
-    if (adminKeys.feed({ code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, repeat: e.repeat, t: e.timeStamp })) {
+    if (adminKeys.feed(keyStroke(e))) {
       e.preventDefault();
       e.stopImmediatePropagation();
       openLogin(screen === 'flight' ? 'station' : screen === 'systems' ? 'systems' : 'map');
@@ -3362,6 +3392,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       for (const n of loadNotes) heldNotes.push(`warn|${n}`);
       loadMessage = loadNotes.join(' ');
       prog = progressionFromSaved(profile.progression);
+      heatBk = heatBook(profile.progression.heat);
+      heatLog.length = 0;
       // the record also knows places reached before Prompt 11 (log only: no mission counts them)
       for (const g of progress.visited) prog = { ...prog, log: recordEvent(prog.log, { type: 'galaxy-reached', galaxyId: g, first: false }, graph) };
       for (const id of progress.visitedSystems) prog = { ...prog, log: recordEvent(prog.log, { type: 'system-visited', systemId: id, galaxyId: galaxyOf(id), first: false }, graph) };
@@ -3633,10 +3665,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       missionsPanel = createMissionsPanel({
         docked: dockedAt,
         stationName: () => dockLabel,
+        standing: () => heatView(heatBk),
         model: () => {
           const at = dockedAt();
           const world = missionWorld();
-          return missionsModel(prog.missions, prereqCtx(), world, galaxyName, profile.cargo, at, [...STORY_BY_ID.values()], at ? stationBoard(prog.missions, at, world) : null);
+          return missionsModel(prog.missions, prereqCtx(), world, galaxyName, profile.cargo, at, [...MISSION_BY_ID.values()], at ? stationBoard(prog.missions, at, world) : null);
         },
         accept: acceptOffer,
         abandon: abandonOffer,
@@ -4155,6 +4188,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         },
         lab: () => (__GALAXIA_GRAVITY_LAB__ && lab ? lab.status() : null),
         ability: () => (run ? abilityStatus(run) : null),
+        heat: () => ({ factions: heatView(heatBk), log: [...heatLog] }),
+        chains: () => chainViews(prog.missions, prereqCtx()),
         gravity: () =>
           run
             ? {

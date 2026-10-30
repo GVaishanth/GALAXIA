@@ -5,7 +5,7 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
-- **Last updated:** 2026-10-27. See [What's new since the 2026-10-26 crew archive](#whats-new-since-the-2026-10-26-crew-archive).
+- **Last updated:** 2026-10-30. See [What's new in the 2026-10-30 missions and faction heat archive](#whats-new-in-the-2026-10-30-missions-and-faction-heat-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
 - **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls (including faint signals), ships, weapons and Guild marks (not crew yet).
@@ -18,7 +18,7 @@ Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What's new](#whats-new-since-the-2026-10-26-crew-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-in-the-2026-10-30-missions-and-faction-heat-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -89,6 +89,7 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules, upgrades and one-time crew berth fees.
 - **Crew (optional):** seven named specialists to sign on and seat aboard your ships on a station's **BRIDGE**. A seated Navigator or Surveyor gives spoken-style text advice in flight; the built-in **Ship Mind** advises every pilot, crew or not. Advice only: crew never fly, fight, pay or travel for you. See [Crew and the Bridge](#crew-and-the-bridge).
 - **Progress:** a ten-mission story chain, contract boards, cargo and crafting, three save slots, and recovery that never strands you.
+- **Guild chains and Faction Heat:** two three-stage Guild mission chains (Gleaner Accord, Faint Lanterns) and a per-faction heat value (0-100) raised by your attacks on that faction's ships. The station Missions tab shows both: GUILD CHAINS (each stage, its status, reward and why it is locked) and FACTION STANDING (value, tier and what it changes).
 - **Pause menu:** RESUME and RESTART FLIGHT (with a confirmation) on top, then three groups that open on demand: MISSIONS & PROGRESS, SETTINGS & HELP and NAVIGATION.
 
 ### For every player
@@ -164,6 +165,7 @@ Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP*
 - Mouse aim is optional (CONTROLS → MOUSE AIM, off by default). Target lock, next target, STOP and the ship ability are not available on a controller.
 - **Gravity Shadow:** a planet or star between you and a hostile hides you from it; a ship that loses sight of you keeps chasing your last seen position for about 1.25 s without firing, then searches. It works per hostile and only when the body is in the line, not just nearby; a small **GRAVITY SHADOW** tag shows while a body really hides you, and **SEARCHING · LAST KNOWN POSITION** while a hostile hunts your last seen spot. Hiding is not protection: you can still be hit. **Silent running** (Z, the **SILENT** button on touch, L3 on a controller) shrinks the range at which hostiles can spot you to about a third. It is not invisibility: ships close by still detect you. Your shield does not recharge while it is on, and pressing fire or boost ends it (the log names the input). The SILENT control reads **SILENT RUNNING** while it is on. More in the [Player Guide](docs/PLAYER_GUIDE.md#silent-running-and-gravity-shadow).
 - **Ship signature abilities:** every ship has one (Swift Vector Burst, Shrike Predator Focus, Petrel Signal Calibration, Magpie Salvage Pulse, Condor Bulwark, Albatross Deep Scan). F or the touch button uses it; the ability panel shows **READY**, **ACTIVE** with the seconds left, or **COOLDOWN** with the seconds until ready. Pausing freezes it; a refused press uses nothing up and the log says why. None makes you invisible or immune to damage, adds loot or solves a signal. More in the [Player Guide](docs/PLAYER_GUIDE.md#ship-signature-abilities).
+- **Faction Heat:** hitting or destroying a faction's ships raises that faction's heat (0-100; Quiet, Wary, Alert, Pursuit, Hunt). Higher heat makes only that faction's ships spot you a little farther away (up to 20%) and search your last position a little longer (up to 1 s); Silent Running and Gravity Shadow still hide you. Heat cools 1 point per 12 s of flight while none of its ships hunts you (not while paused or docked), and some chain stages change it once when turned in. See it under the station **MISSIONS** tab → FACTION STANDING, or pause → MISSIONS. One stage, Fair Shares, can only be accepted while Gleaner heat is below 40; once accepted it stays yours.
 
 #### Flight mode and STOP
 
@@ -394,6 +396,7 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`signal-p06.mjs`](docs/development/playtest/signal-p06.mjs) | Faint signals: bearing prompts and notices, resolution and its reward paid once, the Simple Signals setting saved across a reload, layout clear of the touch controls | `npm run preview:e2e` |
   | [`stealth-p07.mjs`](docs/development/playtest/stealth-p07.mjs) | Silent Running and Gravity Shadow: Z and the SILENT button on and off, fire and boost ending it, the shield pause, the shadow and searching tags against the AI, pause, restart, dock and ship change, HOW TO PLAY text, touch layouts | `npm run preview:e2e` |
   | [`ship-abilities-p08.mjs`](docs/development/playtest/ship-abilities-p08.mjs) | Ship abilities (P08.1 + P08.2): F and the touch button (one tap, one request), exact duration and cooldown on simulation ticks, the HUD panel against the ability status, refusals that consume nothing, pause, Silent Running, restart, reload, sector exit, each ship's effect, scan counts and marks, dock and ship change, CONTROLS and rebinding, six viewports in both flight modes, the guide section | `npm run preview:e2e` |
+  | [`missions-heat-p09.mjs`](docs/development/playtest/missions-heat-p09.mjs) | Guild chains and Faction Heat (P09.1 + P09.2): chain stages through the real board, kills, rewards and consequences once, decay and pause, detection by heat, the GUILD CHAINS and FACTION STANDING sections, notices, reloads, legacy saves and eight viewports | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview
@@ -512,7 +515,18 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
-## What's new since the 2026-10-26 crew archive
+## What's new in the 2026-10-30 missions and faction heat archive
+
+`GALAXIA_Release_2026-10-30_Missions-and-Faction-Heat.zip` adds, on top of the 2026-10-29 Ship Abilities archive (Classic Mode, ships, weapons, prices, flight modes, stealth and abilities unchanged):
+
+- **Guild chains:** Gleaner Accord and Faint Lanterns, three stages each, through the existing Guild dispatch, rewards and saves. Each reward and each heat change is applied once, at turn-in.
+- **Faction Heat:** a 0-100 value per faction raised by your hits and kills on its ships, cooling in calm flight, with small, bounded effects on that faction's ships only.
+- **Missions tab:** GUILD CHAINS (stage, status, objective, reward, lock reasons, including the Fair Shares heat check made when you accept) and FACTION STANDING (value, tier, meter and effect, with help text). One notice per tier change; the turn-in message names the heat change and the next stage.
+- **Saves:** one optional field (`progression.heat`); older saves load with every faction Quiet.
+
+None of this has been playtested by a person or tried on a physical device.
+
+## Earlier: what was new since the 2026-10-26 crew archive
 
 These changes were made after `GALAXIA_Release_2026-10-26_Crew.zip` and are included in the 2026-10-27 signal-triangulation archive. Classic Mode, ships, weapons, flight modes, STOP, crew, prices and saves are unchanged; no save field was added.
 
@@ -549,7 +563,12 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 ## What has been verified
 
-**Automated, on the current code (signal triangulation):**
+**Automated, on the current code (missions and faction heat, 2026-10-30):**
+
+- `BASE_PATH=/galaxia/ npm run check` exit 0: 2,297 passed, the 17 opt-in measurement runs skipped; `verify:dist` OK (first download 94.9 kB gzip of 110 kB; Free Roam 224.9 kB of 225 kB; CSS 24.3 kB of 25 kB).
+- Headless Chromium against this code: Guild chains and Faction Heat (55 of 55, including eight screen sizes), ship abilities (113), stealth (69), faint signals (42), Ship Mind advice (65), crew (42), controls (162), pause and the pause menu (20, 85), HOW TO PLAY (70), Hangar (34), economy (68), Galaxy and System Map (30, 21); on the production build the release smoke test (77) and flight modes (8).
+
+**Earlier, on the signal-triangulation code:**
 
 - `npm run check` passes: typecheck, the Vitest suite (2,131 passed; the 17 opt-in measurement runs skipped), the production build and `verify:dist` (first download 94.8 kB gzip of a 110 kB budget; Free Roam 224.2 kB of 225 kB, loaded only when chosen; CSS 24,997 bytes gzip of a 25,000-byte budget).
 - Browser scripts in headless Chromium against this code: faint signals, the SIGNALS setting and the prompt and notices at 1280×720, 1920×1080 and 320×568 and 390×844 touch layouts (42 of 42), Ship Mind and crew advice (65 of 65), crew and the Bridge (42 of 42), NORMAL and REALISTIC flight with STOP (56 of 56) and pause and resume (20 of 20), all passing. The other scripts were not re-run for this change; their last results (2026-10-26, crew archive) follow.
@@ -573,6 +592,7 @@ Neither change has been playtested by a person or tried on a physical device; se
 - **Open testing:** expect balance and feel issues. Combat tuning, gravity strength, marks rewards and prices come from simulations and automated checks, not from players.
 - **REALISTIC flight and STOP** are tuned from automated measurements only; expect the feel (turn rate, thrust, how STOP brakes near planets) to change after player feedback.
 - **Crew are advice only:** a Navigator or Surveyor never flies, fights, brakes, investigates or travels for you, and plots no routes. Engineer, Defence and Quartermaster duties and route planning are planned, not implemented. Advice is text only (no voice), in English.
+- **Guild chains and Faction Heat:** heat numbers come from automated checks, not players. The chain and standing cards are text (keyboard focus moves between the panel's buttons); heat notices have no sound of their own.
 - **Faint signals:** there is no sound cue for a bearing. The bearing prompt is the usual INTERACT button; on a tall phone (390×844, emulated) a thumb resting low in the left corner can cover its edge, though the DRAG TO FLY spot does not. The difficulty (sensor range, the 35° rule, the error of each bearing) comes from simulations, not from players.
 - **Advice layout:** the advice line was checked in emulated layouts only (1280×720, and 360×640, 320×568, 740×360 and 568×320 touch screens). In touch portrait it hangs just below the ship and the NEARBY line steps aside while it shows. On the narrowest phones (320 px wide), a long crew message can overlap the touch stick's ring if your thumb rests high on the screen; it is drawn over, never in the way of input. Screen-reader announcements are wired up but were not tried with a real screen reader.
 - **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.

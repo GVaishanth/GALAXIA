@@ -18,7 +18,7 @@ import type {
   RouteRecord,
   SectorArchetype,
   SectorConfig,
-  SourceRecord,
+  SourceRef,
   SystemRecord,
   SystemRow,
   UnlockRequirement,
@@ -86,7 +86,7 @@ function deepFreeze<T>(value: T): T {
 }
 
 export interface CatalogueData {
-  readonly sources: readonly SourceRecord[];
+  readonly sources: readonly SourceRef[];
   readonly galaxies: readonly GalaxyRecord[];
   readonly systems: readonly GalaxySystems[];
   readonly archetypes: readonly SectorArchetype[];
@@ -143,7 +143,7 @@ export function buildCatalogue(data: CatalogueData): Catalogue {
   });
   return deepFreeze({
     version: CATALOGUE_VERSION,
-    sources: data.sources.map((s) => ({ ...s })),
+    sources: data.sources.map(({ id, title }) => ({ id, title })), // ids and titles only: the full records stay in data/sources.ts
     galaxies: data.galaxies.map((g) => structuredClone(g)),
     systems,
     routes: data.routes.map((r) => structuredClone(r)),

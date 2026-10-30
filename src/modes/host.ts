@@ -21,6 +21,7 @@ import { DisposableScope } from '../shared/lifecycle/scope.ts';
 import { NOTICE_TEXT, STORAGE_KEYS, type StorageNotice } from '../shared/persistence/namespaces.ts';
 import { PreferencesStore } from '../shared/persistence/preferences.ts';
 import { TitleScreen, type TitleChoice } from '../shared/ui/titleScreen.ts';
+import { mediaMatches } from '../shared/ui/media.ts';
 import { createClassicMode } from './classic/classicMode.ts';
 import { ModeController, type HostState } from './controller.ts';
 import { activeSlot, FR_PREFS_SPEC, readSlot, slotSummary } from './freeroam/saveSlots.ts';
@@ -30,7 +31,7 @@ import type { GuideContext, GuideInput, GuideMode } from './guide/guideContent.t
 import type { GuideDialog, GuideEnd, GuideStatus } from './guide/guideDialog.ts';
 import { acknowledgeGuide, guideDue, readGuide, type GuideRecord } from './guide/guideState.ts';
 import { parseRecord } from '../shared/persistence/record.ts';
-import { createGestureDetector, createSequenceDetector, requestAdminLaunch } from './freeroam/admin/activation.ts';
+import { createGestureDetector, createSequenceDetector, keyStroke, requestAdminLaunch } from './freeroam/admin/activation.ts';
 import { isEditableTarget } from '../input/keyboard.ts';
 import { MODE_IDS, type ModeContext, type ModeDebug, type ModeId, type ModeRegistry, type SharedServices } from './types.ts';
 
@@ -119,14 +120,14 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   const GUIDE_CLOSED: GuideStatus = { open: false, kind: null, step: 'welcome', index: 0, mode: 'classic', input: 'keyboard', highlighted: false, listeners: 0, loops: 0 };
   const reducedMotion = (): boolean => {
     const pref = prefs.get().display.reducedMotion;
-    return pref === 'on' || (pref === 'system' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    return pref === 'on' || (pref === 'system' && mediaMatches('(prefers-reduced-motion: reduce)'));
   };
   /** Opened automatically at most once per page load (also when the choice could not be stored). */
   let guideAutoOpened = false;
   const guideInput = (): GuideInput => {
     const forced = new URLSearchParams(location.search).get('controls');
     if (forced === 'touch' || forced === 'keyboard') return forced;
-    if (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) return 'touch';
+    if (mediaMatches('(pointer: coarse)')) return 'touch';
     const pads = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function' ? [...navigator.getGamepads()] : [];
     return pads.some((p) => p?.connected) ? 'controller' : 'keyboard';
   };
@@ -268,7 +269,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         adminKeys.reset();
         return;
       }
-      if (adminKeys.feed({ code: e.code, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, repeat: e.repeat, t: e.timeStamp })) {
+      if (adminKeys.feed(keyStroke(e))) {
         e.preventDefault();
         startAdmin();
       }
