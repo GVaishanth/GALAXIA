@@ -2,7 +2,7 @@ import { PLAYER_DUAL, PLAYER_FIGHTER } from './player.ts';
 import { ENEMY_COMMANDER, ENEMY_INTERCEPTOR, ENEMY_SCOUT } from './enemies.ts';
 import { SPECIAL_PHANTOM, SPECIAL_SOVEREIGN, SPECIAL_STINGER } from './specials.ts';
 import { BEAM_TRACTOR, EXPLOSION_ENEMY, EXPLOSION_PLAYER, FX_HIT, SHOT_ENEMY, SHOT_PLAYER } from './effects.ts';
-import { FX_SHIELD_IMPACT, SHIP_ALBATROSS, SHIP_CONDOR, SHIP_MAGPIE, SHIP_PETREL, SHIP_SHRIKE, SHIP_SWIFT } from './fleet.ts';
+import { FX_SHIELD_IMPACT, SHIP_ALBATROSS, SHIP_CONDOR, SHIP_CRANE, SHIP_HARRIER, SHIP_HERON, SHIP_MAGPIE, SHIP_PETREL, SHIP_RAVEN, SHIP_SHRIKE, SHIP_SWIFT } from './fleet.ts';
 import { FOE_CAPITAL, FOE_ELITE, FOE_HAULER, FOE_HEAVY, FOE_LANCER, FOE_PICKET, FOE_RAIDER, FOE_RECON } from './foes.ts';
 import type { VariantId } from './variants.ts';
 
@@ -31,6 +31,11 @@ export const SPRITES = {
   [SHIP_CONDOR.id]: SHIP_CONDOR,
   [SHIP_MAGPIE.id]: SHIP_MAGPIE,
   [SHIP_ALBATROSS.id]: SHIP_ALBATROSS,
+  // P10.1 expansion: two Hangar hulls and two recovered from Raid Boxes
+  [SHIP_HARRIER.id]: SHIP_HARRIER,
+  [SHIP_CRANE.id]: SHIP_CRANE,
+  [SHIP_HERON.id]: SHIP_HERON,
+  [SHIP_RAVEN.id]: SHIP_RAVEN,
   [FX_SHIELD_IMPACT.id]: FX_SHIELD_IMPACT,
   // Free Roam enemies (Prompt 9)
   [FOE_RAIDER.id]: FOE_RAIDER,
@@ -109,6 +114,22 @@ export const LOOKS: readonly Look[] = [
   { label: 'Albatross: engine', category: 'fleet', sprite: 'ship.albatross', state: 'thrust' },
   { label: 'Albatross: boost', category: 'fleet', sprite: 'ship.albatross', state: 'boost' },
   { label: 'Albatross: damaged', category: 'fleet', sprite: 'ship.albatross', state: 'thrust', variant: 'scorched' },
+  { label: 'Harrier: idle', category: 'fleet', sprite: 'ship.harrier', state: 'idle' },
+  { label: 'Harrier: engine', category: 'fleet', sprite: 'ship.harrier', state: 'thrust' },
+  { label: 'Harrier: boost', category: 'fleet', sprite: 'ship.harrier', state: 'boost' },
+  { label: 'Harrier: damaged', category: 'fleet', sprite: 'ship.harrier', state: 'thrust', variant: 'scorched' },
+  { label: 'Crane: idle', category: 'fleet', sprite: 'ship.crane', state: 'idle' },
+  { label: 'Crane: engine', category: 'fleet', sprite: 'ship.crane', state: 'thrust' },
+  { label: 'Crane: boost', category: 'fleet', sprite: 'ship.crane', state: 'boost' },
+  { label: 'Crane: damaged', category: 'fleet', sprite: 'ship.crane', state: 'thrust', variant: 'scorched' },
+  { label: 'Heron: idle', category: 'fleet', sprite: 'ship.heron', state: 'idle' },
+  { label: 'Heron: engine', category: 'fleet', sprite: 'ship.heron', state: 'thrust' },
+  { label: 'Heron: boost', category: 'fleet', sprite: 'ship.heron', state: 'boost' },
+  { label: 'Heron: damaged', category: 'fleet', sprite: 'ship.heron', state: 'thrust', variant: 'scorched' },
+  { label: 'Raven: idle', category: 'fleet', sprite: 'ship.raven', state: 'idle' },
+  { label: 'Raven: engine', category: 'fleet', sprite: 'ship.raven', state: 'thrust' },
+  { label: 'Raven: boost', category: 'fleet', sprite: 'ship.raven', state: 'boost' },
+  { label: 'Raven: damaged', category: 'fleet', sprite: 'ship.raven', state: 'thrust', variant: 'scorched' },
   { label: 'Shield impact', category: 'fleet', sprite: 'fx.shield.impact', state: 'flare' },
   ...foeLooks(),
 ];

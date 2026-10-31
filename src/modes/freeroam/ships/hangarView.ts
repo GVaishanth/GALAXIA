@@ -99,7 +99,7 @@ export function catalogue(ctx: HangarContext, filter: HangarFilter, sort: Hangar
 
 /* ------------------------------------------------------------ highlights */
 
-export type HighlightKey = StatKey | 'output' | 'starter' | `class-${WeaponClass}`;
+export type HighlightKey = StatKey | 'output' | 'starter' | 'tow' | 'recovered' | `class-${WeaponClass}`;
 
 export interface Highlight {
   readonly key: HighlightKey;
@@ -175,6 +175,10 @@ export function yardHighlights(id: ShipId): Highlight[] {
   const outputs = SHIPS.map((s) => ({ id: s.id, v: weaponSummary(stockWeapon(s.id)!).output }));
   const topOut = Math.max(...outputs.map((o) => o.v));
   if (outputs.filter((o) => o.v === topOut).length === 1 && outputs.find((o) => o.v === topOut)!.id === id) out.push({ key: 'output', short: 'HIGHEST FIRE OUTPUT', text: 'Highest stock fire output in the yard.' });
+  // P10.1: what the data says about the recovery roles (never a claimed stat)
+  const d = SHIP_BY_ID.get(id)!;
+  if (d.towRig) out.push({ key: 'tow', short: 'TOW RIG', text: `Cancels ${Math.round(d.towRig * 100)}% of the towing penalty.` });
+  if (d.salvage) out.push({ key: 'recovered', short: 'RECOVERED HULL', text: 'Never sold: recovered from its Raid Box.' });
   for (const c of WEAPON_CLASSES) {
     const takers = SHIPS.filter((s) => s.weaponClasses.includes(c));
     if (takers.length === 1 && takers[0]!.id === id) out.push({ key: `class-${c}`, short: `${c.toUpperCase()} HARDPOINTS`, text: `The only hull that accepts ${c} weapons.` });

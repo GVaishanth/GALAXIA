@@ -151,7 +151,7 @@ describe('crew model (P05.1)', () => {
 
 describe('ship crew capacity (P05.1)', () => {
   it('stores the seats in the ship roster with the agreed mapping', () => {
-    const want: Record<ShipId, number> = { swift: 1, shrike: 1, petrel: 2, magpie: 2, condor: 3, albatross: 3 };
+    const want: Record<ShipId, number> = { swift: 1, shrike: 1, petrel: 2, magpie: 2, condor: 3, albatross: 3, harrier: 1, crane: 2, heron: 2, raven: 1 }; // P10.1: four more hulls
     for (const s of SHIPS) {
       expect(s.crewSeats, s.id).toBe(want[s.id]);
       expect(seatCount(s.id)).toBe(want[s.id]);

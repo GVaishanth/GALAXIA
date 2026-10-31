@@ -5,7 +5,8 @@
 import type { MountType, WeaponId } from '../../../config/weapons.ts';
 import type { UnlockRequirement } from '../catalogue/types.ts';
 
-export const SHIP_IDS = ['petrel', 'swift', 'shrike', 'condor', 'magpie', 'albatross'] as const;
+/** Roster order. P10.1 appends Harrier, Crane (Hangar) and Heron, Raven (recovered from Raid Boxes); the first six keep their place. */
+export const SHIP_IDS = ['petrel', 'swift', 'shrike', 'condor', 'magpie', 'albatross', 'harrier', 'crane', 'heron', 'raven'] as const;
 export type ShipId = (typeof SHIP_IDS)[number];
 
 export type ShipArchetype = 'scout' | 'interceptor' | 'explorer' | 'defender' | 'salvager' | 'long-range';
@@ -68,7 +69,7 @@ export interface ShipDef {
   /** One or two sentences for the hangar. */
   readonly description: string;
   /** Sprite registry id (assets/sprites/fleet.ts). */
-  readonly sprite: 'ship.swift' | 'ship.shrike' | 'ship.petrel' | 'ship.condor' | 'ship.magpie' | 'ship.albatross';
+  readonly sprite: `ship.${ShipId}`;
   /** Collision radius, art px (checked against the sprite by a test). */
   readonly radius: number;
   readonly base: ShipStats;
@@ -94,6 +95,16 @@ export interface ShipDef {
    * pilot's own seat is not counted: a ship always flies with no crew at all.
    */
   readonly crewSeats: number;
+  /**
+   * P10.1: a hull that is never sold. Its disabled wreck waits in one sector:
+   * a Raid Box at `box` (sector art px) and the hull resting at `hull`. Opening
+   * the box and towing the hull to a station is the only way to own it
+   * (licence and cost stay empty). Read by sector/generate.ts (the box), the
+   * run (the hull) and hangar.ts (never for sale).
+   */
+  readonly salvage?: { readonly system: string; readonly box: readonly [number, number]; readonly hull: readonly [number, number] };
+  /** P10.1: share of the towing penalty this hull's own rig cancels (0..1; absent = none). Read by sector/tow.ts only. */
+  readonly towRig?: number;
 }
 
 /** Additive and multiplicative changes to stats. Applied as (base + Σadd) × Πmul, then clamped. */

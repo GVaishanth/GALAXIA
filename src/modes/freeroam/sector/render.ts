@@ -129,7 +129,7 @@ const ART = Object.freeze({
   nebula: { dust: '#8a6a4a', 'ion-storm': '#4a7aff', radiation: '#7aff6a', flare: '#ff8a3a', 'gravity-shear': '#b06aff', none: '#5a4a8a' } as Record<string, string>,
   label: '#8d96b8',
   done: '#5a6378',
-  poi: { survey: '#ffd23f', salvage: '#6cf2c2', derelict: '#ff9440', cache: '#ffcf4a', anomaly: '#e46bff', station: '#5cefff', installation: '#ff4f5e', gate: '#7dff8a', exit: '#7dff8a' } as Record<string, string>,
+  poi: { survey: '#ffd23f', salvage: '#6cf2c2', derelict: '#ff9440', cache: '#ffcf4a', anomaly: '#e46bff', station: '#5cefff', installation: '#ff4f5e', gate: '#7dff8a', exit: '#7dff8a', raidbox: '#9fb4ff' } as Record<string, string>,
   sealed: '#ff6b6b',
   dormant: '#5a6378',
 });
@@ -496,6 +496,21 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   const fi = state === 'idle' || o.reducedMotion ? 0 : Math.floor(o.timeMs / 90) % 2;
   // invulnerability after a hit: blink (steady half alpha with reduced motion)
   const alpha = run.invuln > 0 ? (o.reducedMotion ? 0.55 : Math.floor(o.timeMs / 80) % 2 ? 0.35 : 1) : 1;
+  const hk = run.hulk;
+  if (hk) {
+    // P10.1: the disabled hull (dimmed, scorched, no engine) and its tether, under the ship; read-only
+    const hx = hk.px + (hk.x - hk.px) * k;
+    const hy = hk.py + (hk.y - hk.py) * k;
+    if (hk.towed) {
+      ctx.strokeStyle = Math.hypot(sx - hx, sy - hy) > (run.recovery?.towMax(run) ?? Infinity) * 0.8 ? ART.sealed : ART.poi['raidbox']!;
+      ctx.lineWidth = px(1.5);
+      ctx.beginPath();
+      ctx.moveTo(toX(sx), toY(sy));
+      ctx.lineTo(toX(hx), toY(hy));
+      ctx.stroke();
+    }
+    if (visible(hx, hy, hk.r * 2)) drawFrame(ctx, sprites, sprites.frame(hk.sprite, 'idle', 0, 'scorched'), v, hx, hy, { rotation: hk.heading, glow: false, alpha: 0.75 });
+  }
   drawPullArrow(ctx, run, sx, sy, toX, toY, zoom); // FR-TD-86: under the hull sprite
   drawFrame(ctx, sprites, sprites.frame(run.craft.sprite, state, fi, damaged ? 'scorched' : undefined), v, sx, sy, { rotation: heading, glow: o.glow, alpha });
   ctx.globalAlpha = 1;
@@ -674,6 +689,12 @@ export function drawSectorMap(ctx: CanvasRenderingContext2D, w: number, h: numbe
       ctx.fillStyle = col;
       ctx.fillText(p.kind === 'exit' ? 'EXIT' : p.kind === 'gate' ? 'GATE' : 'STATION', X(p.x), Y(p.y) + r + 2 * ratio);
     }
+  }
+  if (run.hulk) {
+    // P10.1: the revealed hull is charted wherever it is (towed or left behind)
+    ctx.fillStyle = ART.poi['raidbox']!;
+    ctx.fillRect(Math.round(X(run.hulk.x) - 3 * ratio), Math.round(Y(run.hulk.y) - 3 * ratio), Math.round(6 * ratio), Math.round(6 * ratio));
+    ctx.fillText('HULL', X(run.hulk.x), Y(run.hulk.y) + 5 * ratio);
   }
   const sh = run.ship;
   const n = noseOf(sh.heading);
@@ -899,6 +920,12 @@ function drawPoi(ctx: CanvasRenderingContext2D, run: SectorRun, p: Poi, x: numbe
       ctx.fillRect(-2 * s, -2 * s, 4 * s, 4 * s);
       break;
     }
+    case 'raidbox':
+      // P10.1: a long armoured crate with corner braces; once open, the lid stands off to one side
+      ctx.strokeRect(-9 * s, -5 * s, 18 * s, 10 * s);
+      for (const [dx, dy] of [[-9, -5], [6, -5], [-9, 2], [6, 2]] as const) ctx.fillRect(dx * s, dy * s, 3 * s, 3 * s);
+      ctx.fillRect(-9 * s, (done ? -11 : -7) * s, 18 * s, 2 * s);
+      break;
     case 'cache':
       ctx.fillRect(-7 * s, -6 * s, 14 * s, 12 * s);
       ctx.fillStyle = done ? '#3a3f4f' : '#7a4a10';

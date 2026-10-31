@@ -39,7 +39,7 @@
 import { createRng, type Rng } from '../../../core/rng.ts';
 import { freshShip, noseOf, SHIP, stepShip, type FlightInput, type FreeRoamPhase, type ShipModifiers, type ShipState, type ShipTuning } from '../sim.ts';
 import { deriveShip } from '../ships/equipment.ts';
-import type { DerivedShip } from '../ships/types.ts';
+import type { DerivedShip, ShipId } from '../ships/types.ts';
 import type { FactionId } from '../catalogue/types.ts';
 import { stepAgents } from '../combat/ai.ts';
 import { heatBook, stepHeat, type HeatBook } from '../combat/factionHeat.ts';
@@ -57,7 +57,7 @@ import { createArsenal, type Arsenal, type ArsenalSpec } from '../../../core/wea
 import { compatibleWeapons, defaultSetup } from '../ships/armory.ts';
 import type { Agent, CombatLevel, EncounterRuntime, EnemyShot, Mine, Pending } from '../combat/state.ts';
 import type { WeaponId } from '../combat/weapons.ts';
-import { damageAgent, damagePlayer, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
+import { damageAgent, damagePlayer, pushOutOfSolids, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
 import { FAMILIES } from '../combat/families.ts';
 import { dist } from './grid.ts';
 import { safeResumePoint, type ResumeAt } from './resume.ts';
@@ -65,7 +65,18 @@ import { initialDropBudget, interactContainer, killDrop, leftFromSave, lootStrea
 import type { AgentRole } from '../combat/state.ts';
 import { NO_CONTROLS, type VectorControls } from './vectorFlight.ts';
 import { clearStationKeeping, createRealisticFlight, freshStationKeeping, stepRealistic, updateStationKeeping, vectorMoving, type FlightMode, type RealisticFlight, type StationKeeping } from './realisticFlight.ts';
-import { abilityGate, abilityOf, burstLevel, endAbility, freshAbility, tickAbility, type AbilityContact, type AbilityDef, type AbilityId, type AbilityRefusal, type AbilityState } from '../combat/shipAbilities.ts';
+import { abilityGate, abilityOf, burstLevel, endAbility, freshAbility, live, tickAbility, type AbilityContact, type AbilityDef, type AbilityId, type AbilityRefusal, type AbilityState } from '../combat/shipAbilities.ts';
+import type * as TowKit from './tow.ts';
+import type { Hulk, TowChange, TowLoss, TowRefusal } from './tow.ts';
+
+/**
+ * P10.1 lazy boundary (SHIP_EXPANSION.md "Lazy recovery chunk"): the towing implementation
+ * (sector/tow.ts) is its own chunk, loaded by the shell only for a sector with an unrecovered
+ * hull. The run holds it as `run.recovery` (null until attached) and calls it synchronously;
+ * no hull exists without it, so every tow call below is a no-op until then. Delivery at a
+ * station stays here (it reads only `run.hulk`), so a completed recovery never waits on a load.
+ */
+export type RecoveryKit = typeof TowKit;
 import { SHIP_LOCK } from '../combat/shipLock.ts';
 import { cancelBearing, createSignals, resetSignals, signalReach, startBearing, stepSignal, type SignalResult, type SignalRunState } from './signal.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
@@ -218,6 +229,14 @@ export type SectorEvent =
   | { readonly type: 'veinHit'; readonly id: string; readonly x: number; readonly y: number }
   | { readonly type: 'chipped'; readonly id: string; readonly vein: string; readonly x: number; readonly y: number; readonly remaining: number }
   | { readonly type: 'docked'; readonly id: string; readonly first: boolean }
+  /** P10.1: a Raid Box opened (ship: the disabled hull it revealed; null = its hull was already recovered). */
+  | { readonly type: 'raidBox'; readonly id: string; readonly ship: ShipId | null }
+  /** P10.1: the box holds an unrecovered hull but the recovery chunk is not attached yet: nothing changed (try again). */
+  | { readonly type: 'recoveryPending'; readonly ship: ShipId }
+  /** P10.1: the tow changed (sector/tow.ts); `why` on a refusal. */
+  | { readonly type: 'tow'; readonly change: TowChange; readonly ship: ShipId; readonly why?: TowRefusal; readonly cause?: TowLoss }
+  /** P10.1: the towed hull reached a station dock: the shell adds the ship to the fleet (pushed right before `docked`). */
+  | { readonly type: 'hullDelivered'; readonly ship: ShipId; readonly station: string }
   | {
       readonly type: 'encounter';
       readonly id: string;
@@ -443,6 +462,12 @@ export interface SectorRun {
   readonly signal: SignalRunState;
   /** P08.1: the flown ship's signature ability (temporary; never saved; combat/shipAbilities.ts). */
   readonly ability: AbilityState;
+  /** P10.1: the unrecovered hull this sector's Raid Box holds (RunOptions.salvage, validated; null after delivery). */
+  salvage: ShipId | null;
+  /** P10.1: that hull once its box is open, and its tether (sector/tow.ts; temporary, never saved). */
+  hulk: Hulk | null;
+  /** P10.1: the loaded recovery implementation (RecoveryKit), or null; attached once, never saved. */
+  recovery: RecoveryKit | null;
 }
 
 export interface RunOptions {
@@ -471,6 +496,10 @@ export interface RunOptions {
   readonly flightMode?: FlightMode | undefined;
   /** P09.1: the save's faction heat book (default: all quiet, owned by this run). */
   readonly heat?: HeatBook | undefined;
+  /** P10.1: a ship the pilot has not recovered yet whose Raid Box is in this layout (ignored otherwise). */
+  readonly salvage?: ShipId | null | undefined;
+  /** P10.1: the recovery implementation when the shell already has it (attachRecovery adds it later otherwise). */
+  readonly recovery?: RecoveryKit | null | undefined;
 }
 
 /** POIs every pilot knows on arrival: the station, the gates and the exit beacon (navigation beacons). */
@@ -569,11 +598,29 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     realistic: createRealisticFlight(),
     signal: createSignals(layout, done, left),
     ability: freshAbility(),
+    salvage: null,
+    hulk: null,
+    recovery: null,
   };
+  // P10.1: only a hull whose Raid Box is in this layout
+  if (o.salvage && layout.pois.some((p) => p.kind === 'raidbox' && p.target === o.salvage)) run.salvage = o.salvage;
+  if (o.recovery) attachRecovery(run, o.recovery);
   layFieldMines(run);
   spawnSavedCaches(run);
   sense(run);
   return run;
+}
+
+/**
+ * P10.1: give the run its recovery implementation (once; between ticks, never inside a step).
+ * An already-open Raid Box shows its hull at the authored rest point, so the result is the same
+ * whenever the chunk arrives. Without an unrecovered hull in this sector nothing is attached.
+ */
+export function attachRecovery(run: SectorRun, kit: RecoveryKit): void {
+  if (run.recovery || run.disposed || !run.salvage) return;
+  run.recovery = kit;
+  const box = run.layout.pois.find((p) => p.kind === 'raidbox' && p.target === run.salvage);
+  if (box && run.done.has(box.id)) run.hulk = kit.spawnHulk(run.salvage);
 }
 
 /** Put a different ship (or loadout) into the run: full hull, shield and energy; the pose is kept. */
@@ -592,6 +639,7 @@ export function applyShip(run: SectorRun, craft: DerivedShip): void {
   run.boosting = false;
   run.sinceBoost = RUN.energyDelayTicks;
   run.silent = false; // P07.1: a new hull starts at its normal signature
+  run.recovery?.endTow(run, 'released', null); // P10.1: a ship change never carries a tow (switching needs a dock, which ends it anyway)
   run.fireCooldown = 0;
   run.heat = 0;
   run.overheated = false;
@@ -637,6 +685,8 @@ export function canSwitchShip(run: SectorRun): boolean {
 /** Is this POI's one-time interaction complete? Survey marks count as done once the survey is. */
 export function isDone(run: SectorRun, p: Poi): boolean {
   if (p.kind === 'survey') return run.surveyed || run.done.has(p.id);
+  // P10.1: a Raid Box whose hull is already recovered stays shut for good (nothing to reveal)
+  if (p.kind === 'raidbox') return run.done.has(p.id) || p.target !== run.salvage;
   return POI_RULES[p.kind].once && run.done.has(p.id);
 }
 
@@ -805,7 +855,13 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   const bd = bl > 0 ? (abilityOf(run.craft.ship) as Extract<AbilityDef, { id: 'vector-burst' }>) : null;
   const am = Math.max(1 + (RUN.boostAccelMul - 1) * run.boost, bd ? 1 + (bd.accelMul - 1) * bl : 1);
   const vm = Math.max(1 + (RUN.boostSpeedMul - 1) * run.boost, bd ? 1 + (bd.speedMul - 1) * bl : 1);
-  const tune = am > 1 || vm > 1 ? { ...run.tune, accel: run.tune.accel * am, maxSpeed: run.tune.maxSpeed * vm } : run.tune;
+  // P10.1: Pivot Jets sharpens the turn and reverse response; the tow penalty applies last, on top of boost and abilities
+  const pj = live(run, 'pivot-jets');
+  const tp = run.recovery?.towPenalty(run) ?? { accel: 1, speed: 1 };
+  const tune =
+    am > 1 || vm > 1 || pj || tp.accel < 1
+      ? { ...run.tune, accel: run.tune.accel * am * tp.accel, maxSpeed: run.tune.maxSpeed * vm * tp.speed, ...(pj ? { turnRate: run.tune.turnRate * pj.turnMul, aimTurnRate: run.tune.aimTurnRate * pj.turnMul, reverseBoost: run.tune.reverseBoost * pj.reverseMul } : {}) }
+      : run.tune;
   /* P04.1 ship lock: the toggle, then a re-check; a held lock becomes the aim of the one orientation rule
      (sim.ts stepShip), replacing mouse aim / right stick. Position, velocity and thrust are never touched. */
   if (input.lockToggle === true) toggleShipLock(run, events);
@@ -830,28 +886,11 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   if (drain > 0) damagePlayer(run, drain / 60, 'hazard', events);
 
   /* collisions with solids: push out, bounce, damage on hard impacts */
-  const collide = (x: number, y: number, r: number): void => {
-    const dx = sh.x - x;
-    const dy = sh.y - y;
-    const d = Math.hypot(dx, dy);
-    const min = r + run.tune.radius;
-    if (d >= min) return;
-    const nx = d > 0 ? dx / d : 0;
-    const ny = d > 0 ? dy / d : -1;
-    sh.x = x + nx * min;
-    sh.y = y + ny * min;
-    const vn = sh.vx * nx + sh.vy * ny;
-    if (vn < 0) {
-      sh.vx -= (1 + RUN.restitution) * vn * nx;
-      sh.vy -= (1 + RUN.restitution) * vn * ny;
-      if (-vn > RUN.impactSpeed && run.invuln === 0) damagePlayer(run, Math.round(2 + -vn / 50), 'impact', events, { x, y });
-    }
-  };
-  for (const l of L.landmarks) collide(l.x, l.y, l.r);
-  for (const r of L.rocks) if (Math.abs(r.x - sh.x) < r.r + 40 && Math.abs(r.y - sh.y) < r.r + 40) collide(r.x, r.y, r.r);
-  for (const p of L.pois) if (p.solidR > 0) collide(p.x, p.y, p.solidR);
-  sh.x = Math.min(L.width, Math.max(0, sh.x));
-  sh.y = Math.min(L.height, Math.max(0, sh.y));
+  pushOutOfSolids(L, sh, run.tune.radius, RUN.restitution, (vn, x, y) => {
+    if (vn > RUN.impactSpeed && run.invuln === 0) damagePlayer(run, Math.round(2 + vn / 50), 'impact', events, { x, y });
+  });
+  /* P10.1: the towed (or drifting) hull follows on its tether */
+  run.recovery?.stepTow(run, events);
 
   /* weapons (Combat P03C): one switch step, then FIRE drives the selected weapon only */
   if (input.cycle === 1 || input.cycle === -1) switchWeapon(run, input.cycle, events);
@@ -868,7 +907,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   /* fly-through interactions: survey marks and salvage (a find that does not fit opens the full-hold offer) */
   for (const p of L.pois) {
     if (p.kind !== 'survey' && p.kind !== 'salvage') continue;
-    if (isDone(run, p) || dist(sh, p) > p.r + run.tune.radius) continue;
+    if (isDone(run, p) || dist(sh, p) > p.r * ((p.kind === 'survey' && live(run, 'survey-sweep')?.markRangeMul) || 1) + run.tune.radius) continue;
     if (p.kind === 'salvage') {
       const n = events.length;
       touchPoi(run, p, events);
@@ -923,6 +962,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   if (run.sinceHit > RUN.regenDelayTicks && run.shield < st.shield && !run.silent) run.shield = Math.min(st.shield, run.shield + st.shieldRegen / 60);
   if (run.hull <= 0) {
     events.push({ type: 'wrecked', x: run.ship.x, y: run.ship.y, heading: run.ship.heading });
+    run.recovery?.endTow(run, 'lost', events, 'wreck'); // P10.1: the hull stays where it was; nothing is granted
     recall(run);
     events.push({ type: 'recalled' });
   }
@@ -991,6 +1031,8 @@ function abilityRefusal(run: SectorRun, d: AbilityDef): AbilityRefusal | null {
     }
     return 'noSignal';
   }
+  if (d.id === 'winch-lock') return run.hulk?.towed ? null : 'noTow';
+  if (d.id === 'survey-sweep') return marksLeft(run) > 0 ? null : 'noMarks';
   if ((d.id === 'salvage-pulse' || d.id === 'deep-scan') && inInterference(run.layout, sh)) return 'jammed';
   return d.id === 'salvage-pulse' && scan(run, d).length === 0 ? 'noSalvage' : null;
 }
@@ -1045,8 +1087,12 @@ function focusOf(run: SectorRun): string | null {
       farD = d;
     }
   }
-  return best ?? far;
+  // P10.1: the disabled hull answers last (TOW HULL in reach; RELEASE TOW anywhere while it is towed)
+  return best ?? far ?? (run.recovery?.hulkFocus(run) ? HULK_FOCUS : null);
 }
+
+/** The focus id of the disabled hull (never a POI id: those are kind-prefixed or fixed words like `station`). */
+export const HULK_FOCUS = 'hulk';
 
 /**
  * Return the ship to the arrival zone with a full hull, shield and energy;
@@ -1062,6 +1108,7 @@ function recall(run: SectorRun): void {
   run.boost = 0;
   run.boosting = false;
   run.silent = false; // P07.1
+  run.recovery?.endTow(run, 'lost', null); // P10.1 (callers report it): the hull stays put; a recall never drags it along
   endAbility(run.ability); // P08.1: the effect ends; the cooldown is kept (like the weapons')
   run.shieldHit = null;
   run.docked = null;
@@ -1096,8 +1143,24 @@ function recall(run: SectorRun): void {
 /** Use the focused POI (Enter / Space / pad A / the INTERACT button). */
 export function interact(run: SectorRun): SectorEvent[] {
   if (run.phase !== 'flight' || run.disposed || !run.focus) return [];
+  if (run.focus === HULK_FOCUS) {
+    const ev = run.recovery?.toggleTow(run) ?? [];
+    run.focus = focusOf(run);
+    return ev;
+  }
   const p = poiById(run.layout, run.focus);
   if (!p) return [];
+  if (p.kind === 'raidbox') {
+    // P10.1: opening reveals the disabled hull at its rest point; it is not the ship yet (tow it to a station)
+    if (isDone(run, p)) return [];
+    const ship = p.target === run.salvage ? run.salvage : null;
+    // the hull needs the recovery chunk: until it is attached the box stays shut (no partial state)
+    if (ship && !run.recovery) return [{ type: 'recoveryPending', ship }];
+    run.done.add(p.id);
+    if (ship && !run.hulk) run.hulk = run.recovery!.spawnHulk(ship);
+    run.focus = focusOf(run);
+    return [{ type: 'raidBox', id: p.id, ship }];
+  }
   if (p.kind === 'anomaly') {
     // P06.1: an unresolved signal takes a bearing; a resolved one is investigated (the existing path) at its fix
     const r = startBearing(run, p);
@@ -1128,6 +1191,13 @@ export function interact(run: SectorRun): SectorEvent[] {
     cancelBearing(run); // P06.1: docking ends a signal observation
     clearShipLock(run); // docked: no combat lock
     clearStationKeeping(run.stop); // docked: the station holds the ship
+    // P10.1: a hull on the tether is delivered (every station is a Haven Guild dock); a resting one stays out there
+    const h = run.hulk;
+    if (h?.towed) {
+      run.hulk = null;
+      run.salvage = null;
+      return [{ type: 'hullDelivered', ship: h.ship, station: p.id }, { type: 'docked', id: p.id, first }];
+    }
     return [{ type: 'docked', id: p.id, first }];
   }
   if (p.kind === 'gate') return [{ type: 'gate', id: p.id, target: p.target!, gate: run.gates[p.id] ?? { state: 'dormant', label: 'Dormant gate', detail: 'No signal.' } }];
@@ -1157,6 +1227,8 @@ export function resumeSector(run: SectorRun): SectorEvent[] {
 
 /** Restart from the arrival: temporary state resets, persistent progress stays. */
 export function restartSector(run: SectorRun): SectorEvent[] {
+  const lost: SectorEvent[] = [];
+  run.recovery?.endTow(run, 'lost', lost, 'restart'); // P10.1 (P10.2: the notice names the restart)
   recall(run);
   run.recalls -= 1;
   for (const st of run.patrols.values()) st.cooldown = 0;
@@ -1164,7 +1236,7 @@ export function restartSector(run: SectorRun): SectorEvent[] {
   run.tick = 0;
   run.distance = 0;
   run.phase = 'flight';
-  return [{ type: 'phase', phase: 'flight' }];
+  return [...lost, { type: 'phase', phase: 'flight' }];
 }
 
 /** Drop every temporary entity. The run must not be stepped afterwards (stepping a disposed run is a no-op). */
@@ -1188,6 +1260,7 @@ export function disposeSectorRun(run: SectorRun): void {
   run.focus = null;
   run.silent = false;
   endAbility(run.ability);
+  run.hulk = null; // P10.1: a tow never leaves the sector; the hull rests at its point on the next visit
   run.disposed = true;
 }
 

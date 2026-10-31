@@ -230,7 +230,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
     const dir = join(src, 'modes/freeroam/sector');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
     // P06.1: bearing.ts (pure bearing geometry) and signal.ts (the signal-triangulation state machine)
-    expect(files.sort()).toEqual(['bearing.ts', 'collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'realisticFlight.ts', 'render.ts', 'resume.ts', 'run.ts', 'signal.ts', 'validate.ts', 'vectorFlight.ts']);
+    expect(files.sort()).toEqual(['bearing.ts', 'collect.ts', 'combatRender.ts', 'context.ts', 'features.ts', 'generate.ts', 'gravityField.ts', 'gravityRender.ts', 'gravityWells.ts', 'grid.ts', 'lootRender.ts', 'model.ts', 'realisticFlight.ts', 'render.ts', 'resume.ts', 'run.ts', 'signal.ts', 'tow.ts', 'validate.ts', 'vectorFlight.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // no storage access: persistent changes leave the sector code only as events

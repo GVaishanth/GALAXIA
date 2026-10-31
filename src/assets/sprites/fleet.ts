@@ -2,7 +2,7 @@ import type { FrameSource, SpriteDef } from './format/types.ts';
 import { ANIMATION_TIMING } from '../../config/visual.ts';
 
 /**
- * FREE ROAM FLEET (Free Roam Prompt 8): six original GALAXIA spacecraft.
+ * FREE ROAM FLEET (Free Roam Prompt 8; four hulls added in P10.1): ten original GALAXIA spacecraft.
  *
  * Every hull is authored as the LEFT half including the centre column
  * (mirror-x), nose up, in the shared player palette, so the whole fleet
@@ -17,6 +17,11 @@ import { ANIMATION_TIMING } from '../../config/visual.ts';
  *   Condor     defender     broad armoured hexagon, shield-emitter pylons, four engines
  *   Magpie     salvager     U-shaped grab arms around a tractor lens, cargo pods, pod engines
  *   Albatross  long-range   long fuselage, very long thin wings, sensor mast, one large engine
+ *   Harrier    pursuit      narrow forward-swept wings with lit tips, compact twin engines (P10.1)
+ *   Crane      recovery     broad industrial fuselage, outrigger stabilizers, rear tow hook, twin engines (P10.1)
+ *   Heron      survey       elongated hull, offset sensor fins and a long starboard antenna: the
+ *                           one hull authored full width (symmetry none), so the asymmetry is real (P10.1)
+ *   Raven      covert       low compact delta, split rear fins, one small dim engine (P10.1)
  *
  * States: `idle` (engine cold), `thrust` (two flame frames) and `boost` (two
  * long flame frames). The damaged look is the `scorched` palette variant;
@@ -49,7 +54,10 @@ const PALETTE = {
 export const FLEET_FLAME_ROWS = 4;
 
 interface Hull {
+  /** The left half with the centre column (mirror-x), or the whole hull when `full` is set. */
   readonly rows: readonly string[];
+  /** P10.1: rows are the whole hull (symmetry none), for a deliberately asymmetric design. */
+  readonly full?: true;
   /** Flame rows [thrust A, thrust B, boost A, boost B], each FLEET_FLAME_ROWS long and as wide as `rows`. */
   readonly flames: readonly [readonly string[], readonly string[], readonly string[], readonly string[]];
 }
@@ -57,7 +65,7 @@ interface Hull {
 function states(h: Hull): { idle: FrameSource[]; thrust: FrameSource[]; boost: FrameSource[] } {
   const w = h.rows[0]!.length;
   const blank = Array.from({ length: FLEET_FLAME_ROWS }, () => '.'.repeat(w));
-  const frame = (flame: readonly string[]): FrameSource => ({ rows: [...blank, ...h.rows, ...flame], symmetry: 'mirror-x' });
+  const frame = (flame: readonly string[]): FrameSource => ({ rows: [...blank, ...h.rows, ...flame], symmetry: h.full ? 'none' : 'mirror-x' });
   return {
     idle: [frame(blank)],
     thrust: [frame(h.flames[0]), frame(h.flames[1])],
@@ -243,6 +251,118 @@ const ALBATROSS: Hull = {
   ],
 };
 
+/* ------------------------------------------------- Harrier (pursuit, P10.1) */
+const HARRIER: Hull = {
+  rows: [
+    '........W',
+    '........W',
+    '.......SW',
+    '.......HC',
+    '.L.....SG',
+    '.T.....SC',
+    '.HT....SH',
+    '..HT..SHW',
+    '..SHTSHHW',
+    '...SHHHTW',
+    '....DSHTW',
+    '....SDSHW',
+    '....DSSDD',
+    '.....NN..',
+  ],
+  flames: [
+    ['.....EY..', '......E..', '.........', '.........'],
+    ['.....YE..', '.....E...', '......E..', '.........'],
+    ['.....YY..', '.....EY..', '.....EE..', '......E..'],
+    ['.....YY..', '.....YE..', '......E..', '.....E...'],
+  ],
+};
+
+/* ------------------------------------------------- Crane (recovery, P10.1) */
+const CRANE: Hull = {
+  rows: [
+    '.........SHHW',
+    '........SHHCC',
+    '........SHHCG',
+    '........SHHCC',
+    'L.......SHHHW',
+    'T.......SHHHW',
+    'T......DSHTTW',
+    'TDDDDDDSHHtTW',
+    'SHHHHHHHHHtHW',
+    'SHWWHHHHHHHHW',
+    'SHHHHHHHHHHHW',
+    'TSSSSHHHHSSSH',
+    'L..DSSHHSD..D',
+    '...DSD.DD...D',
+    '...NNN.....DT',
+  ],
+  flames: [
+    ['...EYE.......', '....E........', '....E........', '.............'],
+    ['...EYE.......', '...EYE.......', '....E........', '.............'],
+    ['...YYY.......', '...EYE.......', '...EYE.......', '....E........'],
+    ['...YYY.......', '...YYE.......', '....YE.......', '....E........'],
+  ],
+};
+
+/* --------------------------------------------- Heron (survey, P10.1, full width) */
+const HERON: Hull = {
+  full: true,
+  rows: [
+    '.........L.........',
+    '.........W.........',
+    '........SWH........',
+    '........SCH........',
+    '........SGH........',
+    '........SCH.......L',
+    '........SHH......T.',
+    '.L......SHH.....T..',
+    '..T.....SHH....T...',
+    '...T....SHH...T....',
+    '....T..SHHHW.T.....',
+    '.....TSHHTHHT......',
+    '......SHHtHHW......',
+    '.....DSHHtHHWD.....',
+    '....DDSHHHHHWDD....',
+    '....SHSHHHHHWHW....',
+    '....DD.SHHHW.DD....',
+    '.......SHHHW.......',
+    '.......SHHHW.......',
+    '.......DSHWD.......',
+    '........NNN........',
+  ],
+  flames: [
+    ['........EYE........', '.........E.........', '.........E.........', '...................'],
+    ['........EYE........', '........EYE........', '.........E.........', '...................'],
+    ['........YYY........', '........EYE........', '........EYE........', '.........E.........'],
+    ['........YYY........', '........YYE........', '.........YE........', '.........E.........'],
+  ],
+};
+
+/* --------------------------------------------------- Raven (covert, P10.1) */
+const RAVEN: Hull = {
+  rows: [
+    '.......W',
+    '......SW',
+    '......HC',
+    '.....SHG',
+    '....SHHW',
+    '...SHHHW',
+    '..SHHTHW',
+    '.SHHTtHW',
+    'SHHHHHHW',
+    'DSS.DSHH',
+    'T.D..DSD',
+    'D.T...DN',
+  ],
+  // restrained engine lighting: a short, narrow flame even at full boost
+  flames: [
+    ['.......E', '........', '........', '........'],
+    ['.......Y', '.......E', '........', '........'],
+    ['.......Y', '.......E', '.......E', '........'],
+    ['.......Y', '.......Y', '.......E', '........'],
+  ],
+};
+
 const ms = { thrust: ANIMATION_TIMING.engineFlickerMs, boost: Math.round(ANIMATION_TIMING.engineFlickerMs * 0.75) };
 const def = <const I extends string>(id: I, name: string, role: string, hull: Hull) =>
   ({ id, name, role, palette: PALETTE, outline: 'player.outline', states: states(hull), frameMs: ms }) as const;
@@ -253,9 +373,13 @@ export const SHIP_PETREL = def('ship.petrel', 'Petrel', 'Explorer', PETREL) sati
 export const SHIP_CONDOR = def('ship.condor', 'Condor', 'Defender', CONDOR) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
 export const SHIP_MAGPIE = def('ship.magpie', 'Magpie', 'Salvager', MAGPIE) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
 export const SHIP_ALBATROSS = def('ship.albatross', 'Albatross', 'Long-range vessel', ALBATROSS) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
+export const SHIP_HARRIER = def('ship.harrier', 'Harrier', 'Pursuit interceptor', HARRIER) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
+export const SHIP_CRANE = def('ship.crane', 'Crane', 'Recovery tug', CRANE) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
+export const SHIP_HERON = def('ship.heron', 'Heron', 'Survey ship', HERON) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
+export const SHIP_RAVEN = def('ship.raven', 'Raven', 'Covert runner', RAVEN) satisfies SpriteDef<'idle' | 'thrust' | 'boost'>;
 
 /** The fleet hulls in roster order (also the authored rows, for the silhouette tests). */
-export const FLEET_SPRITES = [SHIP_SWIFT, SHIP_SHRIKE, SHIP_PETREL, SHIP_CONDOR, SHIP_MAGPIE, SHIP_ALBATROSS] as const;
+export const FLEET_SPRITES = [SHIP_SWIFT, SHIP_SHRIKE, SHIP_PETREL, SHIP_CONDOR, SHIP_MAGPIE, SHIP_ALBATROSS, SHIP_HARRIER, SHIP_CRANE, SHIP_HERON, SHIP_RAVEN] as const;
 
 /**
  * Shield impact: a bright arc drawn on the side that was hit (the renderer

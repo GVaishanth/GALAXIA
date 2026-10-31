@@ -5,7 +5,7 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
-- **Last updated:** 2026-10-30. See [What's new in the 2026-10-30 missions and faction heat archive](#whats-new-in-the-2026-10-30-missions-and-faction-heat-archive).
+- **Last updated:** 2026-10-31. See [What's new in the 2026-10-31 ship expansion and recovery archive](#whats-new-in-the-2026-10-31-ship-expansion-and-recovery-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
 - **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls (including faint signals), ships, weapons and Guild marks (not crew yet).
@@ -18,7 +18,7 @@ Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What's new](#whats-new-in-the-2026-10-30-missions-and-faction-heat-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-in-the-2026-10-31-ship-expansion-and-recovery-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -85,7 +85,7 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Two flight modes:** **NORMAL** (the default, unchanged assisted flight) and an opt-in **REALISTIC** mode with momentum, rotate-and-thrust steering and gravity that bends your path, plus **STOP**, which brakes and then holds position by station-keeping.
 - **Combat:** four original factions with eight enemy families, met in patrols, outposts, ambushes, elite duels and capital-ship fights. Target lock turns your nose toward a chosen hostile (facing only).
 - **Faint signals:** an anomaly you have not investigated yet hides its source inside a dashed ring. Take bearings from different positions with INTERACT; two lines far enough apart fix the source, then investigate there. An optional **Simple Signals** setting makes one bearing enough. See [Faint signals](#faint-signals).
-- **Ships and weapons:** six ships, bought with cargo once you hold their licence, in a station **Hangar**; four weapons configured per ship in the **Armory**.
+- **Ships and weapons:** ten ships. Eight are bought with cargo in a station **Hangar** once you hold their licence. Two, the **Heron** and the **Raven**, are never sold: you recover each by opening its **Raid Box** and towing its disabled hull to a station. Four weapons are configured per ship in the **Armory**.
 - **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules, upgrades and one-time crew berth fees.
 - **Crew (optional):** seven named specialists to sign on and seat aboard your ships on a station's **BRIDGE**. A seated Navigator or Surveyor gives spoken-style text advice in flight; the built-in **Ship Mind** advises every pilot, crew or not. Advice only: crew never fly, fight, pay or travel for you. See [Crew and the Bridge](#crew-and-the-bridge).
 - **Progress:** a ten-mission story chain, contract boards, cargo and crafting, three save slots, and recovery that never strands you.
@@ -164,7 +164,7 @@ Keyboard keys are defaults and can be rebound under pause → **SETTINGS & HELP*
 - **C** moves the lock to the next hostile in range (clockwise, wrapping round); it does nothing without a lock and never fires.
 - Mouse aim is optional (CONTROLS → MOUSE AIM, off by default). Target lock, next target, STOP and the ship ability are not available on a controller.
 - **Gravity Shadow:** a planet or star between you and a hostile hides you from it; a ship that loses sight of you keeps chasing your last seen position for about 1.25 s without firing, then searches. It works per hostile and only when the body is in the line, not just nearby; a small **GRAVITY SHADOW** tag shows while a body really hides you, and **SEARCHING · LAST KNOWN POSITION** while a hostile hunts your last seen spot. Hiding is not protection: you can still be hit. **Silent running** (Z, the **SILENT** button on touch, L3 on a controller) shrinks the range at which hostiles can spot you to about a third. It is not invisibility: ships close by still detect you. Your shield does not recharge while it is on, and pressing fire or boost ends it (the log names the input). The SILENT control reads **SILENT RUNNING** while it is on. More in the [Player Guide](docs/PLAYER_GUIDE.md#silent-running-and-gravity-shadow).
-- **Ship signature abilities:** every ship has one (Swift Vector Burst, Shrike Predator Focus, Petrel Signal Calibration, Magpie Salvage Pulse, Condor Bulwark, Albatross Deep Scan). F or the touch button uses it; the ability panel shows **READY**, **ACTIVE** with the seconds left, or **COOLDOWN** with the seconds until ready. Pausing freezes it; a refused press uses nothing up and the log says why. None makes you invisible or immune to damage, adds loot or solves a signal. More in the [Player Guide](docs/PLAYER_GUIDE.md#ship-signature-abilities).
+- **Ship signature abilities:** every ship has one (Swift Vector Burst, Shrike Predator Focus, Petrel Signal Calibration, Magpie Salvage Pulse, Condor Bulwark, Albatross Deep Scan, Harrier Pivot Jets, Crane Winch Lock, Heron Survey Sweep, Raven Quiet Hull). F or the touch button uses it; the ability panel shows **READY**, **ACTIVE** with the seconds left, or **COOLDOWN** with the seconds until ready. Pausing freezes it; a refused press uses nothing up and the log says why. None makes you invisible or immune to damage, adds loot or solves a signal. More in the [Player Guide](docs/PLAYER_GUIDE.md#ship-signature-abilities).
 - **Faction Heat:** hitting or destroying a faction's ships raises that faction's heat (0-100; Quiet, Wary, Alert, Pursuit, Hunt). Higher heat makes only that faction's ships spot you a little farther away (up to 20%) and search your last position a little longer (up to 1 s); Silent Running and Gravity Shadow still hide you. Heat cools 1 point per 12 s of flight while none of its ships hunts you (not while paused or docked), and some chain stages change it once when turned in. See it under the station **MISSIONS** tab → FACTION STANDING, or pause → MISSIONS. One stage, Fair Shares, can only be accepted while Gleaner heat is below 40; once accepted it stays yours.
 
 #### Flight mode and STOP
@@ -218,7 +218,9 @@ Dock at a Free Roam station and open the **HANGAR** tab.
 - **Available** ships: **ACQUIRE** pays **cargo materials** from your hold (not Guild marks). **NEED CARGO** means your hold is short.
 - **Locked** ships show the licence they need (survey runs, a milestone or a galaxy to visit) and your progress.
 
-The roster is the **Petrel** (starting ship), **Swift**, **Magpie**, **Shrike**, **Condor** and **Albatross**. Their licences and costs are listed in the [Player Guide](docs/PLAYER_GUIDE.md#hangar-ships).
+The roster is the **Petrel** (starting ship), **Swift**, **Magpie**, **Shrike**, **Condor**, **Albatross**, **Harrier** and **Crane** (all sold for cargo once licensed), plus the **Heron** and **Raven** (recovered, never sold). Each card shows the ship's role, real stats, signature ability (name, duration and cooldown) and how to get it. Licences and costs are listed in the [Player Guide](docs/PLAYER_GUIDE.md#hangar-ships).
+
+**Recovering the Heron and Raven.** The Heron's Raid Box is in **Kestrel Verge**, the Raven's in **Lantern Gate** (both in the Milky Way). Open the box with INTERACT, slow down beside the disabled hull, and INTERACT on **TOW HULL**. Then fly it to that sector's Haven Guild station and dock. The INTERACT prompt says why a tow would be refused (**TOO FAST**, **LINE BLOCKED**). While towing it shows **TOW ATTACHED** with the line length and limit, and **STRAINED** or **LINE BLOCKED** when the line is at risk. A release, a snapped or cut line, a wreck, RESTART FLIGHT or leaving the sector ends the tow, and the log names the reason once. **<SHIP> RECOVERED** appears only when you dock with the hull on the line. The Crane's tow rig and its Winch Lock ability make towing easier. The full loop: [Player Guide](docs/PLAYER_GUIDE.md#recovering-a-hull-heron-and-raven).
 
 ## Armory and weapon loadouts
 
@@ -260,7 +262,7 @@ Crew are optional: **flying solo is fully supported**, and no crew member is nee
 - **SIGN ON** shows the fee (or **FREE**) and asks nothing you cannot see: a refused hire says why (the station, the requirement and your progress, or the marks you are short). The fee comes out of your Guild marks once, through the same ledger as every purchase, and appears under **RECORD**.
 - A fee is never charged twice. **DISMISS** ends a contract (the person returns to where they signed on) and they can sign on again later for free. Reloading, replaying a mission or reopening the Bridge never signs anyone on by itself or offers someone twice.
 
-**Seats and assignment.** Each ship has its own crew seats: **Swift 1, Shrike 1, Petrel 2, Magpie 2, Condor 3, Albatross 3.**
+**Seats and assignment.** Each ship has its own crew seats: **Swift 1, Shrike 1, Harrier 1, Raven 1, Petrel 2, Magpie 2, Crane 2, Heron 2, Condor 3, Albatross 3.**
 
 - **ASSIGN TO \<SHIP\>** seats an unassigned crew member; **MOVE TO \<SHIP\>** moves someone from another of your ships (a person sits in one seat only); **UNASSIGN** returns them to the roster. A full ship refuses, and the Bridge says why.
 - Seats change only while docked with no hostiles engaged, and only on ships you own. Crew who are unassigned, or seated on a ship you are not flying, do nothing.
@@ -515,7 +517,20 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
-## What's new in the 2026-10-30 missions and faction heat archive
+## What's new in the 2026-10-31 ship expansion and recovery archive
+
+`GALAXIA_Release_2026-10-31_Ship-Expansion-and-Recovery.zip` adds, on top of the 2026-10-30 Missions and Faction Heat archive (Classic Mode, the six original ships, their prices, stats and abilities, weapons, flight modes, stealth, missions and heat unchanged):
+
+- **Four new ships:** the **Harrier** (pursuit, Pivot Jets) and **Crane** (recovery tug, Winch Lock) are sold for cargo in the Hangar. The **Heron** (survey, Survey Sweep) and **Raven** (covert, Quiet Hull) are recovered from Raid Boxes in Kestrel Verge and Lantern Gate.
+- **Towing:** a deterministic tow line with a speed and thrust penalty (halved by the Crane's tow rig), a snap length, and a cut when a planet or star crosses the line. Delivery happens by docking at the sector's station.
+- **Tow prompt:** the INTERACT button says whether TOW HULL would work and why not. While towing it shows the line length and limit, and the risk in words (STRAINED, LINE BLOCKED). There is one warning per strain and one log line per ending, with its cause.
+- **Hangar:** every ship card shows its signature ability (name, duration, cooldown, summary). Recovery ships name their Raid Box sector and station, with no price.
+- **Guides:** HOW TO PLAY and the [Player Guide](docs/PLAYER_GUIDE.md#recovering-a-hull-heron-and-raven) give the ten-step recovery loop.
+- **Saves:** recovered ships are stored as owned ships, and an opened box as sector progress. A tow in progress is never saved. Older saves load with both recovery ships locked.
+
+None of this has been playtested by a person or tried on a physical device.
+
+## Earlier: what was new in the 2026-10-30 missions and faction heat archive
 
 `GALAXIA_Release_2026-10-30_Missions-and-Faction-Heat.zip` adds, on top of the 2026-10-29 Ship Abilities archive (Classic Mode, ships, weapons, prices, flight modes, stealth and abilities unchanged):
 
@@ -563,7 +578,23 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 ## What has been verified
 
-**Automated, on the current code (missions and faction heat, 2026-10-30):**
+**Automated, on the current code (ship expansion and recovery, 2026-10-31):**
+
+- `BASE_PATH=/galaxia/ npm run check` exit 0: 2,382 passed, the 17 opt-in measurement runs skipped. `verify:dist` OK, with every budget unchanged:
+  - first download: 96.2 kB gzip of 110 kB;
+  - Free Roam at start: 218.6 kB of 225 kB;
+  - CSS: 24.4 kB of 25 kB;
+  - the lazy towing chunk: 2.0 kB of 2.5 kB;
+  - the lazy Hangar chunk: 11.2 kB of 13 kB.
+- Headless Chromium against this code:
+  - ship recovery and towing: 102 of 102, including the tow prompt at eight screen sizes from 320×568 to 1920×1080, emulated touch, the ten-ship Hangar and a failed chunk load;
+  - ship abilities (113), stealth (69), faint signals (42), Guild chains and Faction Heat (55), Ship Mind advice (65), crew (42), flight modes (56, and 8 on the production build);
+  - controls: 162 (one run of three failed one camera-timing check after a restart; the two reruns passed);
+  - pause and the pause menu (20, 85), the tutorial and guide (70), the Hangar (34) and the economy (68);
+  - the release smoke test on the production build (77).
+- Older browser scripts that still fail exactly as on the previous archive: Armory details (43 of 46: the nuke and lock-on cards and a timing check), phone-landscape collection log (34 of 35), and four scripts that predate the pause menu groups and the first-run guide.
+
+**Earlier, on the missions and faction heat code (2026-10-30):**
 
 - `BASE_PATH=/galaxia/ npm run check` exit 0: 2,297 passed, the 17 opt-in measurement runs skipped; `verify:dist` OK (first download 94.9 kB gzip of 110 kB; Free Roam 224.9 kB of 225 kB; CSS 24.3 kB of 25 kB).
 - Headless Chromium against this code: Guild chains and Faction Heat (55 of 55, including eight screen sizes), ship abilities (113), stealth (69), faint signals (42), Ship Mind advice (65), crew (42), controls (162), pause and the pause menu (20, 85), HOW TO PLAY (70), Hangar (34), economy (68), Galaxy and System Map (30, 21); on the production build the release smoke test (77) and flight modes (8).
@@ -592,6 +623,7 @@ Neither change has been playtested by a person or tried on a physical device; se
 - **Open testing:** expect balance and feel issues. Combat tuning, gravity strength, marks rewards and prices come from simulations and automated checks, not from players.
 - **REALISTIC flight and STOP** are tuned from automated measurements only; expect the feel (turn rate, thrust, how STOP brakes near planets) to change after player feedback.
 - **Crew are advice only:** a Navigator or Surveyor never flies, fights, brakes, investigates or travels for you, and plots no routes. Engineer, Defence and Quartermaster duties and route planning are planned, not implemented. Advice is text only (no voice), in English.
+- **Ship recovery and towing:** the tow feel (line length, penalty, strain warning at 80% of the limit) comes from automated checks, not players. Only the Heron and Raven are recoverable, each once per save. A tow is never saved and never crosses a sector edge. The tow has no sound of its own. Towing was checked with the keyboard and emulated touch only, not with a controller.
 - **Guild chains and Faction Heat:** heat numbers come from automated checks, not players. The chain and standing cards are text (keyboard focus moves between the panel's buttons); heat notices have no sound of their own.
 - **Faint signals:** there is no sound cue for a bearing. The bearing prompt is the usual INTERACT button; on a tall phone (390×844, emulated) a thumb resting low in the left corner can cover its edge, though the DRAG TO FLY spot does not. The difficulty (sensor range, the 35° rule, the error of each bearing) comes from simulations, not from players.
 - **Advice layout:** the advice line was checked in emulated layouts only (1280×720, and 360×640, 320×568, 740×360 and 568×320 touch screens). In touch portrait it hangs just below the ship and the NEARBY line steps aside while it shows. On the narrowest phones (320 px wide), a long crew message can overlap the touch stick's ring if your thumb rests high on the screen; it is drawn over, never in the way of input. Screen-reader announcements are wired up but were not tried with a real screen reader.

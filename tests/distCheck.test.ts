@@ -7,7 +7,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkDist, DIST_BUDGET, GRAVITY_LAB_MARKER, resolveHtmlUrl } from '../scripts/lib/distCheck.ts';
+import { gzipSync } from 'node:zlib';
+import { CHUNK_BUDGETS, checkDist, chunkImports, chunkName, DIST_BUDGET, GRAVITY_LAB_MARKER, resolveHtmlUrl } from '../scripts/lib/distCheck.ts';
 import { LAB_MARKER } from '../src/modes/freeroam/gravity/labShell.ts';
 
 const dirs: string[] = [];
@@ -28,8 +29,36 @@ function goodBuild(base: string): Files {
     'THIRD_PARTY_NOTICES.txt': 'Copyright (c) 2019-present, VoidZero Inc. and Vite contributors',
     'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])};',
     'assets/index-BBB.css': 'body{background:#000}',
-    'assets/freeRoamMode-CCC.js': 'export function createFreeRoamMode(){}',
+    // P10.1: Free Roam loads its two lazy chunks by dynamic import; each carries its inventory marker
+    'assets/freeRoamMode-CCC.js': 'export function createFreeRoamMode(){}const t=()=>p(()=>import(`./tow-T0w_0w-1.js`),[]),s=()=>p(()=>import(`./shipyard-SHPyrd01.js`),[]);export{a};',
+    'assets/tow-T0w_0w-1.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=[\`${TOW_MARKER}\`];`,
+    'assets/shipyard-SHPyrd01.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=\`${BAY_MARKER}\`;`,
   };
+}
+
+const TOW_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'tow')!.marker!;
+const BAY_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'shipyard')!.marker!;
+const gz = (t: string): number => gzipSync(Buffer.from(t), { level: 9 }).length;
+/** Incompressible filler: a deterministic SHA-256 chain, hex-encoded. */
+const hex = (chars: number): string => Array.from({ length: Math.ceil(chars / 64) }, (_, i) => createHash('sha256').update(`pad${i}`).digest('hex')).join('').slice(0, chars);
+/** `head` + filler + `tail` whose gzip (level 9, as the verifier measures) is exactly `target` bytes (binary search on the filler length). */
+let pool = '';
+function gzipExactly(head: string, tail: string, target: number): string {
+  pool ||= hex(520_000);
+  const at = (n: number): string => `${head}${pool.slice(0, n)}${tail}`;
+  let lo = 0;
+  let hi = pool.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (gz(at(mid)) < target) lo = mid + 1;
+    else hi = mid;
+  }
+  for (let n = lo; n < lo + 64; n++) {
+    const g = gz(at(n));
+    if (g === target) return at(n);
+    if (g > target) break;
+  }
+  throw new Error(`no filler gives exactly ${target} gzip bytes`);
 }
 
 function makeDist(files: Files): string {
@@ -165,5 +194,130 @@ describe('checkDist', () => {
     const dir = mkdtempSync(join(tmpdir(), 'galaxia-empty-'));
     dirs.push(dir);
     expect(checkDist(dir, '/galaxia/').problems[0]).toMatch(/index\.html does not exist/);
+  });
+});
+
+describe('chunk inventory and Free Roam budgets (P10.1)', () => {
+  const FR = 'assets/freeRoamMode-CCC.js';
+  const TOW = 'assets/tow-T0w_0w-1.js';
+  const BAY = 'assets/shipyard-SHPyrd01.js';
+
+  it('names chunks by Vite\'s 8-character hash (which may contain - or _) and reads static and dynamic chunk imports', () => {
+    expect(chunkName('assets/index--qQzb6v-.js')).toBe('index');
+    expect(chunkName('assets/tow-B65Y_qlS.js')).toBe('tow');
+    expect(chunkName('assets/guideDialog-CC9g_nd-.js')).toBe('guideDialog');
+    expect(chunkImports('assets/a.js', 'import{x}from"./b-1.js";import"./c.js";const d=()=>import(`./d.js`),e=()=>import("./e.js");')).toEqual({ static: ['assets/b-1.js', 'assets/c.js'], dynamic: ['assets/d.js', 'assets/e.js'] });
+  });
+
+  it('lists every chunk with its kind and limit; the eager closure and the full payload are reported', () => {
+    const f = goodBuild('/galaxia/');
+    const r = checkDist(makeDist(f), '/galaxia/');
+    expect(r.problems).toEqual([]);
+    const kinds = Object.fromEntries(r.chunks.map((c) => [c.path, [c.kind, c.limit]]));
+    expect(kinds).toEqual({
+      'assets/index-AAA.js': ['entry', DIST_BUDGET.entryJsGzip],
+      [FR]: ['freeRoam', DIST_BUDGET.freeRoamJsGzip],
+      [TOW]: ['lazy', 2_500],
+      [BAY]: ['lazy', 13_000],
+    });
+    expect(r.freeRoamEager).toBe(gz(f[FR]!));
+    expect(r.freeRoamTotal).toBe(gz(f[FR]!) + gz(f[TOW]!) + gz(f[BAY]!));
+  });
+
+  it('fails a JavaScript chunk that is not in the inventory, and a duplicated inventory name', () => {
+    const f = goodBuild('/galaxia/');
+    f[FR] += 'const x=()=>import(`./extra-ABCDEFGH.js`),y=()=>import(`./tow-ZZZZZZZZ.js`);';
+    f['assets/extra-ABCDEFGH.js'] = 'export const q=1;';
+    f['assets/tow-ZZZZZZZZ.js'] = `const l=\`${TOW_MARKER}\`;`;
+    const all = checkDist(makeDist(f), '/galaxia/').problems.join('\n');
+    expect(all).toContain('assets/extra-ABCDEFGH.js: JS chunk not in the chunk inventory');
+    expect(all).toContain('more than one tow-*.js chunk');
+  });
+
+  it('fails when a required lazy chunk is missing (its code was bundled back into Free Roam)', () => {
+    const f = goodBuild('/galaxia/');
+    delete f[TOW];
+    f[FR] = f[FR]!.replace('import(`./tow-T0w_0w-1.js`)', `[\`${TOW_MARKER}\`]`);
+    const all = checkDist(makeDist(f), '/galaxia/').problems.join('\n');
+    expect(all).toContain('required chunk tow-*.js missing (ship recovery: towing (a sector with an unrecovered hull)): its code is no longer split from Free Roam');
+  });
+
+  it('fails a lazy chunk that Free Roam (or the title screen) imports statically, and lazy code inside an eager chunk', () => {
+    const f = goodBuild('/galaxia/');
+    f[FR] = `import"./tow-T0w_0w-1.js";${f[FR]!}const k=\`${BAY_MARKER}\`;`;
+    const all = checkDist(makeDist(f), '/galaxia/').problems.join('\n');
+    expect(all).toContain(`${TOW}: the ship recovery: towing (a sector with an unrecovered hull) chunk is loaded eagerly`);
+    expect(all).toContain(`${FR}: carries code of the lazy shipyard chunk (marker "${BAY_MARKER}")`);
+    const t = goodBuild('/galaxia/');
+    t['assets/index-AAA.js'] += 'import"./shipyard-SHPyrd01.js";';
+    expect(checkDist(makeDist(t), '/galaxia/').problems.join('\n')).toContain(`${BAY}: the Hangar panel (first dock) chunk is loaded eagerly`);
+  });
+
+  it('fails an inventory entry that no longer matches the build: marker gone, nobody imports it, wrong load type', () => {
+    const f = goodBuild('/galaxia/');
+    f[TOW] = 'export const nothing=1;';
+    f[FR] = f[FR]!.replace('import(`./shipyard-SHPyrd01.js`)', '0');
+    f['assets/world-W0rld000.js'] = 'export const w=1;';
+    f[FR] += 'const w=()=>import(`./world-W0rld000.js`);';
+    f['assets/guideDialog-GD000000.js'] = 'export const g=1;';
+    f[FR] = `import"./guideDialog-GD000000.js";${f[FR]!}`;
+    const all = checkDist(makeDist(f), '/galaxia/').problems.join('\n');
+    expect(all).toContain(`${TOW}: marker "${TOW_MARKER}" not found`);
+    expect(all).toContain(`${BAY}: no Free Roam chunk imports it dynamically`);
+    expect(all).toContain('assets/world-W0rld000.js: listed as eager Free Roam code, but the build loads it lazily or not at all');
+    expect(all).toContain('assets/guideDialog-GD000000.js: listed as shared with the title screen, but the entry never loads it');
+  });
+
+  it('charges eager side chunks to Free Roam, not shared title chunks; the total includes every Free Roam chunk', () => {
+    const f = goodBuild('/galaxia/');
+    f['assets/world-W0rld000.js'] = 'export const w=1;';
+    f['assets/guideDialog-GD000000.js'] = 'export const g=1;';
+    f[FR] = `import"./world-W0rld000.js";import"./guideDialog-GD000000.js";${f[FR]!}`;
+    f['assets/index-AAA.js'] += 'const g=()=>import(`./guideDialog-GD000000.js`);';
+    const r = checkDist(makeDist(f), '/galaxia/');
+    expect(r.problems).toEqual([]);
+    const size = (p: string): number => gz(f[p]!);
+    expect(r.freeRoamEager).toBe(size(FR) + size('assets/world-W0rld000.js'));
+    expect(r.freeRoamTotal).toBe(size(FR) + size('assets/world-W0rld000.js') + size('assets/guideDialog-GD000000.js') + size(TOW) + size(BAY));
+  });
+
+  it('fails Free Roam\'s eager closure over 225 kB even when its own chunk is under it', () => {
+    const f = goodBuild('/galaxia/');
+    f[FR] = gzipExactly(`import"./world-W0rld000.js";${f[FR]!}const pad=\``, '`;', DIST_BUDGET.freeRoamJsGzip - 4_000);
+    f['assets/world-W0rld000.js'] = gzipExactly('const pad=`', '`;', 5_000);
+    const r = checkDist(makeDist(f), '/galaxia/');
+    expect(r.freeRoam!.gzip).toBeLessThanOrEqual(DIST_BUDGET.freeRoamJsGzip);
+    expect(r.problems.filter((p) => p.includes('Free Roam JS'))).toEqual([]);
+    expect(r.problems.some((p) => p.startsWith('Free Roam eager JS') && p.includes('exceeds the 225.0 kB budget'))).toBe(true);
+  });
+
+  it('gzip boundaries: a chunk exactly at its limit passes, one byte over fails (gzip level 9)', () => {
+    const tow = CHUNK_BUDGETS.find((c) => c.name === 'tow')!;
+    const head = `import{a as e}from"./freeRoamMode-CCC.js";const l=[\`${TOW_MARKER}\`],pad=\``;
+    const at = goodBuild('/galaxia/');
+    at[TOW] = gzipExactly(head, '`;', tow.gzip);
+    const ra = checkDist(makeDist(at), '/galaxia/');
+    expect(ra.chunks.find((c) => c.path === TOW)!.gzip).toBe(tow.gzip);
+    expect(ra.problems).toEqual([]);
+    const over = goodBuild('/galaxia/');
+    over[TOW] = gzipExactly(head, '`;', tow.gzip + 1);
+    expect(checkDist(makeDist(over), '/galaxia/').problems).toEqual([`${TOW} 2.5 kB gzip exceeds its 2.5 kB budget`]);
+    const fr = goodBuild('/galaxia/');
+    fr[FR] = gzipExactly(`${fr[FR]!}const pad=\``, '`;', DIST_BUDGET.freeRoamJsGzip);
+    expect(checkDist(makeDist(fr), '/galaxia/').problems).toEqual([]);
+    fr[FR] = gzipExactly(`${goodBuild('/galaxia/')[FR]!}const pad=\``, '`;', DIST_BUDGET.freeRoamJsGzip + 1);
+    const all = checkDist(makeDist(fr), '/galaxia/').problems;
+    expect(all.some((p) => p.startsWith('Free Roam JS 225.0 kB gzip exceeds'))).toBe(true);
+    expect(all.some((p) => p.startsWith('Free Roam eager JS'))).toBe(true);
+  });
+
+  it('the inventory is explicit: every entry has a role, a positive limit, and the lazy ones a marker', () => {
+    for (const c of CHUNK_BUDGETS) {
+      expect(c.role.length).toBeGreaterThan(5);
+      expect(c.gzip).toBeGreaterThan(0);
+      if (c.load === 'lazy') expect(c.marker && c.required).toBeTruthy();
+    }
+    expect(CHUNK_BUDGETS.find((c) => c.name === 'tow')!.gzip).toBeLessThanOrEqual(6_000);
+    expect(DIST_BUDGET).toEqual({ entryJsGzip: 110_000, freeRoamJsGzip: 225_000, cssGzip: 25_000, totalBytes: 1_500_000 });
   });
 });

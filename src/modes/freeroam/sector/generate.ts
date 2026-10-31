@@ -19,6 +19,7 @@ import { createRng, type Rng } from '../../../core/rng.ts';
 import { fnv1a32 } from '../catalogue/build.ts';
 import { FACTIONS } from '../combat/factions.ts';
 import { HOSTILE_FACTIONS, WARY_FACTIONS, RESOURCE_IDS, type FactionId, type HazardId, type ResourceId, type SystemRecord } from '../catalogue/types.ts';
+import { SHIPS } from '../ships/roster.ts';
 import { LOOT_TABLES, lootContextOf, MINING, rareChanceOf, rollLoot, type LootTableId } from '../inventory/lootTables.ts';
 import { CATEGORY_STARS, SECTOR_FEATURES, STAR_SIZE, type Range } from './features.ts';
 import { buildGrid, canReach, dist, reachable, segmentDistance, solidsOf, type Circle } from './grid.ts';
@@ -678,9 +679,23 @@ export function generateSector(system: SystemRecord, ctx: SectorContext): Sector
   for (let a = 0; a < G.maxAttempts; a++) {
     last = attemptLayout(system, ctx, a);
     const required = last.pois.filter((p) => p.kind === 'survey').length;
-    if (unreachableTargets(last).length === 0 && required >= 3 && last.pois.filter((p) => p.kind === 'gate').length === ctx.gates.length) return withVeins(last, system);
+    if (unreachableTargets(last).length === 0 && required >= 3 && last.pois.filter((p) => p.kind === 'gate').length === ctx.gates.length) return withRaidBoxes(withVeins(last, system), system);
   }
-  return withVeins(repairLayout(last!), system);
+  return withRaidBoxes(withVeins(repairLayout(last!), system), system);
+}
+
+/**
+ * P10.1 Raid Boxes: the authored box of the hull whose ShipDef.salvage names
+ * this system, appended after everything else (no seed stream is consumed, so
+ * nothing else moves). Id `raidbox` (one box per sector at most, tested), so
+ * the saved `done` id passes the existing POI id grammar unchanged. The box is part of the layout whatever the profile
+ * owns; the run decides whether its hull still waits (RunOptions.salvage).
+ */
+function withRaidBoxes(L: SectorLayout, s: SystemRecord): SectorLayout {
+  const boxes = SHIPS.filter((d) => d.salvage?.system === s.id).map((d) =>
+    poi({ id: 'raidbox', kind: 'raidbox', x: d.salvage!.box[0], y: d.salvage!.box[1], r: G.interactRadius * 0.8, label: 'Raid Box', target: d.id }),
+  );
+  return boxes.length ? { ...L, pois: [...L.pois, ...boxes] } : L;
 }
 
 /**

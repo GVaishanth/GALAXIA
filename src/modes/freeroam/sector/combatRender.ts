@@ -783,14 +783,17 @@ export function drawShipLock(ctx: CanvasRenderingContext2D, run: SectorRun, V: C
   ctx.restore();
 }
 
+/** Bearing and screen-edge point (inset device px) toward an off-screen point (x, y). */
+function edgeAt(x: number, y: number, W: number, H: number, inset: number): readonly [number, number, number] {
+  const ang = Math.atan2(y - H / 2, x - W / 2);
+  return [ang, Math.max(inset, Math.min(W - inset, W / 2 + Math.cos(ang) * W)), Math.max(inset, Math.min(H - inset, H / 2 + Math.sin(ang) * H))];
+}
+
 /** A hollow chevron at the screen edge pointing to (x, y) device px when that point is off screen (inboard of the threat markers). */
 function edgeChevron(ctx: CanvasRenderingContext2D, V: CombatView, x: number, y: number, color: string, size: number): void {
   const { W, H, ratio } = V;
   if (x >= 0 && y >= 0 && x <= W && y <= H) return;
-  const inset = 30 * ratio;
-  const ang = Math.atan2(y - H / 2, x - W / 2);
-  const ex = Math.max(inset, Math.min(W - inset, W / 2 + Math.cos(ang) * W));
-  const ey = Math.max(inset, Math.min(H - inset, H / 2 + Math.sin(ang) * H));
+  const [ang, ex, ey] = edgeAt(x, y, W, H, 30 * ratio);
   const s = size * ratio;
   ctx.save();
   ctx.translate(Math.round(ex), Math.round(ey));
@@ -858,9 +861,7 @@ export function drawThreatMarkers(ctx: CanvasRenderingContext2D, run: SectorRun,
     const x = toX(wx);
     const y = toY(wy);
     if (x >= 0 && y >= 0 && x <= W && y <= H) return;
-    const ang = Math.atan2(y - H / 2, x - W / 2);
-    const ex = Math.max(inset, Math.min(W - inset, W / 2 + Math.cos(ang) * W));
-    const ey = Math.max(inset, Math.min(H - inset, H / 2 + Math.sin(ang) * H));
+    const [ang, ex, ey] = edgeAt(x, y, W, H, inset);
     const s = (urgent ? 9 : 7) * ratio;
     ctx.save();
     ctx.translate(Math.round(ex), Math.round(ey));

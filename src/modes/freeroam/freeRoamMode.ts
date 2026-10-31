@@ -75,7 +75,7 @@ import { shipLockLine } from './combat/shipLock.ts';
 import { EMPTY_SECTOR_SAVE, POI_RULES, RARE_RESOURCES, type LootEntry, type SectorLayout } from './sector/model.ts';
 import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Shockwave, type Wreck } from './sector/render.ts';
 import type { LabShell, LabStatus } from './gravity/labShell.ts';
-import { applyShip, canSwitchShip, createSectorRun, setRunFlightMode, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
+import { applyShip, attachRecovery, canSwitchShip, createSectorRun, HULK_FOCUS, type RecoveryKit, setRunFlightMode, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
 import { FLIGHT_MODE_TEXT, realisticInput, stopDisplay, type FlightMode, type StopDisplay } from './sector/realisticFlight.ts';
 import { upgradedShip, cleanLevels, LEVEL_NAME, UPGRADE_BY_TRACK, type UpgradeLevels, type UpgradeTrack } from './ships/upgrades.ts';
 import { createEventBus, type GameEvent } from './progression/events.ts';
@@ -102,8 +102,9 @@ import { classicRecordShowsGate, FLEET_SPEC, mergeOwned, recordOwned } from '../
 import type { GuideInput } from '../guide/guideContent.ts';
 import { GuideDialog } from '../guide/guideDialog.ts';
 import { parseRecord } from '../../shared/persistence/record.ts';
-import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, type FleetState } from './ships/hangar.ts';
-import { createHangarPanel, type HangarPanel, type HangarStatus } from './ships/hangarPanel.ts';
+import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, recoverShip, type FleetState } from './ships/hangar.ts';
+import type { TowStatus } from './sector/tow.ts';
+import type { HangarDeps, HangarPanel, HangarStatus } from './ships/hangarPanel.ts';
 import { bridgeModel, seatRefusalText, hireRefusalText, type BridgeContext } from './crew/bridgeView.ts';
 import { CREW_BY_ID } from './crew/data.ts';
 import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
@@ -133,7 +134,7 @@ import { engineLevel, momentCue, sectorCue, type HitContext, type MomentCue } fr
 import type { VolumeBus } from './audio/audioSettings.ts';
 import { createFlightHud, type FlightHud, type MarksReadout } from './ui/flightHud.ts';
 import { stealthStatus } from './combat/stealth.ts';
-import { abilityLine, abilityStatus, type AbilityStatus } from './combat/shipAbilities.ts';
+import { abilityLine, abilityOf, abilityStatus, type AbilityStatus } from './combat/shipAbilities.ts';
 import { abilityHud, cargoText, stealthHud, hudView, missileGauge as missileGaugeOf, nearestPoi, NO_ATTENTION, shipCard, stepAttention, type HudAttention, type MissileCardInput, type PoiCandidate } from './ui/hudModel.ts';
 import { clearNotices, EMPTY_NOTICES, flushNotices, noticeLine, pushNotice, tickNotices, type Notice, type NoticeKind, type NoticeState } from './ui/notices.ts';
 import { browserAnimate, createMotion, type Motion } from './ui/motion.ts';
@@ -291,6 +292,8 @@ export interface FreeRoamStatus {
   readonly lab: () => LabStatus | null;
   /** P08.1: the flown ship's ability status (read only; null outside a sector). */
   readonly ability: () => AbilityStatus | null;
+  /** P10.1 ship recovery: the flown ship, ownership, its ability, the tow (sector/tow.ts) and the recovery hulls' delivered state. */
+  readonly salvage: () => { readonly ship: ShipId; readonly owned: readonly ShipId[]; readonly abilityId: string | null; readonly tow: TowStatus | null; readonly focus: string | null; readonly recovered: Readonly<Record<string, boolean>>; readonly recovery: 'idle' | 'loading' | 'ready' | 'failed'; readonly next: string };
   /** P09.1: faction heat, recent tier changes and the connected chains (read-only snapshots). */
   readonly heat: () => { readonly factions: readonly HeatView[]; readonly log: readonly unknown[] };
   readonly chains: () => readonly ChainView[];
@@ -305,7 +308,8 @@ export interface FreeRoamStatus {
   /* Prompt 8 */
   readonly fleet: () => FleetState;
   readonly craft: () => DerivedShip;
-  readonly hangar: () => HangarStatus;
+  /** P10.1: null until the Hangar chunk has loaded (the panel and its state do not exist before). */
+  readonly hangar: () => HangarStatus | null;
   /* Combat P03B */
   readonly armory: () => ArmoryStatus;
   /** P05.1: the crew state and the read-only crew view of the ship flown. */
@@ -513,6 +517,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
 
   /* DOM (built in init) */
   let interactBtn: HTMLButtonElement;
+  /** P10.2: the last prompt written (text, tow line, state, risk): the button changes only when it does. */
+  let promptKey = '';
   let lastFrameTs = 0;
   /* Prompt 12: presentation (contextual HUD, notices, motion, station hub, recovery, sound) */
   let flightHud: FlightHud;
@@ -733,7 +739,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     }
     stopBtn.classList.toggle('is-active', touches > 0);
   };
-  let hangar: HangarPanel;
+  /** P10.1: the Hangar panel is its own chunk (ships/shipyard.ts), built on first load; null until then. */
+  let hangar: HangarPanel | null = null;
+  let hangarDeps: HangarDeps;
+  let hangarLoad: Promise<HangarPanel | null> | null = null;
   let armory: ArmoryPanel;
   let inventory: InventoryPanel;
   let fabricator: FabricatorPanel;
@@ -1280,6 +1289,56 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const w = profile.lostCargo;
     return w && w.systemId === systemId ? { x: w.x, y: w.y, units: lostCargoUnits(profile), loot: Object.entries(w.cargo).map(([resource, amount]) => ({ resource, amount }) as LootEntry) } : null;
   };
+  /**
+   * P10.1 lazy recovery chunk (sector/tow.ts, SHIP_EXPANSION.md "Lazy recovery chunk"): requested only
+   * for a sector with an unrecovered hull, one cached import at a time. It is attached to the run
+   * between frames (attachRecovery); until then its Raid Box stays shut with a LOADING notice, and a
+   * failed load leaves nothing half-made: the next request (that box again, or the next sector) imports
+   * again. Chromium keeps a failed module for the page's lifetime, so the notice asks for a reload
+   * (the save holds everything; ship-recovery-p10.mjs records what the browser does).
+   */
+  let recoveryKit: RecoveryKit | null = null;
+  let recoveryLoad: Promise<void> | null = null;
+  let recoveryFailed = false;
+  const wantRecovery = (): void => {
+    if (recoveryKit) return;
+    recoveryLoad ??= import('./sector/tow.ts').then(
+      (m) => {
+        recoveryKit = m;
+        recoveryFailed = false;
+        if (run) attachRecovery(run, m);
+      },
+      () => {
+        recoveryLoad = null;
+        recoveryFailed = true;
+        notify('RECOVERY SYSTEMS UNAVAILABLE · CHECK THE CONNECTION, THEN RELOAD', undefined, 'warn');
+      },
+    );
+  };
+  /**
+   * P10.1 lazy Hangar chunk (ships/shipyard.ts): one cached import, requested when the pilot docks
+   * (and by a HANGAR press if it is not here yet). The real panel takes the placeholder's place in
+   * the panel layer and the menu table; a failed load changes nothing and the next request imports again
+   * (Chromium keeps a failed module until a reload, which the notice asks for).
+   */
+  const loadHangar = (): Promise<HangarPanel | null> =>
+    (hangarLoad ??= import('./ships/shipyard.ts').then(
+      (m) => {
+        if (hangar) return hangar;
+        const h = m.createHangarPanel(hangarDeps);
+        h.root.hidden = true;
+        panels.hangar.replaceWith(h.root);
+        panels.hangar = h.root;
+        menus.hangar = h.menu;
+        hangar = h;
+        return h;
+      },
+      () => {
+        hangarLoad = null;
+        notify('HANGAR UNAVAILABLE · CHECK THE CONNECTION, THEN RELOAD', undefined, 'warn');
+        return null;
+      },
+    ));
   /** Generate and enter the sector of `systemId`. Any active sector is torn down first. */
   const enterSector = (systemId: string, spawn: string | undefined, phase: FreeRoamPhase, place?: (L: SectorLayout) => ResumeAt | null): void => {
     leaveSector();
@@ -1292,7 +1351,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     // P04: an admin arrival may start beside the station (a point checked like a resume point)
     const at = place ? place(layout) : pendingResume && pendingResume.systemId === systemId && spawn === undefined ? pendingResume : null;
     pendingResume = null;
-    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode, heat: heatBk });
+    run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode, heat: heatBk, salvage: (layout.pois.find((p) => p.kind === 'raidbox' && !fleet.owned.includes(p.target as ShipId))?.target as ShipId | undefined) ?? null, recovery: recoveryKit });
+    if (run.salvage) wantRecovery();
     resumedAt = !place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     besideStation = !!place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     if (!resumedAt) profile = withResume(profile, null);
@@ -1311,6 +1371,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   const leaveSector = (): void => {
     if (!run) return;
     persist();
+    // P10.2: a tow never crosses a sector edge; said on the next flight view (a quit says nothing)
+    if (run.hulk?.towed && lifecycle !== 'disposed' && heldNotes.length < 6) heldNotes.push(`warn|TOW LOST · LEFT THE SECTOR · THE ${SHIP_BY_ID.get(run.hulk.ship)!.name.toUpperCase()} IS BACK AT ITS RAID BOX`);
     if (__GALAXIA_GRAVITY_LAB__ && lab) {
       lab.dispose();
       lab = null;
@@ -1517,12 +1579,21 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** Open a station section (docked only): the panel, its content, and the tab strip on top. */
   const openStation = (tab: StationTab): void => {
     if (!run?.docked) return;
+    if (tab === 'hangar' && !hangar) {
+      // P10.1: the bay arrives in its own chunk (requested at docking, so normally already here); the
+      // panel opens once it has, provided the pilot is still docked and nothing else was opened meanwhile
+      const from = panel;
+      void loadHangar().then((h) => {
+        if (h && run?.docked && panel === from) openStation('hangar');
+      });
+      return;
+    }
     if (panel !== null && panel !== tab) services.sound.play('uiSelect');
     stationReturn = 'hangar';
     showPanel(tab);
     stationHub.mountTabs(panels[tab], tab);
     if (tab === 'station') stationHub.open();
-    else if (tab === 'hangar') hangar.open(dockLabel);
+    else if (tab === 'hangar') hangar!.open(dockLabel);
     else if (tab === 'armory') armory.open(dockLabel);
     else if (tab === 'equipment') equipment.open(dockLabel);
     else if (tab === 'fabricator') fabricator.open(dockLabel);
@@ -1766,7 +1837,27 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       } else if (e.type === 'chipped') {
         cue(e);
         notify(`ORE FRAGMENT CHIPPED${e.remaining > 0 ? ` · ${e.remaining} LEFT IN THE VEIN` : ' · VEIN DEPLETED'}`, undefined, 'info');
+      } else if (e.type === 'raidBox') {
+        // P10.1: the box stays open (sector progress); the hull is revealed, not owned
+        profile = withSectorProgress(profile, sys, [e.id]);
+        persist();
+        showNotice('discovery', 'RAID BOX OPENED', e.ship ? `A DISABLED ${SHIP_BY_ID.get(e.ship)!.name.toUpperCase()} · TOW IT TO A STATION` : 'EMPTY', 4200);
+      } else if (e.type === 'recoveryPending') {
+        notify(recoveryFailed ? 'RECOVERY SYSTEMS UNAVAILABLE · RELOAD TO RETRY' : 'RECOVERY SYSTEMS LOADING · TRY AGAIN', undefined, 'warn');
+        wantRecovery();
+      } else if (e.type === 'tow' && r.recovery) {
+        const [t, tone] = r.recovery.towLine(e);
+        notify(t, undefined, tone);
+      } else if (e.type === 'hullDelivered') {
+        // P10.1: the only grant of a recovery hull; recoverShip refuses a repeat, so it is never awarded twice
+        const f = recoverShip(fleet, e.ship);
+        if (f) {
+          setFleet(f);
+          persist();
+          showNotice('upgrade', `${SHIP_BY_ID.get(e.ship)!.name.toUpperCase()} RECOVERED`, 'NOW IN YOUR HANGAR', 4200);
+        }
       } else if (e.type === 'docked') {
+        void loadHangar(); // P10.1: the bay chunk is fetched while the station hub is up
         if (e.first) profile = withSectorProgress(profile, sys, [e.id]);
         // P03B: docked and repaired includes the magazines (heavy missiles, nuke) back to capacity; saved below
         const restocked = restockOrdnance(profile.ordnance);
@@ -2025,7 +2116,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         return;
       }
       persist();
-      restartSector(run);
+      // P10.1: a tow ended by the restart is reported like any other end (the hull stays where it was)
+      for (const e of restartSector(run)) if (e.type === 'tow') handleEvent(run, run.layout.systemId, e);
       resetRunCounters();
       services.sound.play('uiSelect');
       snapCamera(cam, run.ship.x, run.ship.y);
@@ -2496,7 +2588,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const back = adminReturn;
     adminReturn = null;
     // the hangar re-reads the fleet (a ship chosen in the admin panel, ADMIN labels)
-    if (panel === 'hangar' && run?.docked) hangar.open(dockLabel);
+    if (panel === 'hangar' && run?.docked) hangar?.open(dockLabel);
     else if (back && back.isConnected && !back.closest('[hidden]')) back.focus({ preventScroll: true });
     else if (panel) menus[panel].focus();
   };
@@ -2592,7 +2684,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     const back = loginReturn;
     loginReturn = null;
     if (success && error) openAdmin(error);
-    else if (success && panel === 'hangar' && run?.docked) hangar.open(dockLabel); // focus could not land while the screen was up
+    else if (success && panel === 'hangar' && run?.docked) hangar?.open(dockLabel); // focus could not land while the screen was up
     else if (!success && back && back.isConnected && !back.closest('[hidden]')) back.focus({ preventScroll: true });
     else if (panel) menus[panel].focus();
   };
@@ -2764,7 +2856,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       else if (panel === 'equipment') equipment.back();
       else if (panel === 'sound') soundPanel.back();
       else if (panel === 'recovery') actions.recoveryContinue();
-      else if (panel === 'hangar') hangar.back();
+      else if (panel === 'hangar') hangar?.back();
       else if (panel === 'armory') armory.back();
       else if (panel === 'fabricator') fabricator.back();
       else if (panel === 'missions') missionsPanel.back();
@@ -3081,7 +3173,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       for (const c of panelPadCommands(update)) if (c === 'back') login.back();
       login.frame(ts);
       if (!arrivedBefore) {
-        if (panel === 'hangar') hangar.frame(ts);
+        if (panel === 'hangar') hangar?.frame(ts);
         status.frames += 1;
         lastTs = ts;
         surface?.sample(ts, 0, false);
@@ -3162,7 +3254,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       toLog(nt.toLog);
     }
     feed.tick(ts);
-    if (panel === 'hangar') hangar.frame(ts); // P03A: the bay preview animates on this loop (no timer of its own)
+    if (panel === 'hangar') hangar?.frame(ts); // P03A: the bay preview animates on this loop (no timer of its own)
     else if (panel === 'armory') armory.frame(ts); // P03B: the plot redraws after a change or resize only
     const r = run;
     if (!r || !art) {
@@ -3338,10 +3430,26 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     combatView.render(panel ? null : hudModel);
     renderAdvice(r);
     renderHud(r, ts, live && !document.hidden, Math.hypot(move.moveX, move.moveY), fire);
-    const focus = !panel && r.phase === 'flight' && r.focus ? r.layout.pois.find((p) => p.id === r.focus) : undefined;
-    const prompt = focus ? `${poiVerb(r, focus, POI_RULES[focus.kind].verb).toUpperCase()} · ${(focus.kind === 'gate' ? r.gates[focus.id]?.label ?? focus.label : focus.label).toUpperCase()}` : '';
-    if (interactBtn.textContent !== prompt) interactBtn.textContent = prompt;
-    if (interactBtn.hidden !== !focus) interactBtn.hidden = !focus;
+    const fid = !panel && r.phase === 'flight' ? r.focus : null;
+    const focus = fid ? r.layout.pois.find((p) => p.id === fid) : undefined;
+    // P10.1/P10.2: the disabled hull's prompt (TOW HULL in reach, RELEASE TOW while towing) and the tow's own
+    // second line (status, or why a press would be refused): sector/tow.ts towPrompt, the sim's values only
+    const tp = r.hulk && r.recovery && fid ? r.recovery.towPrompt(r, focus ? focus.kind : fid === HULK_FOCUS ? 'hulk' : null) : null;
+    const prompt = focus ? `${poiVerb(r, focus, POI_RULES[focus.kind].verb).toUpperCase()} · ${(focus.kind === 'gate' ? r.gates[focus.id]?.label ?? focus.label : focus.label).toUpperCase()}` : tp?.main ?? '';
+    const sub = prompt ? tp?.sub ?? '' : '';
+    const pk = `${prompt}|${sub}|${tp?.state ?? ''}|${tp?.risk ?? ''}`;
+    if (pk !== promptKey) {
+      promptKey = pk;
+      if (sub) interactBtn.replaceChildren(prompt, el('span', 'fr-interact-sub', sub));
+      else interactBtn.textContent = prompt;
+      if (sub) interactBtn.setAttribute('aria-label', `${prompt}. ${sub}`);
+      else interactBtn.removeAttribute('aria-label');
+      if (tp?.state && prompt) interactBtn.dataset['tow'] = tp.state;
+      else delete interactBtn.dataset['tow'];
+      if (tp?.state === 'towing') interactBtn.dataset['risk'] = tp.risk;
+      else delete interactBtn.dataset['risk'];
+    }
+    if (interactBtn.hidden !== !prompt) interactBtn.hidden = !prompt;
     // the full-hold choice: low and small, never over the centre of the action
     const o = !panel && r.phase === 'flight' ? r.offer : null;
     const k = binds.interact[0] ? keyLabel(binds.interact[0]) : '';
@@ -3508,7 +3616,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
 
       // panels
       menus = {} as Record<Exclude<Panel, null>, MenuList>;
-      hangar = createHangarPanel({
+      hangarDeps = {
         sprites: services.sprites,
         fleet: () => fleet,
         cargo: () => profile.cargo,
@@ -3544,7 +3652,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         sound: panelSound,
         glow: () => services.prefs.get().display.glow,
         reducedMotion,
-      });
+      };
       armory = createArmoryPanel({
         sprites: services.sprites,
         fleet: () => fleet,
@@ -3793,7 +3901,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           ['GALAXY MAP', actions.openMap],
         ]),
         cargo: inventory.root,
-        hangar: hangar.root,
+        hangar: Object.assign(el('section', 'fr-panel'), { hidden: true }), // P10.1: an empty placeholder until the Hangar chunk replaces it (loadHangar)
         armory: armory.root,
         fabricator: fabricator.root,
         missions: missionsPanel.root,
@@ -3835,7 +3943,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       // the controls grid buttons join the panel's menu (MenuList reads buttons live)
       panels.controls.querySelector('.fr-menu')!.prepend(controlsGrid);
       menus.cargo = inventory.menu;
-      menus.hangar = hangar.menu;
+      menus.hangar = new MenuList(panels.hangar);
       menus.armory = armory.menu;
       menus.fabricator = fabricator.menu;
       menus.missions = missionsPanel.menu;
@@ -4135,7 +4243,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         saves: () => ({ ...saves.status(), slot: saveSlotNo, writable, persistent: services.store.persistent, lastSaveAt, lastSaveFailed, resume: profile.resume, resumedAt, badge: savesBtn.textContent }),
         fleet: () => fleet,
         craft: () => craft,
-        hangar: () => hangar.status(),
+        hangar: () => hangar?.status() ?? null,
         armory: () => armory.status(),
         crew: () => ({ state: crew, view: crewView }),
         advisor: () => ({ state: advice, view: advisorView(advice), strip: advisorStrip?.status() ?? null, observation: lastObservation, crew: advisorCrewNow() }),
@@ -4188,6 +4296,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         },
         lab: () => (__GALAXIA_GRAVITY_LAB__ && lab ? lab.status() : null),
         ability: () => (run ? abilityStatus(run) : null),
+        salvage: () => {
+          const t = run?.recovery?.towStatus(run) ?? null;
+          const box = run?.layout.pois.find((p) => p.kind === 'raidbox' && p.target === run!.salvage);
+          return {
+            ship: fleet.active,
+            owned: fleet.owned,
+            abilityId: abilityOf(fleet.active)?.id ?? null,
+            tow: t,
+            focus: run?.focus ?? null,
+            recovered: Object.fromEntries(SHIPS.filter((d) => d.salvage).map((d) => [d.id, fleet.owned.includes(d.id)])),
+            recovery: recoveryKit ? 'ready' : recoveryFailed ? 'failed' : recoveryLoad ? 'loading' : 'idle',
+            next: !t?.ship ? (run?.salvage && box && !isDone(run, box) ? 'OPEN THE RAID BOX' : '') : t.state === 'towed' ? 'DOCK AT A STATION' : t.state === 'resting' ? 'TOW HULL' : box && !isDone(run!, box) ? 'OPEN THE RAID BOX' : '',
+          };
+        },
         heat: () => ({ factions: heatView(heatBk), log: [...heatLog] }),
         chains: () => chainViews(prog.missions, prereqCtx()),
         gravity: () =>

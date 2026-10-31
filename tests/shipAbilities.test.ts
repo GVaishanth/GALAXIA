@@ -38,6 +38,7 @@ import { EMPTY_SECTOR_SAVE, type Landmark, type Poi, type SectorLayout } from '.
 import { applyShip, createSectorRun, disposeSectorRun, interact, pauseSector, restartSector, resumeSector, setRunFlightMode, stepSector, type SectorEvent, type SectorInput, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { bearingSpread, signalSource, signalView } from '../src/modes/freeroam/sector/signal.ts';
 import { deriveShip } from '../src/modes/freeroam/ships/equipment.ts';
+import { spawnHulk } from '../src/modes/freeroam/sector/tow.ts';
 import { SHIP_BY_ID, SHIPS } from '../src/modes/freeroam/ships/roster.ts';
 import { SHIP_IDS, type ShipId } from '../src/modes/freeroam/ships/types.ts';
 import { MemoryStore } from '../src/persistence/storage.ts';
@@ -99,10 +100,16 @@ const planet = (id: string, at: Pt, r = 70): Landmark => ({ ...BODY, id, label: 
 function ready(ship: ShipId): SectorRun {
   const L0 = world();
   const c = mid(L0);
-  const L = ship === 'petrel' ? world([poi('anomaly', 'sig-1', { x: c.x + 400, y: c.y })]) : ship === 'magpie' ? world([poi('salvage', 'salv-1', { x: c.x + 1200, y: c.y })]) : L0;
-  const r = setup(ship, L);
+  const L = ship === 'petrel' ? world([poi('anomaly', 'sig-1', { x: c.x + 400, y: c.y })]) : ship === 'magpie' ? world([poi('salvage', 'salv-1', { x: c.x + 1200, y: c.y })]) : ship === 'heron' ? world([poi('survey', 'survey-9', { x: c.x + 1400, y: c.y })]) : L0;
+  const r = ship === 'heron' ? createSectorRun(L, EMPTY_SECTOR_SAVE, { seed: 3, ship: deriveShip(ship) }) : setup(ship, L);
+  if (ship === 'heron') {
+    r.grace = 1e9; // P10.1 Survey Sweep needs a mark still to record (an unsurveyed sector)
+    place(r, c);
+    r.ship.heading = 0;
+  }
   if (ship === 'petrel') r.revealed.add('sig-1');
   if (ship === 'shrike') foe(r, 0, -400);
+  if (ship === 'crane') r.hulk = { ...spawnHulk('heron')!, x: c.x, y: c.y + 100, px: c.x, py: c.y + 100, towed: true }; // P10.1 Winch Lock needs a tow
   return r;
 }
 
@@ -120,6 +127,10 @@ describe('P08.1 ability definitions (one frozen table, by stable ship id)', () =
       magpie: 'Salvage Pulse',
       condor: 'Bulwark',
       albatross: 'Deep Scan',
+      harrier: 'Pivot Jets',
+      crane: 'Winch Lock',
+      heron: 'Survey Sweep',
+      raven: 'Quiet Hull',
     });
     for (const s of SHIP_IDS) {
       const d = SHIP_ABILITIES[s];
@@ -134,7 +145,7 @@ describe('P08.1 ability definitions (one frozen table, by stable ship id)', () =
 
   it('durations and cooldowns are whole ticks inside the P08.1 targets; the cooldown always outlasts the effect', () => {
     // [min s, max s] duration and cooldown targets from the P08.1 brief
-    const T: Record<ShipId, [number, number, number, number]> = { swift: [1.5, 2, 22, 28], shrike: [4, 6, 25, 32], petrel: [6, 8, 25, 35], magpie: [5, 7, 25, 35], condor: [3.5, 4.5, 35, 45], albatross: [5, 8, 30, 40] };
+    const T: Record<ShipId, [number, number, number, number]> = { swift: [1.5, 2, 22, 28], shrike: [4, 6, 25, 32], petrel: [6, 8, 25, 35], magpie: [5, 7, 25, 35], condor: [3.5, 4.5, 35, 45], albatross: [5, 8, 30, 40], harrier: [2, 4, 22, 28], crane: [5, 7, 25, 35], heron: [5, 7, 25, 35], raven: [4, 6, 30, 40] }; // P10.1 targets for the four new hulls
     for (const s of SHIP_IDS) {
       const d = SHIP_ABILITIES[s];
       const [d0, d1, c0, c1] = T[s];

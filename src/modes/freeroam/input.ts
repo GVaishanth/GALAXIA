@@ -66,25 +66,20 @@ export function padAim(snap: PadSnapshot | null): StickVector | null {
   return Math.hypot(x, y) > PAD.aimDeadZone ? { x, y } : null;
 }
 
+/** Any of these pad buttons held (one predicate for the four below). */
+const padHeld = (snap: PadSnapshot | null, buttons: readonly number[]): boolean => !!snap && buttons.some((i) => snap.pressed[i] === true);
+
 /** RT, RB or X held. */
-export function padFire(snap: PadSnapshot | null): boolean {
-  return !!snap && PAD.fire.some((i) => snap.pressed[i] === true);
-}
+export const padFire = (snap: PadSnapshot | null): boolean => padHeld(snap, PAD.fire);
 
 /** LB or LT held (boost, Prompt 8). */
-export function padBoost(snap: PadSnapshot | null): boolean {
-  return !!snap && PAD.boost.some((i) => snap.pressed[i] === true);
-}
+export const padBoost = (snap: PadSnapshot | null): boolean => padHeld(snap, PAD.boost);
 
 /** Right-stick click (R3) held: NEXT WEAPON (every face and shoulder button already has a flight role). */
-export function padWeapon(snap: PadSnapshot | null): boolean {
-  return !!snap && PAD.weapon.some((i) => snap.pressed[i] === true);
-}
+export const padWeapon = (snap: PadSnapshot | null): boolean => padHeld(snap, PAD.weapon);
 
 /** Left-stick click (L3) held: SILENT RUNNING (P07.2; the shell toggles on the press only, like R3). */
-export function padSilent(snap: PadSnapshot | null): boolean {
-  return !!snap && PAD.silent.some((i) => snap.pressed[i] === true);
-}
+export const padSilent = (snap: PadSnapshot | null): boolean => padHeld(snap, PAD.silent);
 
 /** Sum of all sources, clamped to the unit disc (two devices never exceed full thrust). */
 export function combineFlight(...vectors: readonly StickVector[]): FlightInput {

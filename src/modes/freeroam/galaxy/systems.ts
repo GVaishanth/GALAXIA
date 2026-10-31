@@ -96,13 +96,17 @@ export function laneCost(a: SystemRecord, b: SystemRecord): number {
   return level(raw, LANE_COST.min, LANE_COST.max);
 }
 
+/** The worse end of a lane by `score` among those that `count` (ties: the lower id), or undefined. */
+const worseEnd = (a: SystemRecord, b: SystemRecord, count: (s: SystemRecord) => boolean, score: (s: SystemRecord) => number): SystemRecord | undefined =>
+  [a, b].filter(count).sort((x, y) => score(y) - score(x) || (x.id < y.id ? -1 : 1))[0];
+
 function laneHazard(a: SystemRecord, b: SystemRecord): LaneHazard | null {
-  const pick = [a, b].filter((s) => s.sector.hazard !== 'none').sort((x, y) => y.sector.hazardStrength - x.sector.hazardStrength || (x.id < y.id ? -1 : 1))[0];
+  const pick = worseEnd(a, b, (s) => s.sector.hazard !== 'none', (s) => s.sector.hazardStrength);
   return pick ? { id: pick.sector.hazard, strength: pick.sector.hazardStrength, at: pick.id } : null;
 }
 
 function laneEvent(a: SystemRecord, b: SystemRecord): LaneEvent | null {
-  const pick = [a, b].filter((s) => s.encounters.threat >= 2 && s.encounters.pattern !== 'none').sort((x, y) => y.encounters.threat - x.encounters.threat || (x.id < y.id ? -1 : 1))[0];
+  const pick = worseEnd(a, b, (s) => s.encounters.threat >= 2 && s.encounters.pattern !== 'none', (s) => s.encounters.threat);
   return pick ? { pattern: pick.encounters.pattern, threat: pick.encounters.threat, at: pick.id } : null;
 }
 

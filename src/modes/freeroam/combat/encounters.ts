@@ -92,16 +92,13 @@ function clearOfSolids(L: SectorLayout, p: { x: number; y: number }, pad: number
 
 /** A point on the ring of radius `r` around `c`, starting at angle `a`, inside the sector, clear of sanctuaries and solids. */
 function ringPoint(L: SectorLayout, c: { x: number; y: number }, r: number, a: number): { x: number; y: number } {
-  for (let k = 0; k < 12; k++) {
-    const ang = a + k * 0.5;
-    const p = { x: Math.min(L.width - 40, Math.max(40, c.x + Math.cos(ang) * r)), y: Math.min(L.height - 40, Math.max(40, c.y + Math.sin(ang) * r)) };
-    if (!inSanctuary(L, p, 260) && clearOfSolids(L, p, 26)) return p;
-  }
-  for (let k = 0; k < 12; k++) {
-    // relaxed: any point clear of sanctuaries (a rock-choked ring still spawns somewhere fair)
-    const ang = a + k * 0.5;
-    const p = { x: Math.min(L.width - 40, Math.max(40, c.x + Math.cos(ang) * r)), y: Math.min(L.height - 40, Math.max(40, c.y + Math.sin(ang) * r)) };
-    if (!inSanctuary(L, p, 260)) return p;
+  // the same 12 points twice: first clear of solids too, then relaxed (a rock-choked ring still spawns somewhere fair)
+  for (let pass = 0; pass < 2; pass++) {
+    for (let k = 0; k < 12; k++) {
+      const ang = a + k * 0.5;
+      const p = { x: Math.min(L.width - 40, Math.max(40, c.x + Math.cos(ang) * r)), y: Math.min(L.height - 40, Math.max(40, c.y + Math.sin(ang) * r)) };
+      if (!inSanctuary(L, p, 260) && (pass > 0 || clearOfSolids(L, p, 26))) return p;
+    }
   }
   return { x: c.x, y: c.y };
 }

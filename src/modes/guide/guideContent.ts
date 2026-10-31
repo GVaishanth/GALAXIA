@@ -124,7 +124,7 @@ export function freeRoamKeyboard(b: Bindings, mouseAim: boolean): ControlRow[] {
     { id: 'silent', keys: alts(b, 'silent'), action: 'SILENT RUNNING', text: 'Toggle a low signature: hostiles must come much closer to spot you, and your shield stops recharging. Firing or boosting ends it. The SILENT control (right side) shows its state.' },
     { id: 'ability', keys: alts(b, 'ability'), action: 'SHIP ABILITY', text: 'Use your ship\'s signature ability. The ability panel (right side, above SILENT) shows READY, ACTIVE with the seconds left, or COOLDOWN.' },
     { id: 'zoom', keys: [['WHEEL'], ['+', '−']], action: 'ZOOM', text: 'Zoom the camera in or out. The mouse wheel only zooms; it never switches weapons.' },
-    { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect, take a signal bearing or use a gate when a prompt shows.' },
+    { id: 'interact', keys: alts(b, 'interact'), action: 'INTERACT', text: 'Dock, open, inspect, take a signal bearing, tow a hull or use a gate when a prompt shows.' },
     { id: 'map', keys: alts(b, 'map'), action: 'SECTOR MAP', text: 'The map of this sector.' },
     { id: 'cargo', keys: alts(b, 'cargo'), action: 'CARGO', text: 'Your hold and equipment.' },
     { id: 'pause', keys: [...alts(b, 'pause'), ['ESC']], action: 'PAUSE', text: 'Pause: missions, record, saves, controls and HOW TO PLAY.' },
@@ -244,7 +244,33 @@ function ships(ctx: GuideContext): GuideBlock[] {
         { label: 'INSPECT', text: 'Select a ship card to see its speed, handling, hull, shield, hold and weapons. Inspecting never changes your ship.' },
         { label: 'OWNED', text: 'SELECT SHIP, then CONFIRM. You switch ships while docked.' },
         { label: 'AVAILABLE', text: 'ACQUIRE pays cargo materials from your hold, not Guild marks. NEED CARGO means your hold is short.' },
-        { label: 'LOCKED', text: 'A locked ship shows the licence it needs (for example a system to reach or surveys to complete) and your progress.' },
+        { label: 'LOCKED', text: 'A locked ship shows the licence it needs (for example a system to reach or surveys to complete) and your progress. The Heron and Raven are never sold: recover their hulls (below).' },
+      ],
+    },
+    ...recovery(),
+  ];
+}
+
+/** P10.2: recovering the Heron and Raven (sector/tow.ts and the ships' authored Raid Boxes; SHIP_EXPANSION.md). */
+function recovery(): GuideBlock[] {
+  // the same text for every input: INTERACT is the key or the touch prompt (LEARN THE CONTROLS)
+  return [
+    { kind: 'lead', text: 'RECOVERING A HULL: the Heron and Raven wait as disabled hulls behind Raid Boxes. Bring one to a station and it is yours.' },
+    {
+      kind: 'points',
+      items: [
+        { label: '1 · FIND', text: 'Heron: the Raid Box in Kestrel Verge, lower left of the sector. Raven: the Raid Box in Lantern Gate, upper left.' },
+        { label: '2 · OPEN', text: 'Fly to the box and use INTERACT on OPEN · RAID BOX. The disabled hull rests just below it.' },
+        { label: '3 · SLOW DOWN', text: 'The tow line only attaches when you are close, nearly matching the hull\'s speed, with no planet or star between you.' },
+        { label: '4 · TOW', text: 'Use INTERACT on TOW HULL. If it would be refused, the prompt says why (TOO FAST, LINE BLOCKED).' },
+        { label: '5 · FLY GENTLY', text: 'Towing cuts your thrust and top speed. The prompt shows TOW ATTACHED with the line length and its limit.' },
+        { label: '6 · WATCH THE LINE', text: 'TOW LINE STRAINED warns as it nears the limit; past it the line snaps. A body on the line for half a second cuts it.' },
+        { label: '7 · STAY IN THE SECTOR', text: 'Leaving the sector, a wreck or RESTART FLIGHT drops the tow. Nothing is lost: tow the hull again.' },
+        { label: '8 · DELIVER', text: 'Dock at that sector\'s Haven Guild station with the hull on the line (Kestrel Verge: up and right of the box; Lantern Gate: far below it).' },
+        { label: '9 · RECOVERED', text: 'HERON RECOVERED (or RAVEN) shows only on delivery. The box stays open and the hull is gone for good.' },
+        { label: '10 · FLY IT', text: 'In the HANGAR: SELECT SHIP, then CONFIRM.' },
+        { label: 'CRANE · WINCH LOCK', text: 'The Crane\'s tow rig halves the towing penalty. Winch Lock works only while towing: it removes the penalty and lets the line stretch half as far again before it snaps. It ends with the tow.' },
+        { label: 'RELEASE', text: 'INTERACT on RELEASE TOW lets go; the hull stays where you leave it.' },
       ],
     },
   ];
@@ -332,6 +358,10 @@ export const ABILITY_GUIDE: readonly (readonly [ShipId, string, string])[] = [
   ['magpie', 'Salvage Pulse', 'Helps locate eligible existing salvage within an expanded range.'],
   ['condor', 'Bulwark', 'Reduces eligible incoming combat-hit damage briefly; it does not prevent all damage.'],
   ['albatross', 'Deep Scan', 'Performs a one-time expanded-range sweep of permitted markers and visible hostiles.'],
+  ['harrier', 'Pivot Jets', 'Sharpens turning and reverse thrust briefly; thrust and top speed are unchanged.'],
+  ['crane', 'Winch Lock', 'Only while towing a hull: cancels the towing drag and lets the line stretch farther before it snaps.'],
+  ['heron', 'Survey Sweep', 'Records survey marks from four times as far while active; it needs marks still to record.'],
+  ['raven', 'Quiet Hull', 'Lowers your signature briefly; Silent Running stays lower, and sight lines and memory still apply.'],
 ];
 
 /** P08.2: Ship Signature Abilities, straight after Silent Running (the same table the game runs; no extra screen). */

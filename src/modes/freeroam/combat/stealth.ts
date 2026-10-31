@@ -24,6 +24,7 @@
 import type { Landmark } from '../sector/model.ts';
 import type { SectorRun } from '../sector/run.ts';
 import { sweptHit } from './world.ts';
+import { live } from './shipAbilities.ts';
 
 /** Tuning (units: signature multipliers; memory in 60 Hz simulation ticks). */
 export const STEALTH = Object.freeze({
@@ -41,8 +42,13 @@ export function bodyBetween(bodies: readonly Landmark[], ax: number, ay: number,
   return null;
 }
 
-/** The pilot's current signature multiplier. */
-export const signature = (run: Pick<SectorRun, 'silent'>): number => (run.silent ? STEALTH.silent : STEALTH.normal);
+/**
+ * The pilot's current signature multiplier. P10.1: the Raven's Quiet Hull
+ * caps it (min), so it can never drop below Silent Running's value; line of
+ * sight (Gravity Shadow) and contact memory are untouched by either.
+ */
+export const signature = (run: Pick<SectorRun, 'silent'> & Partial<Pick<SectorRun, 'craft' | 'ability'>>): number =>
+  Math.min(run.silent ? STEALTH.silent : STEALTH.normal, (run.craft && run.ability && live({ craft: run.craft, ability: run.ability }, 'quiet-hull')?.signature) || 1);
 
 /** A hostile's effective acquisition range for a base detect range and a signature. */
 export const effectiveRange = (base: number, sig: number): number => base * sig;

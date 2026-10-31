@@ -82,8 +82,14 @@ describe('ship roster (ships/roster.ts)', () => {
     expect(starter.licence).toEqual([]);
     expect(starter.cost).toEqual([]);
     for (const s of SHIPS) if (s.id !== STARTER_SHIP) {
-      expect(s.licence.length).toBeGreaterThan(0);
-      expect(s.cost.length).toBeGreaterThan(0);
+      // P10.1: a recovery hull is never sold (no licence, no price, a Raid Box instead); every other ship is
+      if (s.salvage) {
+        expect(s.licence).toEqual([]);
+        expect(s.cost).toEqual([]);
+      } else {
+        expect(s.licence.length).toBeGreaterThan(0);
+        expect(s.cost.length).toBeGreaterThan(0);
+      }
     }
   });
 

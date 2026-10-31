@@ -54,10 +54,11 @@ describe('hangar catalogue (ships/hangarView.ts)', () => {
 
   it('filters by real ownership and licence state; every ship lands in exactly one of owned / for sale / locked', () => {
     const c = ctxOf();
-    expect(filterCounts(c)).toEqual({ all: 6, owned: 1, forSale: 2, locked: 3 });
+    expect(filterCounts(c)).toEqual({ all: 10, owned: 1, forSale: 2, locked: 7 });
     expect(catalogue(c, 'owned', 'roster')).toEqual(['petrel']);
     expect(catalogue(c, 'forSale', 'roster')).toEqual(['swift', 'magpie']); // Swift affordable, Magpie needs cargo
-    expect(catalogue(c, 'locked', 'roster')).toEqual(['shrike', 'condor', 'albatross']);
+    // P10.1: Harrier and Crane need survey licences; Heron and Raven are recovered, never sold
+    expect(catalogue(c, 'locked', 'roster')).toEqual(['shrike', 'condor', 'albatross', 'harrier', 'crane', 'heron', 'raven']);
     for (const s of SHIPS) {
       const st = statusOf(c, s.id);
       expect(HANGAR_FILTERS.filter((f) => f !== 'all' && matchesFilter(st, f))).toHaveLength(1);
@@ -141,6 +142,11 @@ describe('hangar highlights come from the roster', () => {
     expect(yardHighlights('condor').map((h) => h.key)).toEqual(expect.arrayContaining(['hull', 'class-heavy']));
     expect(yardHighlights('magpie').map((h) => h.key)).toContain('cargo');
     expect(yardHighlights('albatross').map((h) => h.key)).toEqual(expect.arrayContaining(['sensor', 'travel']));
+    // P10.1 expansion: each new hull's true highlight
+    expect(yardHighlights('harrier').map((h) => h.key)).toContain('energyRegen');
+    expect(yardHighlights('crane').map((h) => h.key)).toContain('tow');
+    expect(yardHighlights('heron').map((h) => h.key)).toContain('recovered');
+    expect(yardHighlights('raven').map((h) => h.key)).toContain('recovered');
     for (const s of SHIPS) expect(yardHighlights(s.id).length).toBeGreaterThan(0);
   });
 });
@@ -229,7 +235,18 @@ describe('hangar module boundaries', () => {
 
   it('the shell drives the preview only while the hangar is the open panel', () => {
     const shell = readFileSync(new URL('../src/modes/freeroam/freeRoamMode.ts', import.meta.url), 'utf8');
-    expect(shell).toMatch(/if \(panel === 'hangar'\) hangar\.frame\(ts\)/);
+    // P10.1: the panel is its own lazy chunk, so the call is optional until it has loaded
+    expect(shell).toMatch(/if \(panel === 'hangar'\) hangar\?\.frame\(ts\)/);
     expect(shell).toMatch(/levels: \(id\) => levelsOf\(id\)/);
+  });
+
+  it('P10.1: the shell loads the Hangar panel lazily (types only at the top, one cached import of ships/shipyard.ts)', () => {
+    const shell = readFileSync(new URL('../src/modes/freeroam/freeRoamMode.ts', import.meta.url), 'utf8');
+    expect(shell).toMatch(/^import type \{ HangarDeps, HangarPanel, HangarStatus \} from '\.\/ships\/hangarPanel\.ts';$/m);
+    expect(shell).not.toMatch(/^import \{[^}]*\} from '\.\/ships\/(hangarPanel|shipyard)\.ts'/m);
+    expect(shell.match(/import\('\.\/ships\/shipyard\.ts'\)/g)).toHaveLength(1);
+    expect(shell).toMatch(/hangarLoad \?\?= import\('\.\/ships\/shipyard\.ts'\)/);
+    const yard = readFileSync(new URL('../src/modes/freeroam/ships/shipyard.ts', import.meta.url), 'utf8');
+    expect(yard.replace(/\/\*[\s\S]*?\*\//g, '').trim()).toBe("export { createHangarPanel } from './hangarPanel.ts';");
   });
 });

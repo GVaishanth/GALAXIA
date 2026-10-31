@@ -99,7 +99,8 @@ export interface Rock {
   readonly shape: number;
 }
 
-export const POI_KINDS = ['survey', 'salvage', 'derelict', 'cache', 'anomaly', 'station', 'installation', 'gate', 'exit'] as const;
+/** P10.1 `raidbox`: an authored Raid Box beside a disabled hull (ShipDef.salvage); id `raidbox` (one per sector), target = the ship id. */
+export const POI_KINDS = ['survey', 'salvage', 'derelict', 'cache', 'anomaly', 'station', 'installation', 'gate', 'exit', 'raidbox'] as const;
 export type PoiKind = (typeof POI_KINDS)[number];
 
 export type Interaction = 'record' | 'collect' | 'inspect' | 'open' | 'investigate' | 'dock' | 'trigger' | 'jump' | 'leave';
@@ -115,6 +116,7 @@ export const POI_RULES: Readonly<Record<PoiKind, { readonly interaction: Interac
   installation: { interaction: 'trigger', auto: true, once: true, verb: 'Approach' },
   gate: { interaction: 'jump', auto: false, once: false, verb: 'Use gate' },
   exit: { interaction: 'leave', auto: false, once: false, verb: 'Leave sector' },
+  raidbox: { interaction: 'open', auto: false, once: true, verb: 'Open' },
 };
 
 export interface LootEntry {

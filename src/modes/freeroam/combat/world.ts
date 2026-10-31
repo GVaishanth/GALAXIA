@@ -46,8 +46,12 @@ export function shotBlocked(L: SectorLayout, ax: number, ay: number, bx: number,
   return false;
 }
 
-/** Push a circle out of every solid it overlaps (enemy ships do not fly through rocks or stars). */
-export function pushOutOfSolids(L: SectorLayout, o: { x: number; y: number; vx: number; vy: number }, r: number): void {
+/**
+ * Push a circle out of every solid it overlaps (enemy ships do not fly through rocks or stars).
+ * The pilot's ship uses the same pass with a `bounce` (restitution) and `hit` (closing speed, solid
+ * centre) for impact damage; enemies keep the default: no bounce, no callback.
+ */
+export function pushOutOfSolids(L: SectorLayout, o: { x: number; y: number; vx: number; vy: number }, r: number, bounce = 0, hit?: (speed: number, x: number, y: number) => void): void {
   const out = (x: number, y: number, rr: number): void => {
     const dx = o.x - x;
     const dy = o.y - y;
@@ -60,8 +64,9 @@ export function pushOutOfSolids(L: SectorLayout, o: { x: number; y: number; vx: 
     o.y = y + ny * min;
     const vn = o.vx * nx + o.vy * ny;
     if (vn < 0) {
-      o.vx -= vn * nx;
-      o.vy -= vn * ny;
+      o.vx -= (1 + bounce) * vn * nx;
+      o.vy -= (1 + bounce) * vn * ny;
+      hit?.(-vn, x, y);
     }
   };
   for (const l of L.landmarks) out(l.x, l.y, l.r);

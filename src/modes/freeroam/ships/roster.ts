@@ -27,6 +27,18 @@
  *    behind the late licences (the Lantern Gate milestone, a visit to the
  *    Large Magellanic Cloud). The owner chose this set.
  *
+ * P10.1 expansion (SHIP_EXPANSION.md): four hulls fill the roster's gaps
+ * without beating a specialist at its own stat (tests/fleet.test.ts):
+ *  - Harrier (pursuit): quick to turn and accelerate, but a thin hull, a
+ *    small hold and short sensors; licence after 3 survey runs, cargo price.
+ *  - Crane (recovery tug): a tow rig (towRig) halves the towing penalty and a
+ *    tough hull carries the load, but it is slow and heavy on the stick;
+ *    licence after 2 survey runs, cargo price. Any ship can tow a hull.
+ *  - Heron (survey) and Raven (covert): never sold; each is recovered once
+ *    from its Raid Box (`salvage`), so licence and cost are empty.
+ * All four are light-hardpoint hulls: the heavy rack stays on the medium-class
+ * hulls and the nuke bay on the Condor and the Albatross.
+ *
  * Crew seats (P05.1): bridge seats besides the pilot's, by hull size and
  * role. The light Swift and the gunship Shrike carry one specialist; the
  * explorer Petrel and the hauler Magpie two; the heavy Condor and the
@@ -160,6 +172,87 @@ export const SHIPS: readonly ShipDef[] = [
       { resource: 'fuel', amount: 10 },
       { resource: 'crystal', amount: 6 },
     ],
+  },
+  {
+    id: 'harrier',
+    name: 'Harrier',
+    archetype: 'interceptor',
+    role: 'Pursuit interceptor',
+    description: 'Narrow forward-swept wings with lit tips over two compact engines. Changes direction faster than anything but the Swift and recharges boost energy fastest; the hull is thin and the hold small.',
+    sprite: 'ship.harrier',
+    radius: 9,
+    base: { hull: 70, shield: 80, shieldRegen: 7, accel: 1380, maxSpeed: 385, turnRate: 11.8, energy: 85, energyRegen: 27, cargo: 25, sensor: 800, travel: 1.05 },
+    slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 0 },
+    weaponClasses: ['light'],
+    stock: { weapon: ['needle-repeater'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: [] },
+    crewSeats: 1,
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
+    licence: [{ kind: 'surveys', count: 3 }],
+    cost: [
+      { resource: 'alloy', amount: 10 },
+      { resource: 'fuel', amount: 8 },
+    ],
+  },
+  {
+    id: 'crane',
+    name: 'Crane',
+    archetype: 'salvager',
+    role: 'Recovery tug',
+    description: 'A broad industrial frame on outrigger stabilizers, with a tow hook in the reinforced tail. Its rig halves the drag of a towed hull; slow and heavy on the stick.',
+    sprite: 'ship.crane',
+    radius: 14,
+    base: { hull: 140, shield: 95, shieldRegen: 5, accel: 1000, maxSpeed: 300, turnRate: 6.8, energy: 90, energyRegen: 18, cargo: 70, sensor: 800, travel: 1.2 },
+    slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 2 },
+    weaponClasses: ['light'],
+    stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    crewSeats: 2,
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
+    licence: [{ kind: 'surveys', count: 2 }],
+    cost: [
+      { resource: 'scrap', amount: 14 },
+      { resource: 'alloy', amount: 8 },
+    ],
+    towRig: 0.5,
+  },
+  {
+    id: 'heron',
+    name: 'Heron',
+    archetype: 'explorer',
+    role: 'Survey ship',
+    description: 'An elongated survey hull with offset sensor fins and a long starboard antenna. Long sensors and an efficient drive, but a light hull. Recovered, never sold.',
+    sprite: 'ship.heron',
+    radius: 11,
+    base: { hull: 75, shield: 90, shieldRegen: 6, accel: 1100, maxSpeed: 360, turnRate: 8.5, energy: 105, energyRegen: 24, cargo: 40, sensor: 1150, travel: 0.85 },
+    slots: { weapon: 1, shield: 1, engine: 1, sensor: 2, cargo: 1 },
+    weaponClasses: ['light'],
+    stock: { weapon: ['pulse-cannon'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: ['cargo-pod'] },
+    crewSeats: 2,
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
+    licence: [],
+    cost: [],
+    salvage: { system: 'milky-way/kestrel-verge', box: [600, 2400], hull: [600, 2550] },
+  },
+  {
+    id: 'raven',
+    name: 'Raven',
+    archetype: 'scout',
+    role: 'Covert runner',
+    description: 'A low, compact delta with split rear fins and one small, dim engine. Quick and hard to pin down, with a thin hull and a small hold. Recovered, never sold.',
+    sprite: 'ship.raven',
+    radius: 8,
+    base: { hull: 65, shield: 85, shieldRegen: 6, accel: 1300, maxSpeed: 375, turnRate: 10.5, energy: 95, energyRegen: 22, cargo: 35, sensor: 850, travel: 0.95 },
+    slots: { weapon: 1, shield: 1, engine: 1, sensor: 1, cargo: 0 },
+    weaponClasses: ['light'],
+    stock: { weapon: ['needle-repeater'], shield: ['deflector'], engine: ['ion-drive'], sensor: ['survey-scanner'], cargo: [] },
+    crewSeats: 1,
+    mounts: ['primary', 'missile-rack'],
+    defaultWeapon: 'plasma',
+    licence: [],
+    cost: [],
+    salvage: { system: 'milky-way/lantern-gate', box: [600, 900], hull: [600, 1050] },
   },
 ];
 

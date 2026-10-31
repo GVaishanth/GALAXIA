@@ -33,6 +33,7 @@ import { drawShipThumb, fitCanvas, viewport } from './canvasFit.ts';
 import { MenuList } from '../../../shared/ui/menuList.ts';
 import type { UnlockRequirement } from '../catalogue/types.ts';
 import { MISSILE } from '../combat/playerMissile.ts';
+import { abilityOf } from '../combat/shipAbilities.ts';
 import { WEAPON_BY_ID } from '../../../config/weapons.ts';
 import { compatibleWeapons, setupOf } from './armory.ts';
 import { EQUIPMENT_BY_ID } from './equipment.ts';
@@ -303,7 +304,10 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
   slotsBox.setAttribute('aria-label', 'Fitted equipment');
   const termsHead = el('h4', 'fr-hangar-sec', 'ACQUISITION');
   const terms = el('ul', 'fr-hangar-terms');
-  shipInfo.append(desc, highs, perfHead, legend, stats, el('h4', 'fr-hangar-sec', 'ARMAMENT'), arms, fitHead, slotsBox, termsHead, terms);
+  // P10.2: the ship's signature ability, read from the one ability table (combat/shipAbilities.ts)
+  const abilityHead = el('h4', 'fr-hangar-sec', 'SIGNATURE ABILITY');
+  const abilityText = el('p', 'fr-text fr-hangar-ability');
+  shipInfo.append(desc, highs, abilityHead, abilityText, perfHead, legend, stats, el('h4', 'fr-hangar-sec', 'ARMAMENT'), arms, fitHead, slotsBox, termsHead, terms);
   detail.append(viewTabs, shipInfo);
 
   const body = el('div', 'fr-hangar');
@@ -566,7 +570,7 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     name.textContent = ship.name.toUpperCase();
     role.textContent = `${ship.role.toUpperCase()} · HIT RADIUS ${ship.radius}`;
     const viaAdmin = adminOnly().has(inspected);
-    state.replaceChildren(statusIcon(st), document.createTextNode(viaAdmin ? (st === 'active' ? 'FLYING · ADMIN ACCESS, NOT OWNED' : 'ADMIN ACCESS · NOT OWNED, THIS SESSION ONLY') : STATE_LINE[st]));
+    state.replaceChildren(statusIcon(st), document.createTextNode(viaAdmin ? (st === 'active' ? 'FLYING · ADMIN ACCESS, NOT OWNED' : 'ADMIN ACCESS · NOT OWNED, THIS SESSION ONLY') : ship.salvage && st === 'locked' ? 'LOCKED · RECOVERED, NEVER SOLD' : STATE_LINE[st]));
     state.dataset['status'] = st;
     badge.replaceChildren(statusIcon(st), document.createTextNode(statusText(inspected, st)));
     badge.dataset['status'] = st;
@@ -578,6 +582,9 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
       return li;
     }));
     highs.hidden = highs.childElementCount === 0;
+    const ab = abilityOf(inspected);
+    abilityHead.hidden = abilityText.hidden = !ab;
+    abilityText.textContent = ab ? `${ab.name.toUpperCase()} · ${+(ab.durationTicks / 60).toFixed(2)} s on, ${ab.cooldownTicks / 60} s cooldown. ${ab.summary}` : '';
 
     // performance (bars on the roster scale; a tick marks the comparison ship on the same scale)
     const against = resolveCompare(cx, inspected, compareChoice);
@@ -652,6 +659,10 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     terms.replaceChildren();
     terms.hidden = termsHead.hidden = owned;
     if (!owned) {
+      // P10.1: a recovery hull names its real requirement (the Raid Box's sector), never a price
+      if (ship.salvage) {
+        terms.append(el('li', 'fr-hangar-term', `RECOVERY · OPEN THE RAID BOX IN ${label(ship.salvage.system.split('/')[1] ?? '')} · TOW ITS HULL TO THAT SECTOR'S STATION AND DOCK · NEVER SOLD`));
+      }
       for (const req of ship.licence) {
         const info = d.describe(req);
         const li = el('li', `fr-hangar-term${info.met ? ' is-met' : ''}`);
@@ -680,7 +691,7 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
     if (st === 'owned') actionBtn.textContent = pending === 'select' ? `CONFIRM · FLY THE ${ship.name.toUpperCase()}` : 'SELECT SHIP';
     else if (st === 'available') actionBtn.textContent = pending === 'acquire' ? `CONFIRM · PAY ${costText(ship.cost)}` : `ACQUIRE · ${costText(ship.cost)}`;
     else if (st === 'unaffordable') actionBtn.textContent = 'NOT ENOUGH CARGO';
-    else if (st === 'locked') actionBtn.textContent = 'LICENCE REQUIRED';
+    else if (st === 'locked') actionBtn.textContent = ship.salvage ? 'RECOVERY REQUIRED' : 'LICENCE REQUIRED';
     actionBtn.setAttribute('aria-label', actionBtn.textContent ?? '');
   };
 
@@ -776,7 +787,7 @@ export function createHangarPanel(d: HangarDeps): HangarPanel {
         d.sound('uiSelect');
         message.textContent = `Now flying the ${ship.name}. LAUNCH when ready.`;
       } else message.textContent = r.reason === 'unsafe' ? 'Ships can only be switched while docked with no hostiles engaged.' : 'That ship cannot be selected.';
-    } else if (st === 'locked') message.textContent = 'Locked: meet the licence shown under ACQUISITION first.';
+    } else if (st === 'locked') message.textContent = ship.salvage ? 'Locked: recover its hull as shown under ACQUISITION.' : 'Locked: meet the licence shown under ACQUISITION first.';
     else if (st === 'unaffordable') message.textContent = 'Not enough cargo in the hold for this price.';
     refresh();
     // keep focus on a live control (the action may have hidden itself)

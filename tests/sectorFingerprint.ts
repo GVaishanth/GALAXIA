@@ -3,7 +3,9 @@
  * Covers every persistent layout element a save can refer to (ids and
  * positions of POIs, rocks, patrols, encounter sites, hazard zones and mines)
  * and deliberately excludes loot amounts, which Prompt 10 moved to the central
- * loot tables. Pure helper; not a test file.
+ * loot tables. Pure helper; not a test file. P10.1 Raid Boxes are authored
+ * (ShipDef.salvage, appended after generation like the ore veins), so they are
+ * left out here and pinned by tests/raidBox.test.ts instead.
  */
 import type { SectorLayout } from '../src/modes/freeroam/sector/model.ts';
 
@@ -24,7 +26,7 @@ export function layoutFingerprint(L: SectorLayout): string {
     ...L.landmarks.map((l) => `${l.id}:${l.style}@${r1(l.x)},${r1(l.y)},${r1(l.r)},${r1(l.hazardR)}`),
     ...L.regions.map((g) => `${g.id}:${g.effect}@${r1(g.x)},${r1(g.y)},${r1(g.r)}`),
     ...L.rocks.map((k) => `${r1(k.x)},${r1(k.y)},${r1(k.r)}`),
-    ...L.pois.map((p) => `${p.id}:${p.kind}@${r1(p.x)},${r1(p.y)},${r1(p.r)},${r1(p.solidR)}|${p.alertR},${p.wave},${p.tier},${p.holdTicks}`),
+    ...L.pois.filter((p) => p.kind !== 'raidbox').map((p) => `${p.id}:${p.kind}@${r1(p.x)},${r1(p.y)},${r1(p.r)},${r1(p.solidR)}|${p.alertR},${p.wave},${p.tier},${p.holdTicks}`),
     ...L.patrols.map((p) => `${p.id}:${p.ships}x${p.tier}@${p.points.map((q) => `${r1(q.x)},${r1(q.y)}`).join(';')}`),
     ...L.sites.map((s) => `${s.id}:${s.kind}@${r1(s.x)},${r1(s.y)},${s.r}|${s.anchor}|${s.size}x${s.waves}`),
     ...L.hazards.map((z) => `${z.id}:${z.kind}@${r1(z.x)},${r1(z.y)},${r1(z.r)}|${z.mines.map((m) => `${r1(m.x)},${r1(m.y)}`).join(';')}`),

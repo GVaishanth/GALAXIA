@@ -13,6 +13,10 @@
  *   Signal Calibration -> bearingSpread in sector/signal.ts
  *   Bulwark            -> damagePlayer in combat/world.ts
  *   Salvage Pulse, Deep Scan -> the contact scans in sector/run.ts
+ *   Pivot Jets         -> the flight tuning in sector/run.ts (turn and reverse response)
+ *   Winch Lock         -> the tow penalty and tether length in sector/tow.ts (only while towing)
+ *   Survey Sweep       -> the survey-mark fly-through radius in sector/run.ts
+ *   Quiet Hull         -> signature in combat/stealth.ts (never below Silent Running's)
  * Activation, eligibility and the lifecycle live in sector/run.ts
  * (activateAbility), which owns the run. Nothing here is saved.
  *
@@ -25,7 +29,7 @@ import type { SectorRun } from '../sector/run.ts';
 import type { ShipId } from '../ships/types.ts';
 import type { PlayerDamageSource } from './world.ts';
 
-export type AbilityId = 'vector-burst' | 'predator-focus' | 'signal-calibration' | 'salvage-pulse' | 'bulwark' | 'deep-scan';
+export type AbilityId = 'vector-burst' | 'predator-focus' | 'signal-calibration' | 'salvage-pulse' | 'bulwark' | 'deep-scan' | 'pivot-jets' | 'winch-lock' | 'survey-sweep' | 'quiet-hull';
 
 interface Base {
   readonly ship: ShipId;
@@ -52,7 +56,15 @@ export type AbilityDef =
   /** Incoming damage multiplier for combat hits (the sources that respect invulnerability). */
   | (Base & { readonly id: 'bulwark'; readonly damageMul: number })
   /** Scan radius = sensor x rangeMul (every POI marker and hostile the sensors could show). */
-  | (Base & { readonly id: 'deep-scan'; readonly rangeMul: number });
+  | (Base & { readonly id: 'deep-scan'; readonly rangeMul: number })
+  /** P10.1: turn-rate (free and aimed) and reverse-thrust multipliers on the flight tuning. Thrust and top speed are unchanged. */
+  | (Base & { readonly id: 'pivot-jets'; readonly turnMul: number; readonly reverseMul: number })
+  /** P10.1: while towing, the tow penalty is cancelled and the tether may stretch tetherMul times as far before it snaps. Ends with the tow. */
+  | (Base & { readonly id: 'winch-lock'; readonly tetherMul: number })
+  /** P10.1: survey marks record within markRangeMul times their fly-through radius. */
+  | (Base & { readonly id: 'survey-sweep'; readonly markRangeMul: number })
+  /** P10.1: signature multiplier ceiling while active (min with the normal / Silent Running value, never lower than Silent Running). */
+  | (Base & { readonly id: 'quiet-hull'; readonly signature: number });
 
 type Entry<D> = D extends AbilityDef ? Omit<D, 'ship' | 'name' | 'durationTicks' | 'cooldownTicks'> & { readonly s: readonly [number, number] } : never;
 /** Seconds -> ticks; the ship id from the key; the name from the id ("vector-burst" -> "Vector Burst"). */
@@ -71,13 +83,18 @@ export const SHIP_ABILITIES = table({
   magpie: { id: 'salvage-pulse', tag: 'PULSE', summary: 'Marks salvage, derelicts, pods and your wreck far out.', s: [6, 30], emits: true, rangeMul: 1.75 },
   condor: { id: 'bulwark', tag: 'BULWARK', summary: '22% less damage from weapons, rams, mines and blasts.', s: [4, 40], emits: false, damageMul: 0.78 },
   albatross: { id: 'deep-scan', tag: 'SCAN', summary: 'Sensors reach 50% farther: markers and hostiles.', s: [6.5, 35], emits: true, rangeMul: 1.5 },
+  // P10.1 expansion (SHIP_EXPANSION.md)
+  harrier: { id: 'pivot-jets', tag: 'PIVOT', summary: 'The nose turns 80% faster; reverse thrust bites harder.', s: [3, 25], emits: true, turnMul: 1.8, reverseMul: 1.6 },
+  crane: { id: 'winch-lock', tag: 'WINCH', summary: 'While towing: no tow drag, the line holds 50% longer.', s: [7, 30], emits: false, tetherMul: 1.5 },
+  heron: { id: 'survey-sweep', tag: 'SWEEP', summary: 'Survey marks record from four times as far.', s: [7, 30], emits: true, markRangeMul: 4 },
+  raven: { id: 'quiet-hull', tag: 'QUIET', summary: 'Signature 60% while active; Silent Running stays lower.', s: [5, 35], emits: false, signature: 0.6 },
 });
 
 /** The ability of a ship id; null for anything unknown (fails safe). */
 export const abilityOf = (ship: unknown): AbilityDef | null => (typeof ship === 'string' && Object.hasOwn(SHIP_ABILITIES, ship) ? SHIP_ABILITIES[ship as ShipId] : null);
 
 /** Why a press does nothing (no cooldown is consumed). */
-export type AbilityRefusal = 'unavailable' | 'docked' | 'paused' | 'active' | 'cooling' | 'noTarget' | 'noSignal' | 'noSalvage' | 'jammed';
+export type AbilityRefusal = 'unavailable' | 'docked' | 'paused' | 'active' | 'cooling' | 'noTarget' | 'noSignal' | 'noSalvage' | 'jammed' | 'noTow' | 'noMarks';
 
 /** What a scan shows: existing objects only, at their public positions (an anomaly's marker, never its source). */
 export interface AbilityContact {
@@ -119,8 +136,8 @@ export function tickAbility(st: AbilityState): { end: boolean; ready: boolean } 
 
 type AbilityHost = Pick<SectorRun, 'craft' | 'ability'>;
 
-/** The flown ship's ability while its effect is active, if it is `id`. */
-function live<I extends AbilityId>(run: AbilityHost, id: I): Extract<AbilityDef, { id: I }> | null {
+/** The flown ship's ability while its effect is active, if it is `id` (P10.1: the four new abilities are read through it directly). */
+export function live<I extends AbilityId>(run: AbilityHost, id: I): Extract<AbilityDef, { id: I }> | null {
   const d = abilityOf(run.craft.ship);
   return d && d.id === id && run.ability.active > 0 ? (d as Extract<AbilityDef, { id: I }>) : null;
 }

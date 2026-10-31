@@ -126,7 +126,7 @@ describe('sector generation: every catalogue system', () => {
       fields += L.regions.filter((g) => g.kind === 'asteroids').length;
       patrols += L.patrols.length;
     }
-    expect([...kinds].sort()).toEqual(['anomaly', 'cache', 'derelict', 'exit', 'gate', 'installation', 'salvage', 'station', 'survey']);
+    expect([...kinds].sort()).toEqual(['anomaly', 'cache', 'derelict', 'exit', 'gate', 'installation', 'raidbox', 'salvage', 'station', 'survey']); // P10.1: the two authored Raid Boxes
     expect(bodies).toBeGreaterThan(50);
     expect(clouds).toBeGreaterThan(50);
     expect(fields).toBeGreaterThan(100);

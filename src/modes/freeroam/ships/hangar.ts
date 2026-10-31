@@ -100,7 +100,8 @@ export function shipStatus(f: FleetState, id: ShipId, licenceMet: LicenceCheck, 
   if (f.active === id) return 'active';
   if (f.owned.includes(id)) return 'owned';
   const ship = SHIP_BY_ID.get(id)!;
-  if (!ship.licence.every(licenceMet)) return 'locked';
+  // P10.1: a recovery hull is never for sale; it stays locked until its hull is delivered (recoverShip)
+  if (ship.salvage || !ship.licence.every(licenceMet)) return 'locked';
   return missingFor(ship.cost, cargo).length === 0 ? 'available' : 'unaffordable';
 }
 
@@ -112,9 +113,20 @@ export function acquireShip(f: FleetState, cargo: Readonly<Record<string, number
   if (!isShipId(id)) return { ok: false, reason: 'unknown' };
   if (f.owned.includes(id)) return { ok: false, reason: 'owned' };
   const ship = SHIP_BY_ID.get(id)!;
-  if (!ship.licence.every(licenceMet)) return { ok: false, reason: 'locked' };
+  if (ship.salvage || !ship.licence.every(licenceMet)) return { ok: false, reason: 'locked' };
   if (missingFor(ship.cost, cargo).length > 0) return { ok: false, reason: 'unaffordable' };
   return { ok: true, fleet: { ...f, owned: rosterOrder([...f.owned, id]) }, cargo: pay(ship.cost, cargo) };
+}
+
+/**
+ * P10.1: the one way to own a recovery hull: its disabled hull was towed to a
+ * station dock (the run's `hullDelivered`). Adds it to the fleet for free
+ * (never the active ship); null for an unknown id, a ship that is sold in the
+ * Hangar, or one already owned, so a repeat can never grant it twice.
+ */
+export function recoverShip(f: FleetState, id: string): FleetState | null {
+  if (!isShipId(id) || !SHIP_BY_ID.get(id)!.salvage || f.owned.includes(id)) return null;
+  return { ...f, owned: rosterOrder([...f.owned, id]) };
 }
 
 export type SelectResult = { readonly ok: true; readonly fleet: FleetState } | { readonly ok: false; readonly reason: 'unknown' | 'not-owned' | 'active' | 'unsafe' };

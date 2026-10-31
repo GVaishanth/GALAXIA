@@ -128,15 +128,15 @@ Keyboard keys are the defaults; you can rebind them under pause → **SETTINGS &
 
 ### Ship Signature Abilities
 
-Every ship has one active ability of its own. Press **F** (rebindable in CONTROLS) or, on a touch screen, tap the ability button: it carries your ship's ability tag (BURST, FOCUS, CALIB, PULSE, BULWARK or SCAN). One press or tap is one try.
+Every ship has one active ability of its own. Press **F** (rebindable in CONTROLS) or, on a touch screen, tap the ability button: it carries your ship's ability tag (BURST, FOCUS, CALIB, PULSE, BULWARK, SCAN, PIVOT, WINCH, SWEEP or QUIET). One press or tap is one try.
 
 - **The ability panel** (on a desktop, at the right above SILENT; on a phone, the button itself) names the ability and shows its state in words: **READY** (with the key on a desktop), **ACTIVE · 4.2 s** while it works, or **COOLDOWN · 18 s** until it can be used again. On a desktop it also gives a one-line explanation.
 - **Each ability has its own duration and cooldown** (table below). The cooldown starts when you use it.
 - **Pausing freezes** both the effect and the cooldown; nothing counts down while the pause menu is open.
-- **A refused press uses nothing up.** The log says why: `· ACTIVE`, `· COOLING 12 s`, `· NO TARGET`, `· NO SIGNAL`, `· NO SALVAGE` (none in reach), `· JAMMED` (inside interference) or `· DOCKED`.
+- **A refused press uses nothing up.** The log says why: `· ACTIVE`, `· COOLING 12 s`, `· NO TARGET`, `· NO SIGNAL`, `· NO SALVAGE` (none in reach), `· NO TOW` (Winch Lock without a hull on the line), `· NO MARKS` (Survey Sweep with the survey done), `· JAMMED` (inside interference) or `· DOCKED`.
 - **Scan results:** Salvage Pulse reports how many targets it found (`SALVAGE PULSE ACTIVE · 3 FOUND`) and Deep Scan counts markers and hostiles separately (`DEEP SCAN ACTIVE · 4 MARKERS · 1 HOSTILE`). While either is active, a dashed ring marks each result on screen, and a small arrow at the screen edge points to each one off screen. The marks go when the ability ends, when a result is gone (collected, destroyed) and when you leave the sector.
 - **Changing ships changes the ability.** Docking, a recall, RESTART FLIGHT, a ship change or leaving the sector ends an active ability. None of them resets the cooldown; a ship change keeps the same share of it.
-- **Silent Running:** Vector Burst, Salvage Pulse and Deep Scan are active emissions and end it (`SILENT RUNNING OFF — ABILITY INPUT`). Predator Focus, Signal Calibration and Bulwark leave it on.
+- **Silent Running:** Vector Burst, Salvage Pulse, Deep Scan, Pivot Jets and Survey Sweep are active emissions and end it (`SILENT RUNNING OFF — ABILITY INPUT`). Predator Focus, Signal Calibration, Bulwark, Winch Lock and Quiet Hull leave it on.
 - **Limits:** no ability makes you invisible or immune to damage, collects or adds loot, or solves an anomaly signal for you. Nothing about abilities is saved; a new sector visit starts with the ability ready.
 
 | Ship | Ability | What it does | Lasts | Cooldown |
@@ -147,8 +147,12 @@ Every ship has one active ability of its own. Press **F** (rebindable in CONTROL
 | Magpie | Salvage Pulse | Helps locate eligible existing salvage within an expanded range | 6 s | 30 s |
 | Condor | Bulwark | Reduces eligible incoming combat-hit damage briefly; it does not prevent all damage | 4 s | 40 s |
 | Albatross | Deep Scan | Performs a one-time expanded-range sweep of permitted markers and visible hostiles | 6.5 s | 35 s |
+| Harrier | Pivot Jets | Sharpens turning and reverse thrust briefly; thrust and top speed are unchanged | 3 s | 25 s |
+| Crane | Winch Lock | Only while towing a hull: cancels the towing drag and lets the line stretch farther before it snaps | 7 s | 30 s |
+| Heron | Survey Sweep | Records survey marks from four times as far while active; it needs marks still to record | 7 s | 30 s |
+| Raven | Quiet Hull | Lowers your signature briefly; Silent Running stays lower, and sight lines and memory still apply | 5 s | 35 s |
 
-In detail: Vector Burst raises thrust and top speed (you still steer). Predator Focus needs a hostile in range and in sight; the lock-on locks in half the time and holds in a wider cone. Signal Calibration needs a detected signal in sensor range and halves the error of bearings taken meanwhile. Salvage Pulse finds salvage, derelicts, salvage pods and your cargo wreck farther out. Bulwark takes 22% off damage from weapons, rams, collisions, mines and eruptions, not from a star's heat or hazard drain. Deep Scan reaches 50% beyond your sensors, revealing markers and spotting hostiles in that range.
+In detail: Vector Burst raises thrust and top speed (you still steer). Predator Focus needs a hostile in range and in sight; the lock-on locks in half the time and holds in a wider cone. Signal Calibration needs a detected signal in sensor range and halves the error of bearings taken meanwhile. Salvage Pulse finds salvage, derelicts, salvage pods and your cargo wreck farther out. Bulwark takes 22% off damage from weapons, rams, collisions, mines and eruptions, not from a star's heat or hazard drain. Deep Scan reaches 50% beyond your sensors, revealing markers and spotting hostiles in that range. Pivot Jets turns the nose 80% faster and strengthens reverse thrust. Winch Lock needs a hull on the tow line and ends with the tow. Survey Sweep records marks from four times their usual radius. Quiet Hull caps your signature at 60% of normal (Silent Running's 35% stays lower); hostiles still see you in a clear line and remember you as before.
 
 ### Flight mode (NORMAL or REALISTIC)
 
@@ -242,8 +246,55 @@ You start in the **Petrel**. The other ships, with their licence and cost as of 
 | Shrike | Interceptor | 2 survey runs | 10 refined alloy, 14 hull scrap |
 | Condor | Defender | Lantern Gate milestone (explore 15% of the Milky Way) | 18 refined alloy, 20 hull scrap |
 | Albatross | Long-range vessel | Visit the Large Magellanic Cloud | 10 reactor cells, 6 lumen crystals |
+| Harrier | Pursuit interceptor | 3 survey runs | 10 refined alloy, 8 reactor cells |
+| Crane | Recovery tug | 2 survey runs | 14 hull scrap, 8 refined alloy |
+| Heron | Survey ship | Never sold: recover its hull from the Raid Box in Kestrel Verge | — |
+| Raven | Covert runner | Never sold: recover its hull from the Raid Box in Lantern Gate | — |
 
-Ships you acquire in any Free Roam save slot are also offered in Classic after Wave 20.
+Ships you acquire or recover in any Free Roam save slot are also offered in Classic after Wave 20.
+
+### Recovering a hull (Heron and Raven)
+
+The Heron and the Raven are never for sale and have no price. Each lies disabled beside a **Raid Box** in one sector. Their Hangar cards read **LOCKED · RECOVERED, NEVER SOLD** and name the box's sector. You can recover them in any ship.
+
+| Ship | Raid Box | Where in the sector | Delivery station |
+|---|---|---|---|
+| Heron | Kestrel Verge (Milky Way) | lower left | the Haven Guild station, up and to the right of the box |
+| Raven | Lantern Gate (Milky Way) | upper left | the Haven Guild station, far below the box |
+
+1. **Find the box.** Travel to the sector and fly to the Raid Box (where in the sector: the table above).
+2. **Open it.** Press INTERACT on **OPEN · RAID BOX**. The notice reads **RAID BOX OPENED · A DISABLED HERON · TOW IT TO A STATION**. Opening the box does not give you the ship. The hull rests just below the box.
+3. **Approach slowly.** Come close to the hull and slow down. The line attaches only within reach, at a relative speed under 140, with no planet or star between you and the hull.
+4. **Take it in tow.** Press INTERACT on **TOW HULL · HERON**. If a press would be refused right now, the prompt already says why on a second line (**TOO FAST · MATCH ITS SPEED** or **LINE BLOCKED BY A BODY**), and a press anyway is refused with the reason in the log:
+   - **TOW · OUT OF REACH:** move closer.
+   - **TOW · TOO FAST:** match its speed first.
+   - **TOW · LINE BLOCKED:** a planet or star is between you and the hull.
+5. **Fly gently.** The log reads **TOW LINE ON · DOCK AT A STATION TO DELIVER**. The prompt now reads **RELEASE TOW · HERON** with **TOW ATTACHED · 130/260** below it: the line length and the length at which it snaps. The hull follows on the line, swings through turns and drifts on after a hard stop until the line catches it. It hits planets and stars like any ship. While towing:
+   - You accelerate to 55% and reach 70% of your top speed.
+   - The Crane's tow rig halves that loss (77.5% and 85%), and its **Winch Lock** cancels it while active.
+   - Boost, Silent Running, weapons and your ability all still work. Their effects apply first, then the towing loss.
+6. **Watch the line.** Past 80% of its limit the prompt adds **STRAINED** and the log warns once: **TOW LINE STRAINED · EASE OFF OR IT SNAPS**. The warning repeats only after the line has eased back well inside the limit. With a planet or star across the line the prompt adds **LINE BLOCKED**. If it stays blocked for half a second, the line is cut.
+7. **Stay in the sector.** A tow never crosses the sector edge. Near a gate or the exit beacon, the prompt's second line reads **TOWING HERON · LEAVING DROPS THE TOW**.
+8. **Deliver.** Dock at the sector's Haven Guild station with the hull on the line. Near it the prompt reads **DOCK · HAVEN GUILD STATION** with **DELIVERS THE HERON** below.
+9. **Recovered.** On docking the notice reads **HERON RECOVERED · NOW IN YOUR HANGAR**. This notice appears only on an actual delivery. The ship is yours, free, and you keep flying the ship you came in. The box stays open and the hull is not offered again.
+10. **Fly it.** In the Hangar, select the ship and press **SELECT SHIP**, then **CONFIRM · FLY THE HERON** (or RAVEN). It starts with no tow and its own stock stats and weapons. As with any ship change, an ability cooldown still running carries over as the same share of the new ship's cooldown.
+
+**How a tow ends without a ship:** the log names the reason once.
+
+| Cause | Log line | The hull |
+|---|---|---|
+| INTERACT on **RELEASE TOW** | TOW RELEASED · HULL LEFT HERE | stays where you let go |
+| Stretched past the limit (260; 390 under Winch Lock) | TOW LINE SNAPPED · HULL LEFT BEHIND | stays where it was |
+| A planet or star across the line for half a second | TOW LINE CUT BY A BODY · HULL LEFT BEHIND | stays where it was |
+| Your ship is wrecked | TOW LOST · HULL LEFT BEHIND · SHIP WRECKED | stays where it was |
+| RESTART FLIGHT | TOW LOST · HULL LEFT BEHIND · FLIGHT RESTARTED | stays where it was |
+| Leaving the sector (gate, exit or map) | TOW LOST · LEFT THE SECTOR · THE HERON IS BACK AT ITS RAID BOX (shown on your next flight) | back beside its Raid Box on your next visit |
+
+You cannot change ships during a tow: switching needs a dock, and docking with the hull on the line delivers it.
+
+**Crane and Winch Lock.** The Crane (a Hangar ship) is the recovery tug. Its tow rig halves the towing penalty at all times. Its ability, **Winch Lock** (7 s active, 30 s cooldown), works only while towing; without a tow it is refused and nothing is used. While active it removes the towing penalty, and the line holds half as far again before it snaps (390 instead of 260). It ends early if the tow ends; its cooldown is kept.
+
+If the recovery systems are still loading, the box says **RECOVERY SYSTEMS LOADING · TRY AGAIN** and stays shut; press INTERACT again a moment later. If they cannot load (no connection), the log says **RECOVERY SYSTEMS UNAVAILABLE · CHECK THE CONNECTION, THEN RELOAD**, and the box stays shut. Pressing INTERACT on it again says **RECOVERY SYSTEMS UNAVAILABLE · RELOAD TO RETRY**. Reload the page once you are back online; your progress is saved. Your save keeps the ships you own and the opened box. It does not keep a tow in progress.
 
 ## Armory (weapons)
 
@@ -281,7 +332,7 @@ You never need crew: flying solo is fully supported and the game can be finished
 
 **Recruiting.** Seven named specialists can join. Four wait at their own station and ask a **one-time berth fee** (cadet 80, rated 130, veteran 220 marks); some also need progress first, such as a survey run or a story mission, and the Bridge shows how far you are. Two join free after story missions and one after you clear a distress beacon (a wreck defence); those three sign on at any station. **SIGN ON** shows the price first and pays once, like any purchase. If you **DISMISS** someone, they return to where they signed on, and you can sign them on again later without paying twice.
 
-**Seats.** Swift 1, Shrike 1, Petrel 2, Magpie 2, Condor 3, Albatross 3. Use **ASSIGN TO** (or **MOVE TO** for someone on another ship) and **UNASSIGN**. Changes happen only while docked with no hostiles engaged. Crew not seated on the ship you are flying do nothing.
+**Seats.** Swift 1, Shrike 1, Harrier 1, Raven 1, Petrel 2, Magpie 2, Crane 2, Heron 2, Condor 3, Albatross 3. Use **ASSIGN TO** (or **MOVE TO** for someone on another ship) and **UNASSIGN**. Changes happen only while docked with no hostiles engaged. Crew not seated on the ship you are flying do nothing.
 
 **Roles.** A **Navigator** and a **Surveyor** advise you in flight (the first of each seated on your ship). **Engineer, Defence and Quartermaster** can be recruited and seated, but their duties are **planned for a later update**; they do nothing in flight yet. Each crew card shows **COMPETENCE** (how good their own work is), **CAUTION** (how early they raise a risk) and **FOCUS** (how firmly they stick to their job), from 1 to 5. With a Navigator signed on you can also set the **NAVIGATOR DOCTRINE**: BALANCED or SAFETY-FIRST (earlier warnings, the widest-margin escape burns, no optional route notes).
 
