@@ -52,6 +52,12 @@
  * loads with an empty roster and no crew member is ever granted by loading.
  * Shapes only here; crew/persistence.ts checks the ids against the crew
  * roster and the fleet, and the empty state is never written (no field).
+ * P11.1 fleet vessels (additive, still v10): `vessels` (Fleet Command: up to
+ * three crewed hulls that fly beside the pilot; FLEET_COMMAND.md). Ids, the
+ * archetype ship id, the captain's crew id and a service status only: no
+ * stats, positions, orders or hull points are ever stored. Absent = no fleet
+ * vessels: an older save loads with none and loading never grants one.
+ * Shapes only here; fleet/vessels.ts checks the archetype and the captain.
  */
 import type { KeyValueStore } from '../../persistence/storage.ts';
 import { STORAGE_KEYS } from '../../shared/persistence/namespaces.ts';
@@ -105,6 +111,8 @@ export interface FreeRoamProfile {
   readonly ordnance: Readonly<Record<string, number>>;
   /** P05.1 (additive, still v10): the crew. Absent = no crew signed on. */
   readonly crew?: SavedCrew;
+  /** P11.1 (additive, still v10): Fleet Command vessels. Absent = none (never the player's Hangar, which is `fleet`). */
+  readonly vessels?: SavedVessels;
   /* v10: save management */
   /** ms since epoch of the last successful save (0 = never saved by v10+). */
   readonly savedAt: number;
@@ -243,6 +251,20 @@ export interface SavedCrew {
   readonly seats: Readonly<Record<string, readonly string[]>>;
   /** P05.2: Navigator doctrine; written only when 'safety' (absent = 'balanced'). */
   readonly doctrine?: 'safety';
+}
+
+/** P11.1: one fleet vessel as saved (ids only; fleet/vessels.ts checks them). `captain` absent = uncrewed. */
+export interface SavedVessel {
+  readonly id: string;
+  readonly ship: string;
+  readonly captain?: string;
+  readonly status: 'active' | 'reserve' | 'disabled';
+}
+
+/** P11.1: Fleet Command vessels; `seq` is the last vessel number issued, so an id is never reused. */
+export interface SavedVessels {
+  readonly seq: number;
+  readonly list: readonly SavedVessel[];
 }
 
 export const STARTER_SAVED_FLEET: SavedFleet = Object.freeze({ active: STARTER_SHIP_ID, owned: Object.freeze([STARTER_SHIP_ID]), loadouts: Object.freeze({}) });
@@ -587,6 +609,31 @@ function crewField(f: Fix, v: unknown): SavedCrew | undefined {
   return d === 'safety' ? { hired, paid, seats, doctrine: 'safety' } : { hired, paid, seats };
 }
 
+/* P11.1 fleet vessels (shapes and bounds only; fleet/vessels.ts checks archetypes and captains) */
+const VESSEL_ID = /^fv-[1-9][0-9]{0,5}$/;
+const VESSEL_STATUS = ['active', 'reserve', 'disabled'];
+const MAX_VESSELS = 3;
+
+function vesselsField(f: Fix, v: unknown): SavedVessels | undefined {
+  if (v === undefined) return undefined;
+  const raw = isObj(v) && Array.isArray(v['list']) ? v['list'] : [];
+  const seq = isObj(v) ? int(v['seq'], 0, 999_999) : null;
+  if (seq === null || !isObj(v) || !Array.isArray(v['list']) || raw.length > MAX_VESSELS) f.repaired = true;
+  const list: SavedVessel[] = [];
+  for (const e of raw.slice(0, MAX_VESSELS)) {
+    const ok = isObj(e) && typeof e['id'] === 'string' && VESSEL_ID.test(e['id']) && typeof e['ship'] === 'string' && SHIP_ID.test(e['ship']) && VESSEL_STATUS.includes(e['status'] as string) && (e['captain'] === undefined || (typeof e['captain'] === 'string' && CREW_ID.test(e['captain'])));
+    if (!ok) {
+      f.repaired = true;
+      continue;
+    }
+    const base = { id: e['id'] as string, ship: e['ship'] as string, status: e['status'] as SavedVessel['status'] };
+    list.push(e['captain'] === undefined ? base : { ...base, captain: e['captain'] as string });
+  }
+  // no vessel ever issued is no field at all (an old save and a save that never commissioned look the same)
+  if (!list.length && !seq) return ((f.repaired = true), undefined);
+  return { seq: seq ?? 0, list };
+}
+
 function ordnanceField(f: Fix, v: unknown): Readonly<Record<string, number>> {
   const r = cleanOrdnance(v);
   if (r.repaired) f.repaired = true;
@@ -804,7 +851,8 @@ export const FREEROAM_SPEC: RecordSpec<FreeRoamProfile> = Object.freeze({
       ordnance: ordnanceField(f, doc['ordnance']),
     };
     const crew = crewField(f, doc['crew']);
-    return { data: crew ? { ...data, crew } : data, repaired: f.repaired };
+    const vessels = vesselsField(f, doc['vessels']);
+    return { data: { ...data, ...(crew ? { crew } : {}), ...(vessels ? { vessels } : {}) }, repaired: f.repaired };
   },
   migrations: {
     // v1 -> v2: navigation fields start empty (the sanitizer fills the defaults). Lifetime
@@ -1027,6 +1075,12 @@ export function withOrdnance(p: FreeRoamProfile, ordnance: Readonly<Record<strin
 export function withCrew(p: FreeRoamProfile, crew: SavedCrew | undefined): FreeRoamProfile {
   const { crew: _old, ...rest } = p;
   return crew ? { ...rest, crew } : rest;
+}
+
+/** P11.1: store the Fleet Command vessels (fleet/vessels.ts builds them); undefined = none, the field is removed. */
+export function withVessels(p: FreeRoamProfile, vessels: SavedVessels | undefined): FreeRoamProfile {
+  const { vessels: _old, ...rest } = p;
+  return vessels ? { ...rest, vessels } : rest;
 }
 
 /** Store progression (v9; progression/persistence.ts builds it). */

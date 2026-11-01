@@ -81,7 +81,8 @@ export function missingFor(cost: readonly ResourceCost[], cargo: Readonly<Record
   return cost.filter((c) => (cargo[c.resource] ?? 0) < c.amount).map((c) => ({ resource: c.resource, amount: c.amount - (cargo[c.resource] ?? 0) }));
 }
 
-function pay(cost: readonly ResourceCost[], cargo: Readonly<Record<string, number>>): Record<string, number> {
+/** Take `cost` out of the hold (callers check missingFor first). P11.1: also pays fleet hulls. */
+export function pay(cost: readonly ResourceCost[], cargo: Readonly<Record<string, number>>): Record<string, number> {
   const out = { ...cargo };
   for (const c of cost) {
     const left = (out[c.resource] ?? 0) - c.amount;

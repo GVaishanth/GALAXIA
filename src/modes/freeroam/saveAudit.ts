@@ -21,6 +21,10 @@
  *  - P05.1 crew: unknown or duplicate crew ids are removed; seats on ships
  *    the slot does not own, or beyond a ship's seats, are released and those
  *    crew stay on the roster (crew/persistence.ts). Nobody is ever added;
+ *  - P11.1 fleet vessels: unknown or recovered-unique archetypes, bad or
+ *    duplicate ids and vessels past the cap of three are removed; a captain
+ *    who is not hired, sits aboard a ship or already commands another vessel
+ *    is cleared (the vessel stays, uncrewed). Nothing is ever granted;
  *  - cargo and stored modules with unknown (well-formed) ids are KEPT, inert
  *    and shown as unknown (Prompt 10: nothing in the hold vanishes).
  */
@@ -29,11 +33,12 @@ import { progressFromSaved } from './galaxy/progress.ts';
 import { heatBook } from './combat/factionHeat.ts';
 import { MILESTONE_BY_ID } from './inventory/milestones.ts';
 import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
-import { withCrew, withNavigation, type FreeRoamProfile, type SectorRecord } from './profile.ts';
+import { cleanVessels, vesselsToSaved } from './fleet/vessels.ts';
+import { withCrew, withVessels, withNavigation, type FreeRoamProfile, type SectorRecord } from './profile.ts';
 import { progressionFromSaved, progressionToSaved } from './progression/persistence.ts';
 import { fleetFromSaved, fleetToSaved } from './ships/hangar.ts';
 
-export type AuditArea = 'navigation' | 'sectors' | 'fleet' | 'missions' | 'upgrades' | 'milestones' | 'wreck' | 'resume' | 'crew';
+export type AuditArea = 'navigation' | 'sectors' | 'fleet' | 'missions' | 'upgrades' | 'milestones' | 'wreck' | 'resume' | 'crew' | 'vessels';
 
 export interface AuditIssue {
   readonly area: AuditArea;
@@ -90,6 +95,11 @@ export function auditProfile(graph: NavGraph, p: FreeRoamProfile): AuditResult {
   const crew = crewFromSaved(p.crew, fleetState.owned);
   note('crew', crew.changes);
   if (crew.changes > 0) out = withCrew(out, crewToSaved(crew.state));
+
+  /* fleet vessels (P11.1): sold archetypes only, valid unique ids, at most three; a captain only if hired and unseated */
+  const vs = cleanVessels(p.vessels, crew.state);
+  note('vessels', vs.changes);
+  if (vs.changes > 0) out = withVessels(out, vesselsToSaved(vs.state));
 
   /* progression */
   // P09.1: the faction heat goes through the same book the game uses (unknown factions dropped, values kept)

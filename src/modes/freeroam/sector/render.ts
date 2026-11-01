@@ -412,9 +412,12 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   drawCombatWorld(ctx, run, V);
   drawScanMarks(ctx, run, V, false); // P08.2: the active scan's results, under the ships
   // player bolts: a short streak along their (fixed) flight direction
-  if (run.shots.length > 0) {
+  const wingBolts = run.wing?.bolts; // P11.1: fleet bolts share the pilot's bolt look
+  if (run.shots.length > 0 || wingBolts?.length) {
     ctx.lineCap = 'round';
-    for (const s of run.shots) {
+    const n = run.shots.length;
+    for (let i = 0; i < n + (wingBolts?.length ?? 0); i++) {
+      const s = i < n ? run.shots[i]! : wingBolts![i - n]!;
       const bx = s.px + (s.x - s.px) * k;
       const by = s.py + (s.y - s.py) * k;
       if (!visible(bx, by, 20)) continue;
@@ -436,6 +439,34 @@ export function drawSector(ctx: CanvasRenderingContext2D, sprites: SpriteCache, 
   drawPlayerMissiles(ctx, run, V); // under ships and enemy fire (Combat P03)
   drawShipLock(ctx, run, V); // P04.1 target brackets, under ships and every shot
   drawCombatShips(ctx, sprites, run, V);
+  // P11.1: fleet vessels: their own sprite (interpolated); bracket arcs mark them friendly (a shape, not colour alone); disabled = dimmed, scorched
+  for (const u of run.wing?.units ?? []) {
+    const us = u.ship;
+    const ux = us.px + (us.x - us.px) * k;
+    const uy = us.py + (us.y - us.py) * k;
+    if (!visible(ux, uy, u.spec.radius * 3)) continue;
+    const off = u.state !== 'active';
+    drawFrame(ctx, sprites, sprites.frame(u.spec.sprite, us.thrusting && !off ? 'thrust' : 'idle', 0, off || u.hull < u.spec.stats.hull * HULL_DAMAGED ? 'scorched' : undefined), v, ux, uy, { rotation: us.pheading + (us.heading - us.pheading) * k, glow: o.glow && !off, alpha: off ? 0.55 : 1 });
+    ctx.strokeStyle = COLORS['shot.player.edge'];
+    ctx.lineWidth = px(1.5);
+    ctx.globalAlpha = off ? 0.35 : 0.8;
+    for (let q = 0; q < 4; q++) {
+      ctx.beginPath();
+      ctx.arc(toX(ux), toY(uy), (u.spec.radius + 7) * zoom, q * 1.571 + 0.3, q * 1.571 + 1.271);
+      ctx.stroke();
+    }
+    // P11.2: the vessel's number (from its id, so it follows the vessel, never the list order) at the upper right; disabled adds a cross
+    const rr = (u.spec.radius + 9) * zoom;
+    ctx.save();
+    ctx.globalAlpha = off ? 0.6 : 0.95;
+    ctx.fillStyle = COLORS['shot.player.edge'];
+    ctx.font = `700 ${Math.round(px(11))}px monospace`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(off ? `${u.spec.vessel.slice(3)}✕` : u.spec.vessel.slice(3), toX(ux) + rr * 0.7, toY(uy) - rr * 0.7);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
   for (const w of o.waves ?? []) {
     const age = (o.timeMs - w.startMs) / w.ms;
     if (age < 0 || age >= 1 || !visible(w.x, w.y, w.r)) continue;

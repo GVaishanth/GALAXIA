@@ -81,6 +81,7 @@ export function stepEnemyShots(run: SectorRun, events: SectorEvent[]): void {
       damagePlayer(run, s.damage, 'fire', events, { x: s.px, y: s.py });
       dead = true;
     }
+    if (!dead && run.wing?.kit.shotHit(run, s, events)) dead = true; // P11.1: a fleet vessel in the way takes it (once)
     if (!dead) {
       for (const a of run.hostiles) {
         if (a.id === s.owner || a.state === 'destroyed' || !hostileTo(run, s.faction, a.faction)) continue;
@@ -108,6 +109,7 @@ export function stepBeam(run: SectorRun, a: Agent, events: SectorEvent[]): void 
     b.hit.add('player');
     damagePlayer(run, w.damage * run.row.damage, 'fire', events, a);
   }
+  run.wing?.kit.beamHit(run, a, ex, ey, w.width, w.damage * run.row.damage, b.hit, events); // P11.1: once per vessel per firing
   for (const o of run.hostiles) {
     if (o === a || o.state === 'destroyed' || b.hit.has(o.id) || !hostileTo(run, a.faction, o.faction)) continue;
     if (segmentDistance(o, a, { x: ex, y: ey }) > w.width + FAMILIES[o.family].radius) continue;
@@ -166,7 +168,8 @@ export function stepMines(run: SectorRun, events: SectorEvent[]): void {
     if (m.fuse < 0) {
       const near =
         (run.grace === 0 && hostileTo(run, m.faction, 'player') && !run.docked && dist(P, m) < w.trigger + run.tune.radius) ||
-        run.hostiles.some((a) => a.state !== 'destroyed' && hostileTo(run, m.faction, a.faction) && dist(a, m) < w.trigger + FAMILIES[a.family].radius);
+        run.hostiles.some((a) => a.state !== 'destroyed' && hostileTo(run, m.faction, a.faction) && dist(a, m) < w.trigger + FAMILIES[a.family].radius) ||
+        !!run.wing?.kit.nearUnit(run, m.faction, m.x, m.y, w.trigger);
       if (near) {
         m.fuse = w.fuse;
         events.push({ type: 'telegraph', hostile: 0, weapon: 'mine', x: m.x, y: m.y, ticks: w.fuse });
@@ -179,6 +182,7 @@ export function stepMines(run: SectorRun, events: SectorEvent[]): void {
     run.mines.splice(i, 1);
     events.push({ type: 'blast', kind: 'mine', x: m.x, y: m.y, r: w.blast });
     if (hostileTo(run, m.faction, 'player') && dist(P, m) < w.blast + run.tune.radius) damagePlayer(run, w.damage * run.row.damage, 'mine', events, m);
+    run.wing?.kit.blastHit(run, m.faction, m.x, m.y, w.blast, w.damage * run.row.damage, events); // P11.1
     for (const a of run.hostiles) {
       if (a.state === 'destroyed' || !hostileTo(run, m.faction, a.faction)) continue;
       if (dist(a, m) < w.blast + FAMILIES[a.family].radius) damageAgent(run, a, w.damage * run.row.damage, m.faction, events);

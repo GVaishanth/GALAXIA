@@ -49,7 +49,7 @@ import { createSystemMap, type FuelRefusal, type SystemMapScreen, type SystemMap
 import { applySystemTravel, deriveSystemView, HAZARD_LABEL, systemGraph, type SystemTravelResult } from './galaxy/systems.ts';
 import { combineFlight, flightKeyCommands, flightPadCommands, keyboardBoost, keyboardFire, keyboardWeapon, keyboardVector, MAP_KEYS, mapKeyCommands, mapPadCommands, padAim, padBoost, padFire, padSilent, padWeapon, padVector, panelKeyCommands, panelPadCommands, type FlightCommand, type MapCommand, type PanelCommand } from './input.ts';
 import { FlightPointers } from './pointers.ts';
-import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint, withSimpleSignals } from './profile.ts';
+import { addFlight, dropCargo, formatTicks, lostCargoUnits, recordSurvey, startSession, withCargo, withCrew, withVessels, withFleet, withMilestone, withModules, withNavigation, withOrdnance, withProgression, withResume, withSectorProgress, type FlightControls, type FreeRoamProfile, type ResumePoint, withSimpleSignals } from './profile.ts';
 import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, saveFreeRoamPrefs, saveSlot, setActiveSlot, deleteSlot, slotKey, type SlotNo } from './saveSlots.ts';
 import { auditProfile, auditText } from './saveAudit.ts';
 import { createSavesPanel, SAVE_RETRY, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
@@ -66,7 +66,7 @@ import { FACTIONS } from './combat/factions.ts';
 import { combatHud, type CombatHudModel } from './combat/hudModel.ts';
 import { gateOf, MISSILE } from './combat/playerMissile.ts';
 import { spawnAgent } from './combat/ai.ts';
-import type { FamilyId } from './combat/families.ts';
+import { FAMILIES, type FamilyId } from './combat/families.ts';
 import { createCombatHud, type CombatHudView } from './combatHud.ts';
 import { sectorContext } from './sector/context.ts';
 import { generateSector } from './sector/generate.ts';
@@ -75,7 +75,7 @@ import { shipLockLine } from './combat/shipLock.ts';
 import { EMPTY_SECTOR_SAVE, POI_RULES, RARE_RESOURCES, type LootEntry, type SectorLayout } from './sector/model.ts';
 import { BURST_MS, drawSector, drawSectorMap, SectorArt, SHAKE, WRECK_MS, type Burst, type Shockwave, type Wreck } from './sector/render.ts';
 import type { LabShell, LabStatus } from './gravity/labShell.ts';
-import { applyShip, attachRecovery, canSwitchShip, createSectorRun, HULK_FOCUS, type RecoveryKit, setRunFlightMode, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
+import { applyShip, attachRecovery, canSwitchShip, createSectorRun, RUN, shipTuning, HULK_FOCUS, type RecoveryKit, setRunFlightMode, dockIfInRange, setRunLoadout, setRunOrdnance, setRunUnlimitedAmmo, disposeSectorRun, inCombat, interact, isDone, jettison, leaveOffer, marksLeft, pauseSector, restartSector, resumeSector, setCargoWreck, stepSector, takeOffer, type CargoWreck, type GateInfo, type LootOffer, type SectorEvent, type SectorInput, type SectorRun } from './sector/run.ts';
 import { FLIGHT_MODE_TEXT, realisticInput, stopDisplay, type FlightMode, type StopDisplay } from './sector/realisticFlight.ts';
 import { upgradedShip, cleanLevels, LEVEL_NAME, UPGRADE_BY_TRACK, type UpgradeLevels, type UpgradeTrack } from './ships/upgrades.ts';
 import { createEventBus, type GameEvent } from './progression/events.ts';
@@ -102,11 +102,15 @@ import { classicRecordShowsGate, FLEET_SPEC, mergeOwned, recordOwned } from '../
 import type { GuideInput } from '../guide/guideContent.ts';
 import { GuideDialog } from '../guide/guideDialog.ts';
 import { parseRecord } from '../../shared/persistence/record.ts';
-import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, recoverShip, type FleetState } from './ships/hangar.ts';
+import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, missingFor, pay, recoverShip, type FleetState } from './ships/hangar.ts';
+import { captainsOf, cleanVessels, deployable, NO_VESSELS, serviceAtDock, vesselsToSaved, wingSummary, type FleetAct, type FleetKit, type Vessels, type VesselSpec } from './fleet/vessels.ts';
+import type { PurchaseWorld } from './fleet/command.ts';
+import type { FleetAdmin, FleetPanel, FleetPanelStatus } from './ui/fleetPanel.ts';
+import type { FleetFlight } from './ui/fleetView.ts';
 import type { TowStatus } from './sector/tow.ts';
 import type { HangarDeps, HangarPanel, HangarStatus } from './ships/hangarPanel.ts';
 import { bridgeModel, seatRefusalText, hireRefusalText, type BridgeContext } from './crew/bridgeView.ts';
-import { CREW_BY_ID } from './crew/data.ts';
+import { CREW, CREW_BY_ID } from './crew/data.ts';
 import { crewFromSaved, crewToSaved } from './crew/persistence.ts';
 import { distressBeaconsCleared, feeDue, signOn } from './crew/recruit.ts';
 import { assign as assignCrew, dismiss as dismissCrew, EMPTY_CREW, reconcileCrew, setDoctrine, unassign as unassignCrew } from './crew/state.ts';
@@ -156,7 +160,7 @@ import { el } from './progression/ui/common.ts';
 
 /** Pause menu groups (pause menu refinement). */
 type PauseGroup = 'progress' | 'settings' | 'navigation';
-type Panel = 'briefing' | 'pause' | 'complete' | 'gate' | 'sectormap' | 'cargo' | 'controls' | 'hangar' | 'armory' | 'fabricator' | 'missions' | 'exchange' | 'upgrades' | 'record' | 'station' | 'equipment' | 'sound' | 'recovery' | null;
+type Panel = 'briefing' | 'pause' | 'complete' | 'gate' | 'sectormap' | 'cargo' | 'controls' | 'hangar' | 'armory' | 'fabricator' | 'missions' | 'exchange' | 'upgrades' | 'record' | 'station' | 'equipment' | 'sound' | 'recovery' | 'fleet' | null;
 /** Prompt 11 panels opened from the hangar (docked) or the pause menu (log only). */
 type Screen = 'map' | 'systems' | 'flight';
 /** Where "back to the map" goes after a survey run: the map the run was started from. */
@@ -274,6 +278,9 @@ export interface CameraStatus extends CameraView {
   readonly orientation: 'landscape' | 'portrait';
 }
 
+/** P11.1: one Fleet Command action (FLEET_COMMAND.md). */
+export type { FleetAct };
+
 export interface FreeRoamStatus {
   /** The flight phase and ship of the active sector (an idle placeholder outside sectors). */
   readonly state: { readonly phase: FreeRoamPhase; readonly ship: ShipState };
@@ -359,6 +366,13 @@ export interface FreeRoamStatus {
    */
   readonly qaMarks: (n: number) => boolean;
   readonly qaEvent: (e: GameEvent) => void;
+  /** P11.1: Fleet Command as stored and as flown (read only), and its one action entry point. */
+  readonly fleetCommand: () => { readonly vessels: Vessels; readonly captains: readonly string[]; readonly kit: 'ready' | 'failed' | 'loading' | 'idle'; readonly wing: ReturnType<FleetKit['wingStatus']> };
+  readonly fleetAct: (a: FleetAct) => Promise<{ readonly ok: boolean; readonly text: string; readonly reason?: string }>;
+  /** P11.2: the Fleet panel's state (null before its chunk loaded). */
+  readonly fleetPanel: () => FleetPanelStatus | null;
+  /** P11.1 QA only: a blast of a hostile faction on one vessel through the wing's real damage path (disabled-state checks). */
+  readonly qaFleetBlast: (vessel: string, damage: number) => boolean;
   /** FR-TD-86: the planet / star pull on the ship this tick and the sector's wells (read only). */
   readonly gravity: () => {
     readonly x: number;
@@ -480,6 +494,16 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   /** P05.1: crew (signed on, fees paid, seats per owned ship) and the frozen view of the flown ship's crew (rebuilt on change, never per frame). */
   let crew: CrewState = EMPTY_CREW;
   let crewView: ShipCrewView = shipCrewView(EMPTY_CREW, 'petrel');
+  /** P11.1 Fleet Command vessels (FLEET_COMMAND.md); the lazy fleet kit once loaded. */
+  let vessels: Vessels = NO_VESSELS;
+  let fleetKit: FleetKit | null = null;
+  /** P11.2: the Fleet panel (lazy chunk ui/fleetPanel.ts, loaded with the kit on first open) and its cached import. */
+  let fleetUi: FleetPanel | null = null;
+  let fleetUiLoad: Promise<FleetPanel | null> | null = null;
+  /** P11.2 Admin test fleet: the fleet the session had before PREPARE (RESET restores it; the sandbox is never saved). */
+  let adminFleetWas: Vessels | null = null;
+  let fleetLoad: Promise<FleetKit | null> | null = null;
+  let fleetFailed = false;
   /* P05.2: Ship Mind and crew advice (crew/advisor.ts). Reads the run, writes nothing but these. */
   let advice: AdvisorState = EMPTY_ADVISOR;
   let advisorStrip: AdvisorStrip | null = null;
@@ -546,6 +570,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
   let pauseGroups: readonly { readonly id: PauseGroup; readonly box: HTMLElement; readonly head: HTMLButtonElement; readonly body: HTMLElement }[] = [];
   let restartBtn: HTMLButtonElement;
   let restartAsk: HTMLElement;
+  let fleetBtn: HTMLButtonElement;
   let restartNo: HTMLButtonElement;
   /** Frame-clock ms of the last arrival (canvas ring), or null. */
   let arrivalMs: number | null = null;
@@ -934,6 +959,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       requirementMet: (req) => view.requirementMet(req),
       missionDone: (id) => prog.missions.completed.includes(id),
       rescues: distressBeaconsCleared(profile.sectors),
+      captains: captainsOf(vessels), // P11.1: captains never take a seat aboard (and so never advise)
     };
   };
   /** Store a crew change (and the ledger of a paid hire) with one save. */
@@ -992,7 +1018,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       return { ok: true, text: `${name} left the ${r.moved ? crewShipName(r.moved) : 'ship'} and waits on your roster.` };
     }
     const r = dismissCrew(crew, a.id, w);
-    if (!r.ok) return { ok: false, text: r.reason === 'unsafe' ? 'Contracts end only while docked with no hostiles engaged.' : 'Not on your roster.' };
+    if (!r.ok) return { ok: false, text: r.reason === 'unsafe' ? 'Contracts end only while docked with no hostiles engaged.' : r.reason === 'captain' ? seatRefusalText('captain', fleet.active) : 'Not on your roster.' };
     commitCrew(r.state);
     const src = CREW_BY_ID.get(a.id)?.source;
     return { ok: true, text: `${name}'s contract ended. ${src?.kind === 'station' ? `They return to ${graph.system(src.systemId)?.name ?? src.systemId} station` : 'They can sign on again at any station'}, with no second fee.` };
@@ -1316,6 +1342,84 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     );
   };
   /**
+   * P11.1 lazy fleet chunk (fleet/fleetKit.ts, FLEET_COMMAND.md "Lazy fleet chunk"): one cached
+   * import, requested only when the save holds a fleet vessel or a fleet command is asked for. A run
+   * without vessels never loads it. Nothing deploys before it arrives (the wing is attached between
+   * frames); a failed load changes nothing and the next request imports again.
+   */
+  const loadFleet = (): Promise<FleetKit | null> =>
+    (fleetLoad ??= import('./fleet/fleetKit.ts').then(
+      (m) => {
+        fleetKit = m;
+        fleetFailed = false;
+        if (run) deployWing(run);
+        return m;
+      },
+      () => {
+        fleetLoad = null;
+        fleetFailed = true;
+        notify('FLEET SYSTEMS UNAVAILABLE · CHECK THE CONNECTION, THEN RELOAD', undefined, 'warn');
+        return null;
+      },
+    ));
+  /** The deployable vessels as the catalogue derives their archetype (stock loadout, no upgrades: never the pilot's ship). */
+  const vesselSpecs = (): VesselSpec[] =>
+    vessels.list.filter(deployable).map((v) => {
+      const d = upgradedShip(v.ship, undefined, {});
+      return { vessel: v.id, ship: v.ship, captain: v.captain!, stats: d.stats, weapon: d.weapon, radius: d.radius, sprite: d.sprite, tune: shipTuning(d) };
+    });
+  /** Attach or re-sync the run's wing (between frames only). Without the kit nothing happens. */
+  const deployWing = (r: SectorRun): void => {
+    if (!fleetKit || r.disposed || (__GALAXIA_GRAVITY_LAB__ && lab)) return;
+    const specs = vesselSpecs();
+    if (r.wing) fleetKit.syncWing(r, specs);
+    else if (specs.length) fleetKit.deploy(r, fleetKit, specs, RUN.heat);
+  };
+  const commitVessels = (next: Vessels): void => {
+    vessels = next;
+    profile = withVessels(profile, vesselsToSaved(vessels));
+    save();
+  };
+  /**
+   * P11.1: one Fleet Command action (the P11.2 panel calls this; QA hooks call it now). The rules
+   * live in the lazy kit; this commits. A refusal changes nothing.
+   */
+  /** The world every fleet command checks (fleetAct and the Fleet panel's rows read the same one). */
+  const fleetWorld = (): PurchaseWorld => {
+    const view = deriveView(graph, progress);
+    return { docked: dockedAt(), safe: crewWorld().safe, admin: isAdmin(admin), crew, knownCrew: (id) => CREW_BY_ID.has(id), marks: prog.marks, short: (c) => missingFor(c, profile.cargo), licenceMet: (req) => view.requirementMet(req) };
+  };
+  const fleetAct = async (a: FleetAct): Promise<{ readonly ok: boolean; readonly text: string; readonly reason?: string }> => {
+    const m = await loadFleet();
+    if (!m) return { ok: false, text: 'Fleet systems unavailable.', reason: 'unavailable' };
+    if (a.kind === 'order') {
+      const r = run && m.issueOrder(run, a.who, a.order);
+      if (!r) return { ok: false, text: m.orderRefusalText('no-wing'), reason: 'no-wing' };
+      return r.ok ? { ok: true, text: `${a.order.kind.toUpperCase()} ORDERED${r.vessels.length > 1 ? ` · ${r.vessels.length} VESSELS` : ''}.` } : { ok: false, text: m.orderRefusalText(r.reason), reason: r.reason };
+    }
+    const cw = fleetWorld();
+    if (a.kind === 'buy') {
+      const r = m.purchase(vessels, a.ship, a.captain, cw);
+      if (!r.ok) return { ok: false, text: m.refusalText(r.reason), reason: r.reason };
+      // atomic: the vessel, the hold (the Hangar's payment) and the marks (the ledger, once per transaction id) in one save
+      const before = profile;
+      profile = withVessels(profile, vesselsToSaved(r.vessels));
+      if (!commitWallet({ ...wallet(), marks: r.marks, hold: pay(r.price.cargo, profile.cargo) }, `Fleet hull · ${crewShipName(r.price.ship)}`, 'ship', r.txId)) {
+        profile = before;
+        return { ok: false, text: 'The Guild could not record this purchase. Nothing was charged.', reason: 'ledger' };
+      }
+      vessels = r.vessels;
+      if (run) deployWing(run);
+      notify(m.commissionedText(crewShipName(r.price.ship)), undefined, 'info');
+      return { ok: true, text: `${crewShipName(r.price.ship)} commissioned, captained by ${crewName(a.captain)}.` };
+    }
+    const r = a.kind === 'captain' ? m.assignCaptain(vessels, a.vessel, a.crew, cw) : a.kind === 'release' ? m.releaseCaptain(vessels, a.vessel, cw) : m.setService(vessels, a.vessel, a.status, cw);
+    if (!r.ok) return { ok: false, text: m.refusalText(r.reason), reason: r.reason };
+    commitVessels(r.vessels);
+    if (run) deployWing(run);
+    return { ok: true, text: 'Fleet updated.' };
+  };
+  /**
    * P10.1 lazy Hangar chunk (ships/shipyard.ts): one cached import, requested when the pilot docks
    * (and by a HANGAR press if it is not here yet). The real panel takes the placeholder's place in
    * the panel layer and the menu table; a failed load changes nothing and the next request imports again
@@ -1339,6 +1443,55 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         return null;
       },
     ));
+  /**
+   * P11.2 lazy Fleet panel (ui/fleetPanel.ts): one cached import with the kit, on the first FLEET
+   * tab or FLEET ORDERS press (never at docking, never for a pilot who does not open it). The panel
+   * takes the placeholder's place like the Hangar; a failed load changes nothing and is retried.
+   */
+  const loadFleetUi = (): Promise<FleetPanel | null> =>
+    (fleetUiLoad ??= Promise.all([loadFleet(), import('./ui/fleetPanel.ts')]).then(
+      ([k, m]) => {
+        if (!k) {
+          fleetUiLoad = null; // the kit's own notice already says so
+          return null;
+        }
+        if (fleetUi) return fleetUi;
+        const f = m.createFleetPanel({
+          kit: k,
+          vessels: () => vessels,
+          world: fleetWorld,
+          flight: fleetFlight,
+          crewName,
+          crewRole: (id) => CREW_BY_ID.get(id)?.role ?? '',
+          describe: (req) => describeRequirement(deriveView(graph, progress), req),
+          station: () => (dockedAt() ? dockLabel : null),
+          act: fleetAct,
+          hangar: () => openStation('hangar'),
+          back: () => actions.stationBack(),
+          admin: () => (isAdmin(admin) ? adminTestFleet : null),
+          sound: (cue) => (cue === 'refused' ? moment('refused') : panelSound(cue)),
+        });
+        f.root.hidden = true;
+        panels.fleet.replaceWith(f.root);
+        panels.fleet = f.root;
+        menus.fleet = f.menu;
+        fleetUi = f;
+        return f;
+      },
+      () => {
+        fleetUiLoad = null;
+        notify('FLEET COMMAND UNAVAILABLE · CHECK THE CONNECTION, THEN RELOAD', undefined, 'warn');
+        return null;
+      },
+    ));
+  /** What the panel reads of the sector (in flight only): the wing's units and the pilot's own lock, checked by the kit. */
+  const fleetFlight = (): FleetFlight | null => {
+    const r = run;
+    if (!r || r.docked || !fleetKit) return null;
+    const t = r.shipLock.target;
+    const a = t === null ? undefined : r.hostiles.find((h) => h.id === t);
+    return { units: r.wing?.units ?? [], target: t, targetName: a ? `${FACTIONS[a.faction].short} ${FAMILIES[a.family].label}`.toUpperCase() : null, attack: fleetKit.attackRefusal(r, t) };
+  };
   /** Generate and enter the sector of `systemId`. Any active sector is torn down first. */
   const enterSector = (systemId: string, spawn: string | undefined, phase: FreeRoamPhase, place?: (L: SectorLayout) => ResumeAt | null): void => {
     leaveSector();
@@ -1353,6 +1506,11 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     pendingResume = null;
     run = createSectorRun(layout, profile.sectors[systemId] ?? EMPTY_SECTOR_SAVE, { spawn, gates: gateInfos(layout), seed: randomSeed(), phase, ship: craft, cargoSpace: holdFree(), cargoWreck: wreckFor(systemId), at, loadout: armedLoadout(fleet), ordnance: profile.ordnance, unlimitedAmmo: unlimitedAmmo(admin), flightMode: controls.flightMode, heat: heatBk, salvage: (layout.pois.find((p) => p.kind === 'raidbox' && !fleet.owned.includes(p.target as ShipId))?.target as ShipId | undefined) ?? null, recovery: recoveryKit });
     if (run.salvage) wantRecovery();
+    // P11.1: the fleet wing forms up at the spawn (orders start at Follow); the kit loads first if it is not here yet
+    if (vessels.list.some(deployable)) {
+      if (fleetKit) deployWing(run);
+      else void loadFleet();
+    }
     resumedAt = !place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     besideStation = !!place && at !== null && (run.ship.x !== layout.spawns[0]!.x || run.ship.y !== layout.spawns[0]!.y);
     if (!resumedAt) profile = withResume(profile, null);
@@ -1588,6 +1746,13 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       });
       return;
     }
+    if (tab === 'fleet' && !fleetUi) {
+      const from = panel;
+      void loadFleetUi().then((f) => {
+        if (f && run?.docked && panel === from) openStation('fleet');
+      });
+      return;
+    }
     if (panel !== null && panel !== tab) services.sound.play('uiSelect');
     stationReturn = 'hangar';
     showPanel(tab);
@@ -1599,6 +1764,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     else if (tab === 'fabricator') fabricator.open(dockLabel);
     else if (tab === 'missions') missionsPanel.open();
     else if (tab === 'exchange') exchangePanel.open();
+    else if (tab === 'fleet') fleetUi!.open();
     else upgradesPanel.open();
   };
   const currentGalaxy = () => graph.node(progress.current)!.galaxy;
@@ -1848,6 +2014,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       } else if (e.type === 'tow' && r.recovery) {
         const [t, tone] = r.recovery.towLine(e);
         notify(t, undefined, tone);
+      } else if (e.type === 'fleet') {
+        // P11.1: a disabled vessel stays owned and crewed (saved as disabled until the next dock); a lost Attack target ends the order
+        const v = vessels.list.find((x) => x.id === e.vessel);
+        if (!v) return;
+        if (e.change === 'disabled') {
+          commitVessels({ ...vessels, list: vessels.list.map((x) => (x.id === v.id ? { ...x, status: 'disabled' as const } : x)) });
+          notify(`${crewShipName(v.ship).toUpperCase()} DISABLED · BACK IN SERVICE AT THE NEXT DOCK`, undefined, 'warn');
+        } else notify(`${crewShipName(v.ship).toUpperCase()} · TARGET LOST · BACK IN FORMATION`, undefined, 'info');
       } else if (e.type === 'hullDelivered') {
         // P10.1: the only grant of a recovery hull; recoverShip refuses a repeat, so it is never awarded twice
         const f = recoverShip(fleet, e.ship);
@@ -1864,6 +2038,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         const topped = Object.keys(restocked).some((k) => restocked[k] !== profile.ordnance[k]);
         if (topped) profile = withOrdnance(profile, restocked);
         setRunOrdnance(r, profile.ordnance); // the run fires from the same counts
+        // P11.1: the station services the fleet too: a disabled vessel is back in service and forms up
+        if (vessels.list.some((x) => x.status === 'disabled')) {
+          vessels = serviceAtDock(vessels);
+          profile = withVessels(profile, vesselsToSaved(vessels));
+        }
+        deployWing(r);
         persist();
         cue(e);
         // docking opens the station overview (Prompt 12); the flight is paused until LAUNCH
@@ -2092,6 +2272,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       // the pause card names where you are and carries the survey clock (no longer always on the HUD)
       pauseKicker.textContent = `${hereName} · ${galaxyShort}`;
       pauseInfo.textContent = __GALAXIA_GRAVITY_LAB__ && lab ? `EXPERIMENTAL · NOTHING IS SAVED · TIME ${formatTicks(run.tick)}` : `${surveyText(run)} · TIME ${formatTicks(run.tick)}`;
+      fleetBtn.hidden = !vessels.list.length; // P11.2: only a pilot with a fleet sees FLEET ORDERS
       // every pause starts compact: groups closed, focus on RESUME
       pauseOpen = null;
       pauseReturn = null;
@@ -2237,6 +2418,17 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       stationReturn = 'pause';
       showPanel(p);
       (p === 'missions' ? missionsPanel : recordPanel).open();
+    },
+    /** P11.2 pause FLEET ORDERS: the Fleet panel over the paused flight (orders apply on RESUME); back returns here. */
+    fleet: (): void => {
+      if (panel !== 'pause') return;
+      void loadFleetUi().then((f) => {
+        if (!f || panel !== 'pause' || !run || run.docked) return;
+        services.sound.play('uiSelect');
+        stationReturn = 'pause';
+        showPanel('fleet');
+        f.open();
+      });
     },
     stationBack: (): void => {
       services.sound.play('uiMove');
@@ -2525,6 +2717,59 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     if (!target) return 'No station exists in the game data.';
     return adminTravel({ galaxy: target.galaxyId, system: target.id, arrival: 'station' });
   };
+  /**
+   * P11.2 Admin test fleet (the Admin panel's FLEET opens the Fleet panel, whose ADMIN block calls
+   * these). Only during a session, whose writes are all blocked (save) and which ends by reloading
+   * the untouched slot: the test fleet never reaches the normal profile. Orders and attacks are the
+   * Fleet panel's real ones; DISABLE uses the wing's own damage path (blastHit).
+   */
+  const adminTestFleet: FleetAdmin = {
+    lines: () => {
+      const units = run?.wing?.units ?? [];
+      return [
+        `VESSELS · ${vessels.list.map((v) => `${v.id} ${v.ship} ${v.captain ? crewName(v.captain) : 'uncrewed'} ${v.status}`).join(' · ') || 'none'}${adminFleetWas ? ' (test fleet)' : ''}`,
+        `WING · ${units.map((u) => `${u.spec.vessel} slot ${u.slot + 1} ${u.state} hull ${Math.ceil(u.hull)}/${u.spec.stats.hull} ${u.order.kind}`).join(' · ') || 'not flying'}`,
+        `HEAT (escort hits count for the pilot) · ${heatView(heatBk).map((h) => `${h.label} ${h.value}`).join(' · ')}`,
+      ];
+    },
+    prepare: () => {
+      if (!isAdmin(admin)) return '';
+      adminFleetWas ??= vessels;
+      vessels = { seq: 3, list: (['shrike', 'swift', 'condor'] as const).map((ship, i) => ({ id: `fv-${i + 1}`, ship, captain: CREW[i]!.id, status: 'active' as const })) };
+      if (run) deployWing(run);
+      return 'Test fleet ready in the sandbox: Shrike, Swift and Condor with captains. Launch or fly to see them; nothing is saved.';
+    },
+    reset: () => {
+      if (!adminFleetWas) return 'No test fleet to reset.';
+      vessels = adminFleetWas;
+      adminFleetWas = null;
+      if (run) deployWing(run);
+      return 'Restored the fleet this session started with.';
+    },
+    disable: (id) => {
+      const r = run;
+      const u = r?.wing?.units.find((x) => x.spec.vessel === id);
+      if (!r || !u || !fleetKit || u.state !== 'active') return 'That vessel is not flying.';
+      const ev: SectorEvent[] = [];
+      fleetKit.blastHit(r, 'red-tally', u.ship.x, u.ship.y, 1, u.hull + u.shield + 1, ev);
+      handleEvents(r, ev);
+      fleetUi?.refresh();
+      return `${id} took a test blast: ${(u as { state: string }).state === 'disabled' ? 'disabled (out of the fight until a dock)' : 'damaged'}.`;
+    },
+  };
+  /** Admin panel FLEET: the Fleet panel where it can open (the station tab docked, over the pause menu in flight). */
+  const adminFleetOpen = (): string => {
+    if (run?.docked && !(__GALAXIA_GRAVITY_LAB__ && lab)) {
+      closeAdmin();
+      openStation('fleet');
+      return '';
+    }
+    if (!run || (run.phase !== 'flight' && run.phase !== 'paused')) return 'Fly or dock in a sector first: the Fleet panel opens from the station tab or the pause menu.';
+    closeAdmin();
+    if (panel !== 'pause') actions.pause();
+    actions.fleet();
+    return '';
+  };
   const adminDeps: AdminPanelDeps = {
     view: () => ({
       origin: admin ? `${SHIP_BY_ID.get(admin.origin.ship)!.name} at ${placeName(admin.origin.galaxy, admin.origin.system)}` : '',
@@ -2538,6 +2783,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     travel: adminTravel,
     selectShip: adminSelect,
     hangar: adminHangar,
+    fleet: adminFleetOpen,
     exit: () => exitAdmin(),
     close: () => closeAdmin(),
     sound: (cue) => services.sound.play(cue),
@@ -2769,7 +3015,12 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     restartNo = pauseButton('fr-pause-ask-no', 'CANCEL', () => closeRestartAsk(true));
     askRow.append(pauseButton('fr-pause-ask-yes', 'RESTART', confirmRestart), restartNo);
     restartAsk.append(askText, askRow);
-    top.append(resume, restartBtn, restartAsk);
+    fleetBtn = pauseButton('fr-pause-restart fr-pause-fleet', 'FLEET ORDERS', () => {
+      pauseReturn = fleetBtn;
+      actions.fleet();
+    });
+    fleetBtn.hidden = true;
+    top.append(resume, restartBtn, restartAsk, fleetBtn);
     const groupsBox = el('div', 'fr-pause-groups');
     const defs: readonly { id: PauseGroup; label: string; items: readonly [string, () => void][] }[] = [
       { id: 'progress', label: 'MISSIONS & PROGRESS', items: [['MISSIONS', () => actions.log('missions')], ['RECORD', () => actions.log('record')], ['SAVES', openSaves]] },
@@ -2863,6 +3114,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       else if (panel === 'exchange') exchangePanel.back();
       else if (panel === 'upgrades') upgradesPanel.back();
       else if (panel === 'record') recordPanel.back();
+      else if (panel === 'fleet') fleetUi?.back();
       else if (panel === 'pause' && !restartAsk.hidden) closeRestartAsk(true);
       else if (panel === 'pause' || panel === 'sectormap' || panel === 'cargo') actions.resume();
       else if (panel === 'gate') actions.stay();
@@ -3146,6 +3398,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       cargo: cargoText(used, cap, cells),
       notice: panel ? null : notices.current,
       marks: marksReadout(ts),
+      fleet: r.wing ? wingSummary(r.wing.units) : '',
     });
     // the engine hum follows thrust and boost; silent while paused, behind a panel or hidden
     if (services.sound.unlocked && services.sound.loopLevel(ENGINE_LOOP) === null) services.sound.startLoop(ENGINE_LOOP, 'fr.engine', 0);
@@ -3515,6 +3768,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       crew = crewFromSaved(profile.crew, fleet.owned).state;
       profile = withCrew(profile, crewToSaved(crew));
       crewView = shipCrewView(crew, fleet.active);
+      // P11.1: the saved fleet vessels against the catalogue and the crew just loaded (absent = none; loading never grants one)
+      vessels = cleanVessels(profile.vessels, crew).state;
+      profile = withVessels(profile, vesselsToSaved(vessels));
+      if (vessels.list.length) void loadFleet();
       // Prompt 11: one-time starter reactor cells (as many as fit)
       if (!prog.fuel.starter) {
         profile = withCargo(profile, grantCells(profile.cargo, holdCap(), FUEL.starterCells).hold);
@@ -3750,6 +4007,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
             active: prog.missions.active.length,
             offers: board ? board.offers.length : 0,
             stored: Object.values(profile.modules).reduce((a, n) => a + n, 0),
+            escorts: vessels.list.length,
           };
         },
         open: (tab) => openStation(tab),
@@ -3902,6 +4160,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         ]),
         cargo: inventory.root,
         hangar: Object.assign(el('section', 'fr-panel'), { hidden: true }), // P10.1: an empty placeholder until the Hangar chunk replaces it (loadHangar)
+        fleet: Object.assign(el('section', 'fr-panel'), { hidden: true }), // P11.2: placeholder until the Fleet panel chunk replaces it (loadFleetUi)
         armory: armory.root,
         fabricator: fabricator.root,
         missions: missionsPanel.root,
@@ -3944,6 +4203,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       panels.controls.querySelector('.fr-menu')!.prepend(controlsGrid);
       menus.cargo = inventory.menu;
       menus.hangar = new MenuList(panels.hangar);
+      menus.fleet = new MenuList(panels.fleet);
       menus.armory = armory.menu;
       menus.fabricator = fabricator.menu;
       menus.missions = missionsPanel.menu;
@@ -4030,7 +4290,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       returnButtons = [];
       for (const pnl of Object.values(panels)) for (const b of pnl.querySelectorAll<HTMLButtonElement>('.fr-btn')) if (b.textContent === 'GALAXY MAP') returnButtons.push(b);
       const panelLayer = el('div', 'fr-panels');
-      panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.armory, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery);
+      panelLayer.append(panels.briefing, panels.pause, panels.complete, panels.gate, panels.sectormap, panels.cargo, panels.controls, panels.hangar, panels.armory, panels.fabricator, panels.missions, panels.exchange, panels.upgrades, panels.record, panels.station, panels.equipment, panels.sound, panels.recovery, panels.fleet);
       flightRoot.append(hud);
       flightHud = createFlightHud(flightRoot, motion);
       flightRoot.append(hint, interactBtn, fireBtn, boostBtn, missileBtn, lockBtn, targetBtn, flightCtl, feed.root, offerView.root);
@@ -4341,6 +4601,20 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
             }
           : () => false,
         qaEvent: __GALAXIA_TEST_HOOKS__ ? (e: GameEvent): void => publish([e]) : () => undefined,
+        fleetCommand: () => ({ vessels, captains: captainsOf(vessels), kit: fleetKit ? 'ready' : fleetFailed ? 'failed' : fleetLoad ? 'loading' : 'idle', wing: run && fleetKit ? fleetKit.wingStatus(run) : null }),
+        fleetAct: (a: FleetAct) => fleetAct(a),
+        fleetPanel: () => (fleetUi ? fleetUi.status() : null),
+        qaFleetBlast: __GALAXIA_TEST_HOOKS__
+          ? (vessel: string, damage: number): boolean => {
+              const r = run;
+              const u = r?.wing?.units.find((x) => x.spec.vessel === vessel);
+              if (!r || !u || !fleetKit) return false;
+              const ev: SectorEvent[] = [];
+              fleetKit.blastHit(r, 'red-tally', u.ship.x, u.ship.y, 1, damage, ev);
+              handleEvents(r, ev);
+              return true;
+            }
+          : () => false,
         frames: 0,
         ticks: 0,
         draws: 0,

@@ -77,6 +77,8 @@ import type { Hulk, TowChange, TowLoss, TowRefusal } from './tow.ts';
  * station stays here (it reads only `run.hulk`), so a completed recovery never waits on a load.
  */
 export type RecoveryKit = typeof TowKit;
+/* P11.1 Fleet Command (FLEET_COMMAND.md): the wing is attached by the shell from the lazy fleet chunk; types only here */
+import type { FleetChange, Wing } from '../fleet/vessels.ts';
 import { SHIP_LOCK } from '../combat/shipLock.ts';
 import { cancelBearing, createSignals, resetSignals, signalReach, startBearing, stepSignal, type SignalResult, type SignalRunState } from './signal.ts';
 import { POI_RULES, type EncounterKind, type LootEntry, type Poi, type PoiKind, type SectorLayout, type SectorSave } from './model.ts';
@@ -237,6 +239,8 @@ export type SectorEvent =
   | { readonly type: 'tow'; readonly change: TowChange; readonly ship: ShipId; readonly why?: TowRefusal; readonly cause?: TowLoss }
   /** P10.1: the towed hull reached a station dock: the shell adds the ship to the fleet (pushed right before `docked`). */
   | { readonly type: 'hullDelivered'; readonly ship: ShipId; readonly station: string }
+  /** P11.1: a fleet vessel was disabled (0 hull), or its Attack order fell back to Follow (target gone or no longer hostile). */
+  | { readonly type: 'fleet'; readonly change: FleetChange; readonly vessel: string }
   | {
       readonly type: 'encounter';
       readonly id: string;
@@ -468,6 +472,8 @@ export interface SectorRun {
   hulk: Hulk | null;
   /** P10.1: the loaded recovery implementation (RecoveryKit), or null; attached once, never saved. */
   recovery: RecoveryKit | null;
+  /** P11.1: the fleet wing (lazy kit, units, bolts), or null; attached by the shell between ticks, never saved. */
+  wing: Wing | null;
 }
 
 export interface RunOptions {
@@ -601,6 +607,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     salvage: null,
     hulk: null,
     recovery: null,
+    wing: null,
   };
   // P10.1: only a hull whose Raid Box is in this layout
   if (o.salvage && layout.pois.some((p) => p.kind === 'raidbox' && p.target === o.salvage)) run.salvage = o.salvage;
@@ -931,6 +938,7 @@ export function stepSector(run: SectorRun, input: SectorInput): SectorEvent[] {
   stepPatrols(run);
   run.flight?.beforeAgents?.(run);
   stepAgents(run, events);
+  run.wing?.kit.stepWing(run, events); // P11.1: fleet vessels move and fire after the enemy ships chose their targets
   if (!run.docked) stepHeat(run, events);
   stepEnemyShots(run, events);
   stepMines(run, events);
@@ -1109,6 +1117,7 @@ function recall(run: SectorRun): void {
   run.boosting = false;
   run.silent = false; // P07.1
   run.recovery?.endTow(run, 'lost', null); // P10.1 (callers report it): the hull stays put; a recall never drags it along
+  run.wing?.kit.regroup(run, 'recall'); // P11.1: the wing forms up at the arrival with the pilot, orders back to Follow, damage kept
   endAbility(run.ability); // P08.1: the effect ends; the cooldown is kept (like the weapons')
   run.shieldHit = null;
   run.docked = null;
@@ -1191,6 +1200,7 @@ export function interact(run: SectorRun): SectorEvent[] {
     cancelBearing(run); // P06.1: docking ends a signal observation
     clearShipLock(run); // docked: no combat lock
     clearStationKeeping(run.stop); // docked: the station holds the ship
+    run.wing?.kit.regroup(run, 'dock'); // P11.1: the station services the wing too and it forms up on the dock
     // P10.1: a hull on the tether is delivered (every station is a Haven Guild dock); a resting one stays out there
     const h = run.hulk;
     if (h?.towed) {
@@ -1230,6 +1240,7 @@ export function restartSector(run: SectorRun): SectorEvent[] {
   const lost: SectorEvent[] = [];
   run.recovery?.endTow(run, 'lost', lost, 'restart'); // P10.1 (P10.2: the notice names the restart)
   recall(run);
+  run.wing?.kit.regroup(run, 'restart'); // P11.1: a restart also restores the wing (a disabled vessel stays disabled until a dock)
   run.recalls -= 1;
   for (const st of run.patrols.values()) st.cooldown = 0;
   run.invuln = 0;
@@ -1261,6 +1272,12 @@ export function disposeSectorRun(run: SectorRun): void {
   run.silent = false;
   endAbility(run.ability);
   run.hulk = null; // P10.1: a tow never leaves the sector; the hull rests at its point on the next visit
+  if (run.wing) {
+    // P11.1: fleet units and bolts are temporary entities; nothing keeps stepping a closed sector
+    run.wing.units.length = 0;
+    run.wing.bolts.length = 0;
+    run.wing = null;
+  }
   run.disposed = true;
 }
 

@@ -85,6 +85,8 @@ export const agentById = (run: SectorRun, id: number): Agent | undefined => run.
 export function targetPos(run: SectorRun, t: Target | null): { x: number; y: number; vx: number; vy: number } | null {
   if (t === null) return null;
   if (t === 'player') return run.ship;
+  // P11.1: a negative id is a fleet vessel of the pilot's wing (live units only)
+  if (t < 0) return run.wing?.units.find((u) => u.id === t && u.state === 'active')?.ship ?? null;
   const a = agentById(run, t);
   return a && a.state !== 'destroyed' ? a : null;
 }
@@ -131,8 +133,11 @@ export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamag
  * NPC attackers deal reduced damage; 'environment' (eruptions) deals full
  * damage and credits nobody. Applies once per call; the caller removes
  * its projectile. Returns true if the ship was destroyed by this hit.
+ * P11.1: `from` is where a 'player' hit came from when it was not the pilot's
+ * own ship (a fleet vessel): the struck ship turns on that point, never on the
+ * pilot it did not see. Attribution is unchanged: one heatHit per call.
  */
-export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side | 'environment', events: SectorEvent[]): boolean {
+export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side | 'environment', events: SectorEvent[], from: { readonly x: number; readonly y: number } = run.ship): boolean {
   if (a.state === 'destroyed' || run.disposed) return false;
   const n = Math.max(0, Number.isFinite(amount) ? amount : 0) * (by === 'player' || by === 'environment' ? 1 : COMBAT.npcDamageMul);
   if (n <= 0) return false;
@@ -147,7 +152,7 @@ export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side |
     if (enc) enc.engaged = true;
     // being shot reveals the shooter: the ship turns on the pilot
     if (a.target === null || a.state === 'idle' || a.state === 'patrol' || a.state === 'investigate') {
-      a.lastSeen = { x: run.ship.x, y: run.ship.y };
+      a.lastSeen = { x: from.x, y: from.y };
       if (a.state === 'idle' || a.state === 'patrol') setState(a, 'investigate');
     }
   }

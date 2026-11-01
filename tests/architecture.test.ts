@@ -447,3 +447,80 @@ describe('mode separation (Free Roam Prompt 2)', () => {
     for (const f of advisorFiles) expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/predictBallistic|suggestEscape/);
   });
 });
+
+describe('P11.1 Fleet Command boundaries (fleet/)', () => {
+  const all = files(src);
+  const dir = join(src, 'modes/freeroam/fleet');
+  const fleet = files(dir);
+  const staticValue = /^import\s+(?!type\b)[^;]*?from\s+'(\.[^']+)'/gm;
+  const valuesOf = (f: string): string[] => [...readFileSync(f, 'utf8').matchAll(staticValue)].map((m) => rel(resolve(dirname(f), m[1]!)));
+
+  it('the folder is pinned: the eager record, the rules, the wing and the lazy entry', () => {
+    expect(fleet.map(rel).sort()).toEqual(['command.ts', 'fleetKit.ts', 'vessels.ts', 'wing.ts'].map((f) => `modes/freeroam/fleet/${f}`));
+  });
+
+  it('fleet code imports only catalogue, ship, combat-world and sim modules, values only from the world chunk (never input, crew, the shell or the Hangar)', () => {
+    const allowed = /^modes\/freeroam\/(fleet\/[\w]+|catalogue\/types|ships\/(roster|types)|combat\/(families|stealth|state|world)|sector\/(grid|run)|sim|profile)\.ts$/;
+    // value imports must stay inside the lazy kit or the shared world chunk (a value from run.ts, the Hangar or the
+    // equipment model would pull eager code into the chunk, or the kit into eager code)
+    const valueOk = /^modes\/freeroam\/(fleet\/(vessels|command|wing)|ships\/roster|combat\/(families|stealth|world)|sector\/grid|sim)\.ts$/;
+    for (const f of fleet) {
+      for (const spec of importSpecs(f)) expect(spec, `${rel(f)} imports ${spec}`).toMatch(allowed);
+      for (const v of valuesOf(f)) expect(v, `${rel(f)} value-imports ${v}`).toMatch(valueOk);
+      expect(readFileSync(f, 'utf8'), rel(f)).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|sessionStorage|indexedDB|fetch|requestAnimationFrame|setTimeout|setInterval|addEventListener)\b/);
+    }
+    // the eager record never value-imports the kit (that would make the chunk eager)
+    expect(valuesOf(join(dir, 'vessels.ts')).filter((v) => v.startsWith('modes/freeroam/fleet/'))).toEqual([]);
+  });
+
+  it('only the shell, the save audit and the sector run use fleet/, and only the shell loads the kit (one dynamic import)', () => {
+    const users = all.filter((x) => !rel(x).startsWith('modes/freeroam/fleet/') && importSpecs(x).some((s2) => s2.startsWith('modes/freeroam/fleet/'))).map(rel);
+    // P11.2: the lazy Fleet panel and its view model read fleet/ types and the eager vessels.ts helpers (never kit values: checked below)
+    expect(users).toEqual(['modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/sector/run.ts', 'modes/freeroam/ui/fleetPanel.ts', 'modes/freeroam/ui/fleetView.ts']);
+    for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/fleet/'))) {
+      const kitValues = valuesOf(f).filter((v) => /^modes\/freeroam\/fleet\/(fleetKit|wing|command)\.ts$/.test(v));
+      expect(kitValues, rel(f)).toEqual([]);
+    }
+    expect(valuesOf(join(src, 'modes/freeroam/sector/run.ts')).filter((v) => v.startsWith('modes/freeroam/fleet/'))).toEqual([]);
+    const shell = readFileSync(join(src, 'modes/freeroam/freeRoamMode.ts'), 'utf8');
+    expect(shell.match(/import\('\.\/fleet\//g)).toHaveLength(1);
+  });
+
+  it('P11.2 Fleet panel: one lazy chunk loaded only by the shell, no global listeners, timers or frame loops, no fleet state of its own', () => {
+    const panelFiles = ['modes/freeroam/ui/fleetPanel.ts', 'modes/freeroam/ui/fleetView.ts'];
+    // nobody imports them statically (the shell's one dynamic import is the only way in); the view is the panel's alone
+    for (const f of all) {
+      const r = rel(f);
+      if (r === 'modes/freeroam/ui/fleetPanel.ts') {
+        expect(valuesOf(f).filter((v) => v === 'modes/freeroam/ui/fleetView.ts')).toEqual(['modes/freeroam/ui/fleetView.ts']);
+        continue;
+      }
+      expect(valuesOf(f).filter((v) => panelFiles.includes(v)), r).toEqual([]);
+    }
+    const shell = readFileSync(join(src, 'modes/freeroam/freeRoamMode.ts'), 'utf8');
+    expect(shell.match(/import\('\.\/ui\/fleetPanel\.ts'\)/g)).toHaveLength(1);
+    for (const p of panelFiles) {
+      const code = readFileSync(join(src, p), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      expect(code, p).not.toMatch(/\b(document|window)\.addEventListener|\bsetTimeout\b|\bsetInterval\b|requestAnimationFrame|\bMath\.random\b|\bDate\.now\b|localStorage|sessionStorage/);
+      // the panel holds no fleet: vessels and the wing are read through deps on every refresh, changes go through fleetAct
+      expect(code, p).not.toMatch(/(?<!(?:const|let|var)\s+)\b(vessels|wing|units)\s*=(?!=)|\.(issueOrder|purchase|setService|releaseCaptain|blastHit|deploy|syncWing)\(/);
+    }
+  });
+
+  it('captains are not advisors: crew/ never imports fleet/, fleet/ never imports crew/, and the advisor never reads captains', () => {
+    for (const f of files(join(src, 'modes/freeroam/crew'))) expect(importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/fleet/')), rel(f)).toEqual([]);
+    for (const f of fleet) expect(importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/crew/')), rel(f)).toEqual([]);
+    for (const f of ['advisor.ts', 'traits.ts', 'observation.ts', 'view.ts']) expect(readFileSync(join(src, 'modes/freeroam/crew', f), 'utf8'), f).not.toMatch(/captain/i);
+  });
+
+  it('fleet AI never touches player input or the pilot\'s ship: no input frame, no writes to the run\'s ship, shots, silent or energy', () => {
+    for (const f of fleet) {
+      const code = readFileSync(f, 'utf8');
+      // each escort steers itself through the shared movement path (sim.ts stepShip with its own ShipInput);
+      // the pilot's input frame, fire / Silent Running toggles and the device layer are never read
+      expect(code, rel(f)).not.toMatch(/\bSectorInput\b|\bInputFrame\b|\bfireHeld\b|\bfirePressed\b|\bsilentToggle\b|\babilityPressed\b|\brun\.input\b|\bkeyboard\b|\bgamepad\b/);
+      expect(code, rel(f)).not.toMatch(/\brun\.(ship|silent|hull|shield|energy|boost|boosting|heat|overheated|fireCooldown|invuln|craft|tune|lock|weapon)(\.[\w$]+|\[[^\]]+\])*\s*(=(?!=)|\+=|-=|\*=|\/=|\+\+|--)/);
+      expect(code, rel(f)).not.toMatch(/Object\.assign\(\s*run\.ship|\brun\.shots\.(push|pop|splice|length\s*=)/);
+    }
+  });
+});

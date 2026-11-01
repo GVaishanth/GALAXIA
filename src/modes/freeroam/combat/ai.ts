@@ -140,6 +140,9 @@ function defaultState(role: AgentRole): AiState {
   return 'idle';
 }
 
+/** Another enemy ship as the target (P11.1: fleet vessels have negative ids and are not infighting). */
+const infight = (t: Target | null): boolean => typeof t === 'number' && t > 0;
+
 function detectRange(run: SectorRun, a: Agent, other: { x: number; y: number }): number {
   const F = FAMILIES[a.family];
   return F.detect * (inInterference(run.layout, a) || inInterference(run.layout, other) ? 0.6 : 1);
@@ -170,7 +173,19 @@ function chooseTarget(run: SectorRun, a: Agent, infighters: number): Target | nu
       bestScore = d * 0.85;
     } else mem = !blocked && keep === 'player' && a.lost < STEALTH.memoryTicks + HEAT.memory[t]!;
   }
-  const mayInfight = typeof keep === 'number' || infighters < COMBAT.maxInfighters;
+  // P11.1: the pilot's fleet vessels are seen the same way (detect range x their own signature, past every body; no heat
+  // widening, which is about the pilot), and never reveal the pilot: an escort is a target of its own, the pilot slightly preferred
+  if (run.wing && hostileTo(run, a.faction, 'player')) {
+    for (const u of run.wing.units) {
+      if (u.state !== 'active' || inSanctuary(run.layout, u.ship)) continue;
+      const d = dist(a, u.ship);
+      if (d < bestScore && d <= effectiveRange(detectRange(run, a, u.ship), u.sig) * (keep === u.id ? 1.3 : 1) && !(blocked ? blocked(a.x, a.y, u.ship.x, u.ship.y) : bodyBetween(run.layout.landmarks, a.x, a.y, u.ship.x, u.ship.y))) {
+        best = u.id;
+        bestScore = d;
+      }
+    }
+  }
+  const mayInfight = infight(keep) || infighters < COMBAT.maxInfighters;
   if (mayInfight) {
     for (const o of run.hostiles) {
       if (o === a || o.state === 'destroyed' || !hostileTo(run, a.faction, o.faction)) continue;
@@ -450,8 +465,8 @@ function stepAgent(run: SectorRun, a: Agent, fights: { n: number }, events: Sect
   const prev = a.target;
   a.target = chooseTarget(run, a, fights.n);
   // the infighting count is kept live within the tick, so the cap holds even when many ships look at once
-  if (typeof a.target === 'number' && typeof prev !== 'number') fights.n += 1;
-  else if (typeof prev === 'number' && typeof a.target !== 'number') fights.n -= 1;
+  if (infight(a.target) && !infight(prev)) fights.n += 1;
+  else if (infight(prev) && !infight(a.target)) fights.n -= 1;
   if (a.target !== null && prev === null) a.reaction = Math.round(run.row.reaction * (0.8 + 0.4 * a.trait));
   else if (a.target === null) a.reaction = 0;
   else if (a.reaction > 0) a.reaction -= 1;
@@ -690,7 +705,7 @@ function separate(run: SectorRun): void {
 /** Advance every ship one tick; remove destroyed ships and retreaters that escaped. */
 export function stepAgents(run: SectorRun, events: SectorEvent[]): void {
   const fights = { n: 0 };
-  for (const a of run.hostiles) if (typeof a.target === 'number' && a.state !== 'destroyed') fights.n += 1;
+  for (const a of run.hostiles) if (infight(a.target) && a.state !== 'destroyed') fights.n += 1;
   // Combat P03C: a ship inside a nuke's dilation zone runs its whole step only on the ticks its accumulator allows
   for (const a of run.hostiles) if (agentSteps(run, a)) stepAgent(run, a, fights, events);
   separate(run);

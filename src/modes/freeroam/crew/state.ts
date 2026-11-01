@@ -61,7 +61,7 @@ const without = (s: CrewState, crewId: string): CrewState => {
 
 /* ------------------------------------------------------------ operations */
 
-export type SeatRefusal = 'unknown' | 'not-hired' | 'not-owned' | 'no-seats' | 'full' | 'unsafe' | 'already' | 'not-seated';
+export type SeatRefusal = 'unknown' | 'not-hired' | 'not-owned' | 'no-seats' | 'full' | 'unsafe' | 'already' | 'not-seated' | 'captain';
 
 export type SeatResult = { readonly ok: true; readonly state: CrewState; readonly moved: ShipId | null } | { readonly ok: false; readonly reason: SeatRefusal };
 
@@ -69,6 +69,7 @@ export type SeatResult = { readonly ok: true; readonly state: CrewState; readonl
 export function assignRefusal(s: CrewState, crewId: string, ship: ShipId, w: CrewWorld): SeatRefusal | null {
   if (!CREW_BY_ID.has(crewId) || !isShip(ship)) return 'unknown';
   if (!isHired(s, crewId)) return 'not-hired';
+  if (w.captains?.includes(crewId)) return 'captain'; // P11.1: commands a fleet vessel, never an onboard seat
   if (!w.owned.includes(ship)) return 'not-owned';
   if (seatCount(ship) === 0) return 'no-seats';
   if (crewAboard(s, ship).includes(crewId)) return 'already';
@@ -98,6 +99,7 @@ export function unassign(s: CrewState, crewId: string, w: CrewWorld): SeatResult
 export function dismiss(s: CrewState, crewId: string, w: CrewWorld): SeatResult {
   if (!CREW_BY_ID.has(crewId)) return { ok: false, reason: 'unknown' };
   if (!isHired(s, crewId)) return { ok: false, reason: 'not-hired' };
+  if (w.captains?.includes(crewId)) return { ok: false, reason: 'captain' }; // P11.1: no captain is dropped silently
   if (!w.safe) return { ok: false, reason: 'unsafe' };
   const from = shipOf(s, crewId);
   const next = without(s, crewId);

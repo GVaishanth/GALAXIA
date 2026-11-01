@@ -39,6 +39,8 @@ export interface HudFrame {
   readonly notice: Notice | null;
   /** Economy pass: the Guild marks readout (formatted by the shell from the wallet; transient animation state is never saved). */
   readonly marks?: MarksReadout | undefined;
+  /** P11.2: the fleet line (fleet/vessels.ts wingSummary); empty without escorts in the sector. */
+  readonly fleet?: string | undefined;
 }
 
 export interface MarksReadout {
@@ -104,6 +106,10 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
   const energy = bar('ENERGY', 'fr-meter-energy fr-gauge-energy');
   const heat = bar('HEAT', 'fr-meter-heat'); // weapon heat (FR-TD-79)
   const missile = bar('PLASMA', 'fr-meter-missile'); // the selected weapon (Combat P03 missile row, P03C: every weapon)
+  // P11.2: one line under the meters while escorts fly (the weapon line's style: no new layout)
+  const fleetLine = el('span', 'fr-weapon fr-fleet-line');
+  fleetLine.hidden = true;
+  card.append(fleetLine);
 
   // location + objective
   const location = el('div', 'fr-loc');
@@ -143,8 +149,9 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
   let marksSerial = -1;
   let cardLabel = '';
   let marksSpoken = '';
+  let fleetKey = '';
   const setCardLabel = (): void => {
-    const t = marksSpoken ? `${cardLabel}, ${marksSpoken}` : cardLabel;
+    const t = [cardLabel, marksSpoken, fleetKey.toLowerCase()].filter(Boolean).join(', ');
     if (card.getAttribute('aria-label') !== t) card.setAttribute('aria-label', t);
   };
   const paint = (b: { row: HTMLElement; fill: HTMLElement; value: HTMLElement }, g: { pct: number; text: string; low: boolean }): void => {
@@ -179,6 +186,13 @@ export function createFlightHud(host: HTMLElement, motion: Motion): FlightHud {
         card.classList.toggle('is-boosting', c.boosting);
         card.classList.toggle('is-damaged', c.hull.low);
         cardLabel = c.label;
+        setCardLabel();
+      }
+      const fl = f.fleet ?? '';
+      if (fl !== fleetKey) {
+        fleetKey = fl;
+        fleetLine.textContent = fl;
+        fleetLine.hidden = !fl;
         setCardLabel();
       }
       const m = f.marks;

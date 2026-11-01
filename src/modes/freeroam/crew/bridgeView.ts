@@ -190,6 +190,8 @@ export function seatRefusalText(r: SeatRefusal, ship: ShipId): string {
       return 'Not on your roster.';
     case 'not-seated':
       return 'Not in a seat.';
+    case 'captain':
+      return 'Captains a fleet vessel. Return them to the roster first.';
     case 'unknown':
       return 'Unknown crew member.';
   }

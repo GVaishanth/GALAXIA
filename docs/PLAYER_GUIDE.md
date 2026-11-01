@@ -336,6 +336,36 @@ You never need crew: flying solo is fully supported and the game can be finished
 
 **Roles.** A **Navigator** and a **Surveyor** advise you in flight (the first of each seated on your ship). **Engineer, Defence and Quartermaster** can be recruited and seated, but their duties are **planned for a later update**; they do nothing in flight yet. Each crew card shows **COMPETENCE** (how good their own work is), **CAUTION** (how early they raise a risk) and **FOCUS** (how firmly they stick to their job), from 1 to 5. With a Navigator signed on you can also set the **NAVIGATOR DOCTRINE**: BALANCED or SAFETY-FIRST (earlier warnings, the widest-margin escape burns, no optional route notes).
 
+## Fleet Command (optional escorts)
+
+You never need a fleet. An **escort** is a second hull of a Guild-built ship type, flown beside you by one of your recruited crew as its **captain**. You always fly your own ship.
+
+**Commission an escort.** Dock and open the **FLEET** tab. Choose a hull, choose a captain, then press **CONFIRM COMMISSION**.
+- **Cost:** the hull's usual materials plus a Guild commission in marks: Petrel 100, Albatross 160, Swift 160, Harrier 170, Magpie 190, Crane 190, Shrike 200, Condor 250. You need that ship's licence.
+- **Limit:** up to three escorts. The Heron and Raven are never built as escorts.
+- **Refusals:** anything you cannot choose is greyed out, with the reason beside it. A double click, a second Enter or a second tap never buys twice.
+
+**Captains.** One captain per escort.
+- A crew member seated aboard one of your ships cannot captain; unseat them on the Bridge first.
+- **Moving or replacing:** CHANGE CAPTAIN asks you to confirm (CONFIRM CAPTAIN) when it moves a captain from another escort or replaces one.
+- **Releasing:** RELEASE CAPTAIN (then CONFIRM RELEASE) sends them back to the roster. An escort without a captain stays at the station until you give it one.
+- **No advice or bonus:** captains never give advice and add no bonus.
+- **Service:** **TAKE OUT OF SERVICE** keeps an escort docked; **RETURN TO SERVICE** brings it back.
+
+**Orders.** Escorts launch in formation. In flight, pause and choose **FLEET ORDERS**: **FOLLOW**, **HOLD**, **DEFEND** or **ATTACK**, for one escort or **ALL ESCORTS**. ATTACK needs a hostile locked with LOCK first; otherwise the button is greyed out and says why.
+- **HUD:** the ship card shows, for example, `ESCORTS 2 · FOLLOW`, and each escort carries its number in the sector.
+- **Reset:** a new sector, a restart, a dock or a reload starts again in FOLLOW.
+
+**When an escort is beaten.** At 0 hull it is **disabled**: shown with a ✕ and DISABLED, out of the fight even after RESTART FLIGHT, and back in service the next time you dock. It is never lost.
+
+**Stealth and heat.**
+- With Silent Running on, escorts in FOLLOW hold fire.
+- Hiding behind a planet still hides you.
+- Your escorts' hits raise Faction Heat just as yours do.
+
+**Controls.** Menu keys (arrows or W / S, Enter or Space, Escape) and taps work in the FLEET panel; flight keys do nothing while it is open.
+- **No controller button:** there is no controller button for fleet orders, and the panel has not been tested with a controller.
+
 ### Ship Mind and crew advice
 
 Short advice lines appear in flight, one at a time, each starting with an icon, a level and who is speaking: **◆ CRITICAL**, **▲ WARNING**, **● INFO** or **○ NOTE**. They take no input and never show over menus, maps or station screens.

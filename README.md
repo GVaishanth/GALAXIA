@@ -5,7 +5,7 @@
 Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 - **Status: prepared for open testing.** Classic Mode is complete. Free Roam is a playable prototype. Automated checks pass on the current build, but **nobody has playtested it yet**, it has **not been tested on physical phones, tablets or game controllers**, and it has **not been deployed** anywhere. See [Known limitations](#known-limitations-and-open-testing-notes).
-- **Last updated:** 2026-10-31. See [What's new in the 2026-10-31 ship expansion and recovery archive](#whats-new-in-the-2026-10-31-ship-expansion-and-recovery-archive).
+- **Last updated:** 2026-11-01. See [What's new in the 2026-11-01 fleet command archive](#whats-new-in-the-2026-11-01-fleet-command-archive).
 - **Licence:** [MIT](LICENSE) for GALAXIA's own code and content. The copyright holder line in `LICENSE` is still a placeholder.
 - **Runs in:** current desktop and mobile browsers, as a static site with no server, accounts or tracking.
 - **How to play:** the [Player Guide](docs/PLAYER_GUIDE.md) covers every control, the Hangar, the Armory, Guild marks and crew. The in-game **HOW TO PLAY** covers controls (including faint signals), ships, weapons and Guild marks (not crew yet).
@@ -14,11 +14,11 @@ Vite · TypeScript · HTML Canvas 2D · Web Audio API · Vitest
 
 ## Contents
 
-**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Gravity and STOP](#gravity-stop-and-station-keeping) · [Faint signals](#faint-signals) · [Guild marks](#guild-marks-credits) · [Crew and the Bridge](#crew-and-the-bridge) · [Ship Mind and crew advice](#ship-mind-navigator-and-surveyor-advice) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
+**Playing:** [Screenshots](#screenshots) · [What GALAXIA is](#what-galaxia-is) · [Features](#features) · [Quick start](#quick-start) · [Controls](#controls) · [Hangar](#hangar-and-ship-selection) · [Armory](#armory-and-weapon-loadouts) · [Gravity and STOP](#gravity-stop-and-station-keeping) · [Faint signals](#faint-signals) · [Guild marks](#guild-marks-credits) · [Crew and the Bridge](#crew-and-the-bridge) · [Fleet Command](#fleet-command-escorts) · [Ship Mind and crew advice](#ship-mind-navigator-and-surveyor-advice) · [Tutorial and HOW TO PLAY](#first-run-tutorial-and-how-to-play) · [Classic progression](#classic-progression-and-the-wave-20-gate)
 
 **Developing:** [Development setup](#development-setup) · [Build and verification](#build-and-verification) · [Release archive](#release-archive) · [Hosting on GitHub Pages](#hosting-on-github-pages) · [Project structure](#project-structure) · [Architecture](#architecture-in-brief) · [Save data](#save-data-and-browser-support)
 
-**Status:** [What's new](#whats-new-in-the-2026-10-31-ship-expansion-and-recovery-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
+**Status:** [What's new](#whats-new-in-the-2026-11-01-fleet-command-archive) · [What has been verified](#what-has-been-verified) · [Known limitations](#known-limitations-and-open-testing-notes) · [Licence and attribution](#licence-and-attribution) · [Reporting issues and contributing](#reporting-issues-and-contributing)
 
 ---
 
@@ -88,6 +88,7 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - **Ships and weapons:** ten ships. Eight are bought with cargo in a station **Hangar** once you hold their licence. Two, the **Heron** and the **Raven**, are never sold: you recover each by opening its **Raid Box** and towing its disabled hull to a station. Four weapons are configured per ship in the **Armory**.
 - **Economy:** one currency, **Guild marks**, earned from missions, sales, encounters, discoveries and capped bounties, and spent on reactor cells, modules, upgrades and one-time crew berth fees.
 - **Crew (optional):** seven named specialists to sign on and seat aboard your ships on a station's **BRIDGE**. A seated Navigator or Surveyor gives spoken-style text advice in flight; the built-in **Ship Mind** advises every pilot, crew or not. Advice only: crew never fly, fight, pay or travel for you. See [Crew and the Bridge](#crew-and-the-bridge).
+- **Fleet Command (optional):** commission up to three escort hulls at a station's **FLEET** tab, each captained by one of your recruited crew, and give them four orders from the pause menu (**FOLLOW**, **HOLD**, **DEFEND**, **ATTACK** your locked target). You always fly your own ship. See [Fleet Command](#fleet-command-escorts).
 - **Progress:** a ten-mission story chain, contract boards, cargo and crafting, three save slots, and recovery that never strands you.
 - **Guild chains and Faction Heat:** two three-stage Guild mission chains (Gleaner Accord, Faint Lanterns) and a per-faction heat value (0-100) raised by your attacks on that faction's ships. The station Missions tab shows both: GUILD CHAINS (each stage, its status, reward and why it is locked) and FACTION STANDING (value, tier and what it changes).
 - **Pause menu:** RESUME and RESTART FLIGHT (with a confirmation) on top, then three groups that open on demand: MISSIONS & PROGRESS, SETTINGS & HELP and NAVIGATION.
@@ -199,7 +200,7 @@ Bearings are not saved: leaving the system starts the signal afresh (a completed
 
 #### Pause menu
 
-Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIGHT** sit at the top; RESTART asks for confirmation first (CANCEL is focused, so a repeated key never restarts by accident). Below them are three groups that expand when chosen:
+Esc, P, **II** or Start pauses a Free Roam flight. **RESUME** and **RESTART FLIGHT** sit at the top; RESTART asks for confirmation first (CANCEL is focused, so a repeated key never restarts by accident). A pilot who owns a fleet vessel also sees **FLEET ORDERS** there (see [Fleet Command](#fleet-command-escorts)). Below them are three groups that expand when chosen:
 
 | Group | Contents |
 |---|---|
@@ -287,6 +288,45 @@ Only the first Navigator and the first Surveyor seated on the ship you fly are o
 - **Focus**, sticking to the work: a new non-urgent topic waits until the last one has had 1.5 to 3.5 s; at 4 and up the core job comes first (no route notes during a gravity hazard; no salvage calls while survey marks remain).
 
 **NAVIGATOR DOCTRINE** (on the Bridge, once you have signed on a Navigator): **BALANCED** (concise advice; escape burns that keep momentum first) or **SAFETY-FIRST** (warnings a second earlier, gravity explained at lower pulls, the widest-margin burns first, no optional route notes).
+
+## Fleet Command (escorts)
+
+Fleet Command is optional: no mission, licence or story step needs it, and you always fly your own ship by hand. An **escort** is a second hull of a Guild-built ship type, flown beside you by one of your recruited crew as its **captain**.
+
+**Commissioning.** Dock and open the station's **FLEET** tab. Choose a hull, choose a captain, check the price, then press **CONFIRM COMMISSION**.
+
+- **Price:** an escort costs the same hull materials as buying that ship in the Hangar, **plus** a Guild commission in marks (Petrel 100, Albatross 160, Swift 160, Harrier 170, Magpie 190, Crane 190, Shrike 200, Condor 250). The ship's licence is needed as usual. The Heron and Raven are never built as escorts.
+- **Limit:** up to **three** escorts.
+- **Refusals:** a hull or captain you cannot choose is greyed out, and the reason is shown beside it.
+- **No double purchase:** one purchase is made however fast you click, press Enter or tap.
+
+**Captains.** Any recruited crew member who is not seated aboard one of your ships can captain one escort, one each.
+
+- **CHANGE CAPTAIN:** moving a captain from another escort, or replacing one, asks for **CONFIRM CAPTAIN** first and says what happens.
+- **RELEASE CAPTAIN:** returns them to the crew roster, after a **CONFIRM RELEASE**. An escort without a captain stays at the station; no one is assigned automatically.
+- **Captains and advisors are different roles.** A captain is never seated aboard your ship, so never gives advice. A seated Navigator or Surveyor cannot captain. A captain gives the escort no bonus: it flies as its ship type.
+- **TAKE OUT OF SERVICE** keeps an escort at the station; **RETURN TO SERVICE** brings it back.
+
+**Orders.** Escorts launch with you in formation. In flight, pause and choose **FLEET ORDERS**: give one escort or all of them an order. Orders take effect when you resume.
+
+| Order | What the escorts do |
+|---|---|
+| **FOLLOW** | Fly in formation beside you and return fire at hostiles already attacking you or them |
+| **HOLD** | Hold where they are now |
+| **DEFEND** | Engage hostiles that come near you |
+| **ATTACK** | Attack your locked target (press LOCK first); refused, with the reason, if nothing valid is locked |
+
+- **HUD:** the ship card shows `ESCORTS 2 · FOLLOW`, or each escort's number and order when they differ. Each escort carries its number beside it in the sector.
+- **Reset:** every new sector, restart, dock or reload starts in **FOLLOW**.
+
+**Damage and repair.** An escort at 0 hull is **disabled**, not lost. It drops out of the fight, stays disabled through RESTART FLIGHT, and returns to service the next time you dock. Escorts are not invulnerable.
+
+**Stealth, heat and saves.**
+- Silent Running still works with escorts flying: in FOLLOW they hold fire. Your escorts' hits raise Faction Heat as yours do.
+- Saves keep each escort's ship, captain and service state; orders are never saved. Older saves start with no escorts.
+
+**Controls.** The FLEET panel uses the usual menu keys (arrows or W / S, Enter or Space, Escape to go back) and taps; while it is open, flight keys do nothing.
+- **No controller button:** every controller button already has a flight job. The panel has not been tested with a controller.
 
 ## Ship Mind, Navigator and Surveyor advice
 
@@ -399,6 +439,7 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`stealth-p07.mjs`](docs/development/playtest/stealth-p07.mjs) | Silent Running and Gravity Shadow: Z and the SILENT button on and off, fire and boost ending it, the shield pause, the shadow and searching tags against the AI, pause, restart, dock and ship change, HOW TO PLAY text, touch layouts | `npm run preview:e2e` |
   | [`ship-abilities-p08.mjs`](docs/development/playtest/ship-abilities-p08.mjs) | Ship abilities (P08.1 + P08.2): F and the touch button (one tap, one request), exact duration and cooldown on simulation ticks, the HUD panel against the ability status, refusals that consume nothing, pause, Silent Running, restart, reload, sector exit, each ship's effect, scan counts and marks, dock and ship change, CONTROLS and rebinding, six viewports in both flight modes, the guide section | `npm run preview:e2e` |
   | [`missions-heat-p09.mjs`](docs/development/playtest/missions-heat-p09.mjs) | Guild chains and Faction Heat (P09.1 + P09.2): chain stages through the real board, kills, rewards and consequences once, decay and pause, detection by heat, the GUILD CHAINS and FACTION STANDING sections, notices, reloads, legacy saves and eight viewports | `npm run preview:e2e` |
+  | [`fleet-command-p11.mjs`](docs/development/playtest/fleet-command-p11.mjs) | Fleet Command (P11.1 + P11.2): commissioning escorts through the FLEET tab (prices, materials, licences, refusals, one purchase per double click, key or tap), captains and transfers, the four orders for one vessel or all, ATTACK on the locked target, the HUD line, disabled vessels and docking, sector changes, restarts, reloads, legacy saves, a failed panel load and eight viewports | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview
@@ -517,7 +558,20 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 
 ---
 
-## What's new in the 2026-10-31 ship expansion and recovery archive
+## What's new in the 2026-11-01 fleet command archive
+
+`GALAXIA_Release_2026-11-01_Fleet-Command.zip` adds, on top of the 2026-10-31 Ship Expansion and Recovery archive (Classic Mode, all ten ships, their prices, stats and abilities, weapons, flight modes, stealth, missions, heat, recovery and crew recruitment unchanged):
+
+- **Fleet Command (optional):** commission up to three escort hulls at a station's **FLEET** tab. Each costs the hull's materials plus a Guild commission of 100 to 250 marks, and each is captained by one of your recruited crew. You always fly your own ship. See [Fleet Command](#fleet-command-escorts).
+- **Captains:** choose, move or release a captain, with a confirmation before a captain is moved from another escort, replaced or released. Captains and Bridge advisors are separate roles, and a captain gives no bonus.
+- **Orders:** **FLEET ORDERS** in the pause menu gives one escort or all of them **FOLLOW**, **HOLD**, **DEFEND** or **ATTACK** (your locked target). The ship card shows the current orders, and each escort carries its number in the sector.
+- **Damage:** an escort at 0 hull is disabled, not lost, and returns to service the next time you dock.
+- **Saves:** each escort's ship, captain and service state are kept; orders are not saved. Older saves load with no escorts.
+- **Download size:** the fleet panel and the escort flight code load only when a pilot opens the FLEET tab or has an escort to fly.
+
+None of this has been playtested by a person or tried on a physical device, and the panel has no controller button.
+
+## Earlier: what was new in the 2026-10-31 ship expansion and recovery archive
 
 `GALAXIA_Release_2026-10-31_Ship-Expansion-and-Recovery.zip` adds, on top of the 2026-10-30 Missions and Faction Heat archive (Classic Mode, the six original ships, their prices, stats and abilities, weapons, flight modes, stealth, missions and heat unchanged):
 
@@ -578,7 +632,22 @@ Neither change has been playtested by a person or tried on a physical device; se
 
 ## What has been verified
 
-**Automated, on the current code (ship expansion and recovery, 2026-10-31):**
+**Automated, on the current code (fleet command, 2026-11-01):**
+
+- `BASE_PATH=/galaxia/ npm run check` exit 0: 2,448 passed, the 17 opt-in measurement runs skipped. `verify:dist` OK, with every existing budget unchanged:
+  - first download: 96.5 kB gzip of 110 kB;
+  - Free Roam at start: 222.3 kB of 225 kB;
+  - CSS: 24.4 kB of 25 kB;
+  - the lazy fleet panel chunk: 5.3 kB of 7 kB (new, with its own limit);
+  - the lazy escort flight chunk: 5.6 kB of 18 kB.
+- Headless Chromium against this code:
+  - Fleet Command: 117 of 117, covering commissioning, refusals, one purchase per double click, key or tap, captains, the four orders, ATTACK on the locked target, the HUD line, disabled escorts, sector changes, restarts, reloads, older saves, a failed panel load and eight screen sizes from 320×568 to 1920×1080 with emulated touch;
+  - ship recovery (102), ship abilities (113), stealth (69), faint signals (42), Guild chains and Faction Heat (55), Ship Mind advice (65), crew (42), flight modes (56, and 8 on the production build), controls (162);
+  - pause and the pause menu (20, 85), the tutorial and guide (70), the Hangar (34), the economy (68), the Galaxy and System Map (30, 21), ships and cargo (32), combat (19) and a simulated controller (23);
+  - the release smoke test on the production build (77).
+- Older browser scripts that still fail exactly as on the previous code: Armory details (44 of 46: the nuke and lock-on cards), phone-landscape collection log (34 of 35), and six scripts that predate the pause menu groups, the new CONTROLS panel and the first-run guide.
+
+**Earlier, on the ship expansion and recovery code (2026-10-31):**
 
 - `BASE_PATH=/galaxia/ npm run check` exit 0: 2,382 passed, the 17 opt-in measurement runs skipped. `verify:dist` OK, with every budget unchanged:
   - first download: 96.2 kB gzip of 110 kB;
@@ -627,6 +696,7 @@ Neither change has been playtested by a person or tried on a physical device; se
 - **Guild chains and Faction Heat:** heat numbers come from automated checks, not players. The chain and standing cards are text (keyboard focus moves between the panel's buttons); heat notices have no sound of their own.
 - **Faint signals:** there is no sound cue for a bearing. The bearing prompt is the usual INTERACT button; on a tall phone (390×844, emulated) a thumb resting low in the left corner can cover its edge, though the DRAG TO FLY spot does not. The difficulty (sensor range, the 35° rule, the error of each bearing) comes from simulations, not from players.
 - **Advice layout:** the advice line was checked in emulated layouts only (1280×720, and 360×640, 320×568, 740×360 and 568×320 touch screens). In touch portrait it hangs just below the ship and the NEARBY line steps aside while it shows. On the narrowest phones (320 px wide), a long crew message can overlap the touch stick's ring if your thumb rests high on the screen; it is drawn over, never in the way of input. Screen-reader announcements are wired up but were not tried with a real screen reader.
+- **Fleet Command:** escort strength and the commission come from automated checks, not players. There is no controller button for FLEET ORDERS and the panel was not tested with a controller. Escort markers were checked from screenshots only. Touch was checked in Chromium's emulation only.
 - **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.
 - **Classic:** a single high score (no name entry or table); the score caps at 9,999,990; a few original arcade rules that could not be confirmed are configurable.
 - **General:** sound effects and short jingles only (no music); English only; saves are local to one browser.

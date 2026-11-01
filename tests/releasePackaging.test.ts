@@ -109,8 +109,10 @@ describe('file selection', () => {
       'docs/development/playtest/missions-heat-p09.mjs', 'docs/freeroam/MISSIONS_AND_FACTION_HEAT.md',
       // P10.1: the ship recovery harness ships too (a player feature); its design notes stay out
       'docs/development/playtest/ship-recovery-p10.mjs', 'docs/freeroam/SHIP_EXPANSION.md',
+      // P11.2: the fleet harness ships too (a player feature); its design notes and the internal Admin session stay out
+      'docs/development/playtest/fleet-command-p11.mjs', 'docs/development/playtest/fleet-admin-p11.mjs', 'docs/freeroam/FLEET_COMMAND.md',
     ]);
-    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/missions-heat-p09.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/ship-abilities-p08.mjs', 'docs/development/playtest/ship-recovery-p10.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
+    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/fleet-command-p11.mjs', 'docs/development/playtest/missions-heat-p09.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/ship-abilities-p08.mjs', 'docs/development/playtest/ship-recovery-p10.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
   });
 
   it('rejects unsafe paths', () => {

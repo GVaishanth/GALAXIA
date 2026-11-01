@@ -141,4 +141,9 @@ export interface CrewWorld {
   readonly missionDone: (missionId: string) => boolean;
   /** Distress beacons cleared (wreck-defence sites in the saved sectors). */
   readonly rescues: number;
+  /**
+   * P11.1: crew who captain a fleet vessel (FLEET_COMMAND.md). A captain never takes a seat aboard
+   * (so never advises the pilot) and cannot be dismissed until returned to the roster. Absent = none.
+   */
+  readonly captains?: readonly string[];
 }

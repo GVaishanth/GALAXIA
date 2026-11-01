@@ -53,6 +53,8 @@ export interface AdminPanelDeps {
   readonly selectShip: (id: string) => string;
   /** Open the hangar (docked) or go to the nearest station. '' = done (panel closed), otherwise a line. */
   readonly hangar: () => string;
+  /** P11.2: open the Fleet panel (its Admin test-fleet block). '' = done (panel closed), otherwise a line. */
+  readonly fleet: () => string;
   /** End the session (confirmed already): the mode restores the normal save. */
   readonly exit: () => void;
   readonly close: () => void;
@@ -270,6 +272,14 @@ export function createAdminPanel(d: AdminPanelDeps): AdminPanel {
         if (r) {
           say(r);
           render('hangar');
+        }
+      }),
+      btn('', 'FLEET', 'fleet', () => {
+        d.sound('uiSelect');
+        const r = d.fleet();
+        if (r) {
+          say(r);
+          render('fleet');
         }
       }),
       btn('', 'CLOSE', 'close', () => {

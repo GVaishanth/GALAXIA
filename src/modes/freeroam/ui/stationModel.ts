@@ -2,18 +2,19 @@
  * Station interface model (Prompt 12): the docked hub's tabs and its overview.
  * Pure (no DOM), unit-tested. The tab strip is presentation: every tab opens a
  * panel that already existed (hangar, fabricator, missions, exchange,
- * upgrades), the equipment screen or the armory (Combat P03B), whose actions call the same rules as
- * before. Nothing here changes what docking does.
+ * upgrades), the equipment screen, the armory (Combat P03B) or the Fleet panel (P11.2, a lazy chunk), whose
+ * actions call the same rules as before. Nothing here changes what docking does.
  */
 import { formatMarks } from '../progression/ledger.ts';
 
-export const STATION_TABS = Object.freeze(['station', 'hangar', 'armory', 'equipment', 'fabricator', 'missions', 'exchange', 'upgrades'] as const);
+export const STATION_TABS = Object.freeze(['station', 'hangar', 'armory', 'fleet', 'equipment', 'fabricator', 'missions', 'exchange', 'upgrades'] as const);
 export type StationTab = (typeof STATION_TABS)[number];
 
 export const TAB_LABEL: Readonly<Record<StationTab, string>> = Object.freeze({
   station: 'STATION',
   hangar: 'HANGAR',
   armory: 'ARMORY',
+  fleet: 'FLEET',
   equipment: 'EQUIPMENT',
   fabricator: 'FABRICATOR',
   missions: 'MISSIONS',
@@ -50,6 +51,8 @@ export interface StationSummary {
   readonly active: number;
   readonly offers: number;
   readonly stored: number;
+  /** P11.2: fleet vessels owned (absent = none). */
+  readonly escorts?: number;
 }
 
 export interface OverviewLine {
@@ -87,6 +90,7 @@ export function stationOverview(s: StationSummary): StationOverview {
     { tab: 'missions', title: 'MISSIONS', detail: s.ready > 0 ? 'Turn in completed work, take new jobs.' : 'Take contracts and story missions.', badge: s.ready > 0 ? `${s.ready} READY` : s.offers > 0 ? plural(s.offers, 'OFFER') : '' },
     { tab: 'hangar', title: 'HANGAR', detail: 'Choose, buy and inspect ships.', badge: '' },
     { tab: 'armory', title: 'ARMORY', detail: 'Choose the weapons your ship carries and starts with.', badge: '' },
+    { tab: 'fleet', title: 'FLEET', detail: 'Commission escort hulls and choose their captains.', badge: s.escorts ? plural(s.escorts, 'ESCORT') : '' },
     { tab: 'equipment', title: 'EQUIPMENT', detail: 'Fit stored modules to the ship’s slots.', badge: s.stored > 0 ? `${s.stored} STORED` : '' },
     { tab: 'fabricator', title: 'FABRICATOR', detail: 'Build modules from cargo.', badge: '' },
     { tab: 'exchange', title: 'EXCHANGE', detail: 'Trade cargo with the Guild for marks.', badge: '' },
