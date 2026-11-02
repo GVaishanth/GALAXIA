@@ -24,6 +24,7 @@ import { EMPTY_PROFILE, FREEROAM_VERSION, loadProfile, saveProfile, withVessels,
 import { auditProfile } from '../src/modes/freeroam/saveAudit.ts';
 import { SLOT_NUMBERS } from '../src/modes/freeroam/saveSlots.ts';
 import { EMPTY_SECTOR_SAVE, type Landmark, type SectorLayout } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, disposeSectorRun, pauseSector, restartSector, resumeSector, RUN, shipTuning, stepSector, type SectorEvent, type SectorInput, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { deriveShip } from '../src/modes/freeroam/ships/equipment.ts';
 import { missingFor } from '../src/modes/freeroam/ships/hangar.ts';
@@ -427,6 +428,7 @@ describe('P11.1 fleet wing on the real sector simulation', () => {
     const { L, cx, cy } = arenaAt([body(0, -260, 120)]);
     const r = flight(L, cx, cy, [spec('fv-1', 'shrike', MAREN)]);
     r.silent = false;
+    forceCritical(r, 'normal'); // Finale P1: targeting under test, on the ordinary damage path
     expect(Kit.issueOrder(r, 'all', { kind: 'defend' }).ok).toBe(true);
     const a = foe(r, 'raider', cx, cy - 520);
     for (let i = 0; i < 30; i++) {
@@ -439,6 +441,7 @@ describe('P11.1 fleet wing on the real sector simulation', () => {
     // the same threat in the open is engaged and fired on
     const o = arenaAt();
     const r2 = flight(o.L, o.cx, o.cy, [spec('fv-1', 'shrike', MAREN)]);
+    forceCritical(r2, 'normal'); // the engaged target must still be there at the check (a critical would destroy it)
     Kit.issueOrder(r2, 'all', { kind: 'defend' });
     const b = foe(r2, 'raider', o.cx, o.cy - 330);
     let fired = 0;

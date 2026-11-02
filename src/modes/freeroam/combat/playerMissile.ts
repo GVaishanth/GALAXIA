@@ -44,6 +44,7 @@
 import { WEAPON_BY_ID, type AmmoRule, type Guidance, type OrdnanceWeapon, type WeaponId } from '../../../config/weapons.ts';
 import { cycleWeapon, fireGate, startCooldown, tickArsenal, type FireGate } from '../../../core/weapons/arsenal.ts';
 import type { SectorEvent, SectorRun } from '../sector/run.ts';
+import { rollCritical, useCritical, type CritToken } from './critical.ts';
 import { openZone } from './dilation.ts';
 import { FAMILIES } from './families.ts';
 import { inInterference } from './hazards.ts';
@@ -132,6 +133,8 @@ export interface PlayerMissile {
   life: number;
   /** Hostile id it homes on (lock-on); null for unguided weapons and once lost (then it flies straight). */
   target: number | null;
+  /** Finale P1: the launch's one critical decision (direct ship impact only; never the blast). Never saved. */
+  readonly crit?: CritToken | null;
 }
 
 export function freshMissileSkill(): MissileSkill {
@@ -263,7 +266,7 @@ function launch(run: SectorRun, w: OrdnanceWeapon, target: Agent | null, events:
   const speed = w.projectile.launchSpeed + Math.max(0, s.vx * nx + s.vy * ny);
   const x = s.x + nx * (run.tune.radius + 6);
   const y = s.y + ny * (run.tune.radius + 6);
-  run.missiles.push({ id: run.nextMissile++, weapon: w.id, x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, speed, life: w.projectile.lifeTicks, target: target ? target.id : null });
+  run.missiles.push({ id: run.nextMissile++, weapon: w.id, x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, speed, life: w.projectile.lifeTicks, target: target ? target.id : null, crit: rollCritical(run) });
   if (w.ammo.kind === 'energy' && !run.unlimitedAmmo) run.energy = Math.max(0, run.energy - w.ammo.cost);
   if (w.ammo.kind === 'stock' && !run.unlimitedAmmo) {
     const left = Math.max(0, (run.ammo[w.id] ?? 0) - 1);
@@ -419,7 +422,8 @@ export function stepMissiles(run: SectorRun, events: SectorEvent[]): void {
     }
     if (hit) {
       const dmg = w.impactDamage * (bossClass(hit) ? w.damageRules.bossMul : 1);
-      damageAgent(run, hit, dmg, 'player', events);
+      // the direct hit alone can be critical (never a capital, never a wary ship); the blast below is unchanged
+      damageAgent(run, hit, dmg, 'player', events, run.ship, hostileTo(run, hit.faction, 'player') && useCritical(m.crit, hit));
       events.push({ type: 'missileHit', weapon: w.id, hostile: hit.id, x: m.x, y: m.y, damage: dmg, killed: hit.state === 'destroyed' });
       run.missiles.splice(i, 1);
       detonate(run, w, m.x, m.y, hit, events);

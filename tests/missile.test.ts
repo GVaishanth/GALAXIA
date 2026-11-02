@@ -21,6 +21,7 @@ import { sectorCue } from '../src/modes/freeroam/audio/frCues.ts';
 import { FR_SOUNDS } from '../src/modes/freeroam/audio/frSounds.ts';
 import { missileGauge } from '../src/modes/freeroam/ui/hudModel.ts';
 import { EMPTY_SECTOR_SAVE } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, disposeSectorRun, pauseSector, restartSector, resumeSector, stepSector, type SectorEvent, type SectorInput, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { arena } from './helpers/combatProbe.ts';
 
@@ -69,6 +70,7 @@ const ehp = (a: Agent): number => a.hull + a.shield;
 describe('missile skill lifecycle (activation -> validation -> lock -> launch -> guidance -> impact -> cleanup -> cooldown)', () => {
   it('locks the ship ahead, launches after the lock, damages it exactly once, then cools down and is ready again', () => {
     const r = setup();
+    forceCritical(r, 'normal'); // Finale P1: ordinary damage path only (criticals off for this run: tests/criticalHits.test.ts covers them)
     const a = foe(r, 'heavy', 0, -380);
     const e0 = r.energy;
     const before = ehp(a);
@@ -186,6 +188,7 @@ describe('missile skill lifecycle (activation -> validation -> lock -> launch ->
 
   it('two ships overlapping on its path: exactly one impact, on the nearest, damage once; the small blast reaches the other once', () => {
     const r = setup();
+    forceCritical(r, 'normal'); // Finale P1: ordinary damage path only (criticals off for this run: tests/criticalHits.test.ts covers them)
     const near = foe(r, 'heavy', 0, -300);
     const far = foe(r, 'heavy', 0, -312); // radii overlap along the path
     const n0 = ehp(near);

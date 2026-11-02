@@ -218,6 +218,17 @@ Bearings are not saved; leave the system and the signal starts again (a finished
 - **FACTION STANDING** (MISSIONS tab, or pause → MISSIONS) lists the four factions with their heat, tier and what it changes.
 - **Fair Shares** (Gleaner Accord, stage 2) can only be accepted while Gleaner heat is below 40. The check is made when you accept: once accepted, the stage stays yours even if the heat rises.
 
+### Critical hits
+
+- Every weapon shot in a fight, fired by you, by hostile ships or by your escorts, has a **10 % chance** to be a critical hit. Each shot is decided on its own when it is fired, so two in a row can happen, and so can a long run without one.
+- A critical hit **destroys the ship it strikes at once**, whatever its hull and shield. It counts exactly like any other kill (bounty, Faction Heat, mission progress, salvage).
+- Only ships can be destroyed this way. Stations, planets, asteroids, wrecks, Raid Boxes and tow lines take ordinary damage, and so do **capital ships**, which are immune.
+- A ship that is not hostile to you yet (a wary Gleaner, the Haven Guild) takes an ordinary hit from your shot, never a critical one.
+- One decision per firing: twin bolts and flak pellets fired together share it, and it is used by the first ship hit. A missile or nuke decides once, for the ship it strikes directly. Its blast on other ships stays ordinary damage. Mines, launch bays and gravity never cause critical hits.
+- **Hostile critical hits can strike you.** Your ship is lost and you are recalled as usual, and half your cargo stays in a wreck. The short protection after a recall still blocks it. An escort hit by one is disabled, keeps its captain and returns to service at the next dock.
+- You see one short line when it happens: **CRITICAL HIT · RAIDER DESTROYED**, **CRITICAL HIT TAKEN · SHIP LOST** or **CRITICAL HIT ON** an escort. (These are combat notices, not the Ship Mind's ◆ CRITICAL advice level.)
+- Fights against groups are more dangerous than before: keep your distance, use cover and Silent Running, and do not take on several ships at once lightly.
+
 ### Travel and staying safe
 
 - Selecting a destination never travels by itself; every jump is confirmed.

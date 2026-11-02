@@ -8,7 +8,8 @@
  * block that says the session is a sandbox (nothing saved, costs bypassed,
  * the real balance untouched), the Admin Navigator (galaxies -> systems,
  * search, details, TRAVEL to the arrival or the station), the ship list
- * (every roster ship with its real stats and weapon mounts, SELECT), and
+ * (every roster ship with its real stats and weapon mounts, SELECT),
+ * DIAGNOSTICS (Finale P1: read-outs and sandbox test actions, a lazy chunk), and
  * HANGAR / CLOSE / EXIT ADMIN. EXIT asks for a confirmation with CANCEL
  * focused, so a repeated Enter never ends the session by accident.
  *
@@ -55,6 +56,8 @@ export interface AdminPanelDeps {
   readonly hangar: () => string;
   /** P11.2: open the Fleet panel (its Admin test-fleet block). '' = done (panel closed), otherwise a line. */
   readonly fleet: () => string;
+  /** Finale P1: fill the DIAGNOSTICS tab (the mode loads admin/diagnostics.ts on first use). */
+  readonly diag: (host: HTMLElement, say: (text: string) => void, rerender: (focus?: string) => void) => void;
   /** End the session (confirmed already): the mode restores the normal save. */
   readonly exit: () => void;
   readonly close: () => void;
@@ -62,7 +65,7 @@ export interface AdminPanelDeps {
 }
 
 export type AdminCommand = 'prev' | 'next' | 'confirm' | 'back';
-export type AdminTab = 'navigator' | 'ships';
+export type AdminTab = 'navigator' | 'ships' | 'diag';
 
 export interface AdminPanel {
   readonly root: HTMLElement;
@@ -158,7 +161,7 @@ export function createAdminPanel(d: AdminPanelDeps): AdminPanel {
       b.classList.toggle('is-on', tab === id);
       return b;
     };
-    tabs.replaceChildren(mk('navigator', 'NAVIGATOR'), mk('ships', 'SHIPS'));
+    tabs.replaceChildren(mk('navigator', 'NAVIGATOR'), mk('ships', 'SHIPS'), mk('diag', 'DIAGNOSTICS'));
   };
 
   const renderNavigator = (): HTMLElement[] => {
@@ -295,7 +298,11 @@ export function createAdminPanel(d: AdminPanelDeps): AdminPanel {
   };
 
   function renderBody(): void {
-    body.replaceChildren(...(tab === 'navigator' ? renderNavigator() : renderShips()));
+    if (tab === 'diag') {
+      const host = el('div', 'fr-admin-diags');
+      d.diag(host, say, render);
+      body.replaceChildren(host);
+    } else body.replaceChildren(...(tab === 'navigator' ? renderNavigator() : renderShips()));
   }
 
   function render(focus?: string): void {

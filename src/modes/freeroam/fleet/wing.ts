@@ -25,6 +25,7 @@ import { FAMILIES } from '../combat/families.ts';
 import { bodyBetween, STEALTH } from '../combat/stealth.ts';
 import type { Agent, EnemyShot, Target } from '../combat/state.ts';
 import { damageAgent, hostileTo, pushOutOfSolids, shotBlocked, sweptHit } from '../combat/world.ts';
+import { landCritical, rollCritical, useCritical, type CritToken } from '../combat/critical.ts';
 import { dist, segmentDistance } from '../sector/grid.ts';
 import type { SectorEvent, SectorRun } from '../sector/run.ts';
 import { stepShip, TICK_SECONDS } from '../sim.ts';
@@ -450,11 +451,12 @@ function coolOrFire(run: SectorRun, w: Wing, u: FleetUnit, t: Agent | null, even
     const al = Math.hypot(ax, ay) || 1;
     if ((nx * ax + ny * ay) / al >= Math.cos(WING.fireArc)) {
       const speed = wp.shotSpeed + Math.max(0, sh.vx * nx + sh.vy * ny);
+      const crit = rollCritical(run); // one decision per escort firing (the same policy as the pilot's gun)
       for (let b = 0; b < wp.bolts; b++) {
         const off = wp.bolts === 1 ? 0 : (b === 0 ? -0.5 : 0.5) * wp.spread;
         const x = sh.x + nx * (u.spec.radius + 4) - ny * off;
         const y = sh.y + ny * (u.spec.radius + 4) + nx * off;
-        w.bolts.push({ x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, life: wp.lifeTicks, damage: wp.damage, from: u.id });
+        w.bolts.push({ x, y, px: x, py: y, vx: nx * speed, vy: ny * speed, life: wp.lifeTicks, damage: wp.damage, from: u.id, crit });
       }
       u.cooldown = wp.cooldownTicks;
       u.quiet = 0;
@@ -526,7 +528,7 @@ function stepBolts(run: SectorRun, w: Wing, events: SectorEvent[]): void {
         // only ships hostile to the pilot: a fleet bolt never provokes a neutral (it passes them)
         if (a.state === 'destroyed' || !hostileTo(run, a.faction, 'player') || !sweptHit(b.px, b.py, b.x, b.y, a.x, a.y, FAMILIES[a.family].radius + R)) continue;
         const from = w.units.find((u) => u.id === b.from)?.ship ?? b;
-        damageAgent(run, a, b.damage, 'player', events, from); // the one attribution point (heat, kills, bounty)
+        damageAgent(run, a, b.damage, 'player', events, from, useCritical(b.crit, a)); // the one attribution point (heat, kills, bounty)
         dead = true;
         break;
       }
@@ -537,9 +539,10 @@ function stepBolts(run: SectorRun, w: Wing, events: SectorEvent[]): void {
 
 /* ------------------------------------------------- enemy fire on the wing */
 
-function hurt(run: SectorRun, u: FleetUnit, amount: number, events: SectorEvent[]): void {
-  const n = Math.max(0, Number.isFinite(amount) ? amount : 0);
+function hurt(run: SectorRun, u: FleetUnit, amount: number, events: SectorEvent[], crit = false): void {
+  let n = Math.max(0, Number.isFinite(amount) ? amount : 0);
   if (n <= 0 || u.state !== 'active' || run.disposed) return;
+  if (crit) n = Math.max(n, u.shield + u.hull); // Finale P1: a critical disables the escort (never destroys or frees it)
   const absorbed = Math.min(u.shield, n);
   u.shield -= absorbed;
   u.hull = Math.max(0, u.hull - (n - absorbed));
@@ -549,6 +552,7 @@ function hurt(run: SectorRun, u: FleetUnit, amount: number, events: SectorEvent[
     u.state = 'disabled';
     u.target = null;
     u.order = FOLLOW;
+    if (crit) landCritical(run, 'escort', 'npc', u.spec.vessel, u.ship.x, u.ship.y, events); // logged before the disabled line
     events.push({ type: 'fleet', change: 'disabled', vessel: u.spec.vessel });
   }
 }
@@ -559,20 +563,20 @@ export function shotHit(run: SectorRun, s: EnemyShot, events: SectorEvent[]): bo
   if (!w || !hostileTo(run, s.faction, 'player')) return false;
   for (const u of w.units) {
     if (u.state !== 'active' || !sweptHit(s.px, s.py, s.x, s.y, u.ship.x, u.ship.y, u.spec.radius + s.radius)) continue;
-    hurt(run, u, s.damage, events);
+    hurt(run, u, s.damage, events, useCritical(s.crit));
     return true;
   }
   return false;
 }
 
 /** A sweep beam hits each live escort once per firing (the beam's own `hit` set). */
-export function beamHit(run: SectorRun, a: Agent, ex: number, ey: number, width: number, damage: number, hit: Set<Target>, events: SectorEvent[]): void {
+export function beamHit(run: SectorRun, a: Agent, ex: number, ey: number, width: number, damage: number, hit: Set<Target>, events: SectorEvent[], crit?: CritToken | null): void {
   const w = run.wing;
   if (!w || !hostileTo(run, a.faction, 'player')) return;
   for (const u of w.units) {
     if (u.state !== 'active' || hit.has(u.id) || segmentDistance(u.ship, a, { x: ex, y: ey }) > width + u.spec.radius) continue;
     hit.add(u.id);
-    hurt(run, u, damage, events);
+    hurt(run, u, damage, events, useCritical(crit));
   }
 }
 

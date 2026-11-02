@@ -61,6 +61,7 @@ export const CHUNK_BUDGETS: readonly ChunkBudget[] = Object.freeze([
   { name: 'shipyard', role: 'Hangar panel (first dock)', load: 'lazy', gzip: 13_000, required: true, marker: 'LOCKED · RECOVERED, NEVER SOLD' }, // measured 11.0 kB
   { name: 'fleetKit', role: 'Fleet Command: purchase, captains, orders and the fleet wing (a save with fleet vessels, or a fleet command)', load: 'lazy', gzip: 18_000, required: true, marker: 'FLEET HULL COMMISSIONED' }, // P11.1 budget set by the prompt (measured below in FLEET_COMMAND.md)
   { name: 'fleetPanel', role: 'Fleet panel: the FLEET station tab and the pause menu FLEET ORDERS (first opened)', load: 'lazy', gzip: 7_000, required: true, marker: 'COMMISSION AN ESCORT HULL' }, // P11.2: measured 5.2 kB (about 1.35x)
+  { name: 'diagnostics', role: 'Admin panel DIAGNOSTICS tab (only inside an active Admin session, first opened)', load: 'lazy', gzip: 4_500, required: true, marker: 'TEST REWARD GUARDS' }, // Finale P1: measured 3.3 kB (about 1.35x, as fleetPanel)
   { name: 'world', role: 'Free Roam modules shared with the recovery chunk', load: 'eager', gzip: 10_000, required: false }, // measured 8.3 kB
   { name: 'guideDialog', role: 'guide (title screen; Free Roam imports its content)', load: 'shared', gzip: 14_000, required: false }, // measured 11.8 kB
 ]);

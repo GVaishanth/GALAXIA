@@ -52,6 +52,8 @@ const ALLOWED: Record<string, readonly string[]> = {
 const rel = (f: string): string => relative(src, f).replace(/\\/g, '/');
 const importSpecs = (f: string): string[] =>
   [...readFileSync(f, 'utf8').matchAll(/from\s+'(\.[^']+)'|import\s*\(\s*'(\.[^']+)'\s*\)/g)].map((m) => rel(resolve(dirname(f), (m[1] ?? m[2])!)));
+/** Static value imports only (`import type` excluded), resolved like importSpecs. */
+const valueImports = (f: string): string[] => [...readFileSync(f, 'utf8').matchAll(/^import\s+(?!type\b)[^;]*?from\s+'(\.[^']+)'/gm)].map((m) => rel(resolve(dirname(f), m[1]!)));
 
 describe('layer dependencies', () => {
   const all = files(src);
@@ -294,7 +296,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps Free Roam combat pure and independent of Classic (Prompt 9)', () => {
     const dir = join(src, 'modes/freeroam/combat');
     const files = readdirSync(dir).filter((f) => f.endsWith('.ts'));
-    expect(files.sort()).toEqual(['ai.ts', 'difficulty.ts', 'dilation.ts', 'encounters.ts', 'factionHeat.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'shipAbilities.ts', 'shipLock.ts', 'state.ts', 'stealth.ts', 'weapons.ts', 'world.ts']);
+    expect(files.sort()).toEqual(['ai.ts', 'critical.ts', 'difficulty.ts', 'dilation.ts', 'encounters.ts', 'factionHeat.ts', 'factions.ts', 'families.ts', 'hazards.ts', 'hudModel.ts', 'playerMissile.ts', 'projectiles.ts', 'shipAbilities.ts', 'shipLock.ts', 'state.ts', 'stealth.ts', 'weapons.ts', 'world.ts']);
     for (const f of files) {
       const code = readFileSync(join(dir, f), 'utf8');
       // deterministic simulation: no DOM, wall clock, unseeded randomness or storage
@@ -371,7 +373,7 @@ describe('mode separation (Free Roam Prompt 2)', () => {
   it('keeps P04 Admin Access contained: pure rules, a DOM panel without timers or storage, entered only through the hidden activation', () => {
     const dir = join(src, 'modes/freeroam/admin');
     const names = readdirSync(dir).filter((f) => f.endsWith('.ts')).sort();
-    expect(names).toEqual(['activation.ts', 'adminPanel.ts', 'login.ts', 'loginScreen.ts', 'navigator.ts', 'session.ts']);
+    expect(names).toEqual(['activation.ts', 'adminPanel.ts', 'diagnostics.ts', 'login.ts', 'loginScreen.ts', 'navigator.ts', 'session.ts']);
     for (const f of ['activation.ts', 'login.ts', 'navigator.ts', 'session.ts']) {
       const code = readFileSync(join(dir, f), 'utf8');
       expect(code, f).not.toMatch(/\b(document|window|Math\.random|Date\.now|performance\.now|localStorage|sessionStorage|fetch)\b/);
@@ -379,12 +381,18 @@ describe('mode separation (Free Roam Prompt 2)', () => {
       for (const spec of importSpecs(join(dir, f))) expect(spec, `${f} imports ${spec}`).not.toMatch(/^(persistence|shared\/persistence)\/|^modes\/(crossMode|freeroam\/(profile|saveSlots|freeRoamMode))\.ts$/);
     }
     // the DOM parts (panel, login screen): no timers or frame loops of their own, no global listeners, no storage
-    for (const f of ['adminPanel.ts', 'loginScreen.ts']) {
+    for (const f of ['adminPanel.ts', 'diagnostics.ts', 'loginScreen.ts']) {
       const code = readFileSync(join(dir, f), 'utf8');
       expect(code, f).not.toMatch(/\b(requestAnimationFrame|setTimeout|setInterval|localStorage|sessionStorage|fetch|saveSlot|recordOwned|console)\b/);
       expect(code, f).not.toMatch(/(window|document)\.addEventListener/);
     }
-    for (const spec of [...importSpecs(join(dir, 'adminPanel.ts')), ...importSpecs(join(dir, 'loginScreen.ts'))]) expect(spec).not.toMatch(/^(persistence|shared\/persistence)\/|^modes\/(crossMode|freeroam\/(profile|saveSlots|freeRoamMode))\.ts$/);
+    for (const spec of [...importSpecs(join(dir, 'adminPanel.ts')), ...importSpecs(join(dir, 'diagnostics.ts')), ...importSpecs(join(dir, 'loginScreen.ts'))]) expect(spec).not.toMatch(/^(persistence|shared\/persistence)\/|^modes\/(crossMode|freeroam\/(profile|saveSlots|freeRoamMode))\.ts$/);
+    // Finale P1: the DIAGNOSTICS tab is one lazy chunk the shell imports dynamically (once, never statically), and it
+    // takes values only from modules of the shared world chunk (the rest is lent by the shell through DiagHost)
+    const shellCode = readFileSync(join(src, 'modes/freeroam/freeRoamMode.ts'), 'utf8');
+    expect(shellCode.match(/import\('\.\/admin\/diagnostics\.ts'\)/g)).toHaveLength(1);
+    expect(valueImports(join(src, 'modes/freeroam/freeRoamMode.ts'))).not.toContain('modes/freeroam/admin/diagnostics.ts');
+    for (const v of valueImports(join(dir, 'diagnostics.ts'))) expect(v).toMatch(/^modes\/freeroam\/(combat\/(critical|factionHeat|families|shipAbilities|stealth)|progression\/ui\/common)\.ts$/);
     // outside Free Roam only the title host reaches it, and only the activation detectors
     for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/'))) {
       const specs = importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/admin/'));
@@ -417,7 +425,9 @@ describe('mode separation (Free Roam Prompt 2)', () => {
     // inside Free Roam: the shell (rules and commits), the hangar (the Bridge section), the save audit, and (P05.2) the
     // advisor observation builder and forecast, which only build the crew/observation.ts types
     const users = all.filter((x) => !rel(x).startsWith('modes/freeroam/crew/') && importSpecs(x).some((s2) => s2.startsWith('modes/freeroam/crew/'))).map(rel).sort();
-    expect(users).toEqual(['modes/freeroam/advisor/forecast.ts', 'modes/freeroam/advisor/observe.ts', 'modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/ships/hangarPanel.ts']);
+    // Finale P1: the Admin DIAGNOSTICS tab reads the crew view type only (the shell lends the view)
+    expect(users).toEqual(['modes/freeroam/admin/diagnostics.ts', 'modes/freeroam/advisor/forecast.ts', 'modes/freeroam/advisor/observe.ts', 'modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/ships/hangarPanel.ts']);
+    expect(valueImports(join(src, 'modes/freeroam/admin/diagnostics.ts')).filter((v) => v.startsWith('modes/freeroam/crew/'))).toEqual([]);
     for (const f of all.filter((x) => rel(x).startsWith('modes/freeroam/advisor/'))) for (const spec of importSpecs(f).filter((s2) => s2.startsWith('modes/freeroam/crew/'))) expect(spec, rel(f)).toMatch(/^modes\/freeroam\/crew\/(observation|types)\.ts$/);
     expect(readdirSync(dir).includes('ui')).toBe(true);
   });
@@ -460,10 +470,11 @@ describe('P11.1 Fleet Command boundaries (fleet/)', () => {
   });
 
   it('fleet code imports only catalogue, ship, combat-world and sim modules, values only from the world chunk (never input, crew, the shell or the Hangar)', () => {
-    const allowed = /^modes\/freeroam\/(fleet\/[\w]+|catalogue\/types|ships\/(roster|types)|combat\/(families|stealth|state|world)|sector\/(grid|run)|sim|profile)\.ts$/;
+    const allowed = /^modes\/freeroam\/(fleet\/[\w]+|catalogue\/types|ships\/(roster|types)|combat\/(critical|families|stealth|state|world)|sector\/(grid|run)|sim|profile)\.ts$/;
     // value imports must stay inside the lazy kit or the shared world chunk (a value from run.ts, the Hangar or the
-    // equipment model would pull eager code into the chunk, or the kit into eager code)
-    const valueOk = /^modes\/freeroam\/(fleet\/(vessels|command|wing)|ships\/roster|combat\/(families|stealth|world)|sector\/grid|sim)\.ts$/;
+    // equipment model would pull eager code into the chunk, or the kit into eager code). Finale P1: the critical-hit
+    // policy (combat/critical.ts) is imported by combat/world.ts, so it lives in the same shared world chunk.
+    const valueOk = /^modes\/freeroam\/(fleet\/(vessels|command|wing)|ships\/roster|combat\/(critical|families|stealth|world)|sector\/grid|sim)\.ts$/;
     for (const f of fleet) {
       for (const spec of importSpecs(f)) expect(spec, `${rel(f)} imports ${spec}`).toMatch(allowed);
       for (const v of valuesOf(f)) expect(v, `${rel(f)} value-imports ${v}`).toMatch(valueOk);
@@ -476,7 +487,9 @@ describe('P11.1 Fleet Command boundaries (fleet/)', () => {
   it('only the shell, the save audit and the sector run use fleet/, and only the shell loads the kit (one dynamic import)', () => {
     const users = all.filter((x) => !rel(x).startsWith('modes/freeroam/fleet/') && importSpecs(x).some((s2) => s2.startsWith('modes/freeroam/fleet/'))).map(rel);
     // P11.2: the lazy Fleet panel and its view model read fleet/ types and the eager vessels.ts helpers (never kit values: checked below)
-    expect(users).toEqual(['modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/sector/run.ts', 'modes/freeroam/ui/fleetPanel.ts', 'modes/freeroam/ui/fleetView.ts']);
+    // Finale P1: the Admin DIAGNOSTICS tab reads the Vessels type only (never a fleet value)
+    expect(users).toEqual(['modes/freeroam/admin/diagnostics.ts', 'modes/freeroam/freeRoamMode.ts', 'modes/freeroam/saveAudit.ts', 'modes/freeroam/sector/run.ts', 'modes/freeroam/ui/fleetPanel.ts', 'modes/freeroam/ui/fleetView.ts']);
+    expect(valuesOf(join(src, 'modes/freeroam/admin/diagnostics.ts')).filter((v) => v.startsWith('modes/freeroam/fleet/'))).toEqual([]);
     for (const f of all.filter((x) => !rel(x).startsWith('modes/freeroam/fleet/'))) {
       const kitValues = valuesOf(f).filter((v) => /^modes\/freeroam\/fleet\/(fleetKit|wing|command)\.ts$/.test(v));
       expect(kitValues, rel(f)).toEqual([]);

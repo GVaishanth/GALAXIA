@@ -57,7 +57,8 @@ import { createArsenal, type Arsenal, type ArsenalSpec } from '../../../core/wea
 import { compatibleWeapons, defaultSetup } from '../ships/armory.ts';
 import type { Agent, CombatLevel, EncounterRuntime, EnemyShot, Mine, Pending } from '../combat/state.ts';
 import type { WeaponId } from '../combat/weapons.ts';
-import { damageAgent, damagePlayer, pushOutOfSolids, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
+import { damageAgent, damagePlayer, hostileTo, pushOutOfSolids, shotBlocked, sweptHit, type PlayerDamageSource } from '../combat/world.ts';
+import { freshCrit, rollCritical, useCritical, type CritEvent, type CritState, type CritToken } from '../combat/critical.ts';
 import { FAMILIES } from '../combat/families.ts';
 import { dist } from './grid.ts';
 import { safeResumePoint, type ResumeAt } from './resume.ts';
@@ -151,6 +152,8 @@ export interface Shot {
   life: number;
   /** Hit points removed on impact (weapon module). */
   readonly damage: number;
+  /** Finale P1: this firing event's critical (shared by twin bolts; null = ordinary). Never saved. */
+  readonly crit?: CritToken | null;
 }
 
 /** One tick of controller-independent intent: movement, optional aim, fire held. */
@@ -265,6 +268,8 @@ export type SectorEvent =
   | { readonly type: 'overheated' }
   /** The overheated weapon cooled enough to fire again. */
   | { readonly type: 'weaponCooled' }
+  /** Finale P1: a confirmed critical hit (the struck ship was destroyed, lost or disabled). */
+  | CritEvent
   | { readonly type: 'struck'; readonly hostile: number; readonly x: number; readonly y: number; readonly shield: boolean; readonly by: 'player' | 'npc' }
   | {
       readonly type: 'destroyed';
@@ -444,6 +449,8 @@ export interface SectorRun {
   disposed: boolean;
   /** Temporary variation only (spawn jitter, enemy traits, aim jitter, evade rolls); never layout, loot or rewards. */
   readonly rng: Rng;
+  /** Finale P1: critical-hit decisions (their own seeded stream, forced mode, counters). Never saved. */
+  readonly crit: CritState;
   /** Spawn point used on entry (and after a recall when it was the arrival). */
   readonly spawn: string;
   /** Flight step override (FR-TD-83); null everywhere except the Gravity Flight test sector. */
@@ -595,6 +602,7 @@ export function createSectorRun(layout: SectorLayout, save: SectorSave, o: RunOp
     completeTick: 0,
     disposed: false,
     rng: createRng((o.seed ?? layout.seed) >>> 0),
+    crit: freshCrit(o.seed ?? layout.seed),
     spawn: sp.id,
     flight: null,
     wells: wellsOf(layout.landmarks),
@@ -711,12 +719,13 @@ function fire(run: SectorRun, events: SectorEvent[]): void {
   const n = noseOf(sh.heading);
   // the bolt keeps exactly the nose direction; the ship's forward speed is added so bolts never lag a fast ship
   const speed = w.shotSpeed + Math.max(0, sh.vx * n.x + sh.vy * n.y);
+  const crit = rollCritical(run); // one decision per trigger pull, shared by twin bolts
   for (let b = 0; b < w.bolts; b++) {
     // twin bolts sit side by side across the nose, both parallel to it
     const off = w.bolts === 1 ? 0 : (b === 0 ? -0.5 : 0.5) * w.spread;
     const x = sh.x + n.x * (run.tune.radius + 4) - n.y * off;
     const y = sh.y + n.y * (run.tune.radius + 4) + n.x * off;
-    run.shots.push({ id: run.nextShot++, x, y, px: x, py: y, vx: n.x * speed, vy: n.y * speed, life: w.lifeTicks, damage: w.damage });
+    run.shots.push({ id: run.nextShot++, x, y, px: x, py: y, vx: n.x * speed, vy: n.y * speed, life: w.lifeTicks, damage: w.damage, crit });
   }
   run.fireCooldown = w.cooldownTicks;
   run.shotsFired += 1;
@@ -761,7 +770,8 @@ function stepShots(run: SectorRun, events: SectorEvent[]): void {
       for (const a of run.hostiles) {
         if (a.state === 'destroyed' || !sweptHit(s.px, s.py, s.x, s.y, a.x, a.y, FAMILIES[a.family].radius + RUN.shotRadius)) continue;
         dead = true;
-        damageAgent(run, a, s.damage, 'player', events);
+        // a critical lands only on a ship already hostile to the pilot (a wary ship takes the ordinary hit, then turns)
+        damageAgent(run, a, s.damage, 'player', events, run.ship, hostileTo(run, a.faction, 'player') && useCritical(s.crit, a));
         break;
       }
     }

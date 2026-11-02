@@ -301,6 +301,7 @@ function weapons(ctx: GuideContext): GuideBlock[] {
         { label: 'SET AS START', text: 'The weapon selected when you launch.' },
         { label: 'CYCLE', text: `ADD / REMOVE FROM CYCLE chooses what NEXT WEAPON steps through. ${primary ? `The ${primary.name} is always in the cycle.` : ''}`.trim() },
         { label: 'AMMUNITION', text: 'Heavy missiles and nukes carry limited rounds, refilled free when you dock. The lock-on missile uses energy and has a cooldown.' },
+        { label: 'CRITICAL HITS', text: 'Any shot, yours or a hostile\'s, has a 10 % chance to destroy the ship it strikes outright. Capital ships are immune, and blasts stay ordinary damage.' },
       ],
     },
     { kind: 'points', items: fit },

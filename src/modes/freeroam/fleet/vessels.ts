@@ -13,6 +13,7 @@
  * the pilot flies, so the onboard advisors (crew/advisor.ts, which read only seated crew) never
  * see them. Crew are passed in as plain ids (`CrewRoster`); this folder imports nothing from crew/.
  */
+import type { CritToken } from '../combat/critical.ts';
 import type { SavedVessels } from '../profile.ts';
 import { SHIP_BY_ID } from '../ships/roster.ts';
 import type { ShipDef, ShipId, ShipStats, WeaponProfile } from '../ships/types.ts';
@@ -163,6 +164,8 @@ export interface FleetBolt {
   readonly damage: number;
   /** The firing unit's id. */
   readonly from: number;
+  /** Finale P1: this firing event's critical (shared by twin bolts; null = ordinary). Never saved. */
+  readonly crit?: CritToken | null;
 }
 
 export type FleetKit = typeof Kit;

@@ -153,6 +153,8 @@ import type { ResumeAt } from './sector/resume.ts';
 import { createSequenceDetector, keyStroke, takeAdminRequest } from './admin/activation.ts';
 import { mediaMatches } from '../../shared/ui/media.ts';
 import { createAdminPanel, type AdminPanel, type AdminPanelDeps } from './admin/adminPanel.ts';
+import type { DiagHost, renderDiagnostics } from './admin/diagnostics.ts';
+import { forceCritical } from './combat/critical.ts';
 import { createAdminLogin, type AdminLogin, type AdminLoginStatus } from './admin/loginScreen.ts';
 import { navigatorGalaxies, navigatorSystems } from './admin/navigator.ts';
 import { ADMIN_HOME, adminArrive, adminFleet, adminOnlyShips, adminSelectShip, beginAdmin, DESTINATION_TEXT, isAdmin, mayPersist, resolveDestination, stationApproach, travelCost, unlimitedAmmo, type AdminSession, type DestinationRef } from './admin/session.ts';
@@ -373,6 +375,10 @@ export interface FreeRoamStatus {
   readonly fleetPanel: () => FleetPanelStatus | null;
   /** P11.1 QA only: a blast of a hostile faction on one vessel through the wing's real damage path (disabled-state checks). */
   readonly qaFleetBlast: (vessel: string, damage: number) => boolean;
+  /** Finale P1: this sector visit's critical-hit state (read only; null outside a sector). */
+  readonly crit: () => { readonly mode: string; readonly rolls: number; readonly rolled: number; readonly landed: number; readonly last: readonly Readonly<Record<string, unknown>>[] } | null;
+  /** Finale P1 QA only: force the critical outcome for this sector visit ('auto' | 'crit' | 'normal'). Test hook object only: absent from release builds. */
+  readonly qaCrit: (mode: string) => boolean;
   /** FR-TD-86: the planet / star pull on the ship this tick and the sector's wells (read only). */
   readonly gravity: () => {
     readonly x: number;
@@ -2160,6 +2166,14 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         cue(e);
       } else if (e.type === 'struck') {
         cue(e);
+      } else if (e.type === 'critical') {
+        // Finale P1: one log line per confirmed critical involving the pilot or the wing (NPC duels stay silent)
+        if (e.victim === 'player') notify('CRITICAL HIT TAKEN · SHIP LOST', undefined, 'warn');
+        else if (e.victim === 'escort') {
+          const v = vessels.list.find((x) => x.id === e.what);
+          notify(`CRITICAL HIT ON ${v ? crewShipName(v.ship).toUpperCase() : 'AN ESCORT'}`, undefined, 'warn');
+        }
+        else if (e.by === 'player') notify(`CRITICAL HIT · ${(FAMILIES[e.what as FamilyId]?.label ?? 'ship').toUpperCase()} DESTROYED`, undefined, 'info');
       } else if (e.type === 'destroyed') {
         cue(e);
         bursts.push({ x: e.x, y: e.y, startMs: lastFrameTs, size: e.size });
@@ -2770,6 +2784,41 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     actions.fleet();
     return '';
   };
+  /** Finale P1: the DIAGNOSTICS tab: admin/diagnostics.ts is fetched on first use inside an Admin session only. */
+  let diagMod: { readonly renderDiagnostics: typeof renderDiagnostics } | null = null;
+  let diagLoad: 'idle' | 'loading' | 'failed' = 'idle';
+  const diagHost: DiagHost = {
+    session: () => admin,
+    run: () => run,
+    prog: () => prog,
+    vessels: () => vessels,
+    crew: () => crewView,
+    heat: () => heatBk,
+    chains: () => chainViews(prog.missions, prereqCtx()),
+    fleetLines: adminTestFleet.lines,
+    slot: () => services.store.read(slotKey(saveSlotNo)),
+    persists: () => mayPersist(admin),
+    claim: claimMission,
+    spawn: (family, x, y, heading) => (run ? spawnAgent(run, family, 'red-tally', 'admin-probe', 'guard', x, y, heading) : null),
+    rewardRepeat: (id) => award(ledgerOf(prog), 1, 'bounty', 'Admin guard check', id),
+  };
+  const adminDiag = (host: HTMLElement, say: (text: string) => void, again: (focus?: string) => void): void => {
+    if (!isAdmin(admin)) return;
+    if (diagMod) return diagMod.renderDiagnostics(diagHost, host, say, again);
+    host.append(el('p', 'fr-text fr-text-dim', diagLoad === 'failed' ? 'Diagnostics could not load. Reload the page to retry (that ends the session).' : 'Loading diagnostics…'));
+    if (diagLoad !== 'idle') return;
+    diagLoad = 'loading';
+    import('./admin/diagnostics.ts').then(
+      (m) => {
+        diagMod = m;
+        adminPanel?.refresh();
+      },
+      () => {
+        diagLoad = 'failed';
+        adminPanel?.refresh();
+      },
+    );
+  };
   const adminDeps: AdminPanelDeps = {
     view: () => ({
       origin: admin ? `${SHIP_BY_ID.get(admin.origin.ship)!.name} at ${placeName(admin.origin.galaxy, admin.origin.system)}` : '',
@@ -2784,6 +2833,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     selectShip: adminSelect,
     hangar: adminHangar,
     fleet: adminFleetOpen,
+    diag: adminDiag,
     exit: () => exitAdmin(),
     close: () => closeAdmin(),
     sound: (cue) => services.sound.play(cue),
@@ -4615,6 +4665,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
               return true;
             }
           : () => false,
+        crit: () => (run ? { mode: run.crit.mode, rolls: run.crit.rolls, rolled: run.crit.rolled, landed: run.crit.landed, last: run.crit.last.map((e) => ({ ...e })) } : null),
+        qaCrit: __GALAXIA_TEST_HOOKS__ ? (mode: string): boolean => !!run && forceCritical(run, mode) : () => false,
         frames: 0,
         ticks: 0,
         draws: 0,

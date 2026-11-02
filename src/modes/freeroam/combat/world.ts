@@ -25,6 +25,7 @@ import { COMBAT } from './difficulty.ts';
 import { isHostile, type Side } from './factions.ts';
 import { FAMILIES } from './families.ts';
 import { heatHit } from './factionHeat.ts';
+import { critShip, landCritical } from './critical.ts';
 import { incomingDamageMul } from './shipAbilities.ts';
 import type { Agent, Target } from './state.ts';
 
@@ -109,11 +110,12 @@ export type PlayerDamageSource = 'impact' | 'hostile' | 'star' | 'hazard' | 'fir
  * P08.1: the one damage boundary for the Condor's Bulwark (combat/shipAbilities.ts
  * incomingDamageMul: combat hits only, exactly 1 otherwise). Returns the damage dealt (0 when ignored).
  */
-export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamageSource, events: SectorEvent[], from?: { readonly x: number; readonly y: number }): number {
-  const n = Math.max(0, Number.isFinite(amount) ? amount : 0) * incomingDamageMul(run, source);
+export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamageSource, events: SectorEvent[], from?: { readonly x: number; readonly y: number }, crit = false): number {
+  let n = Math.max(0, Number.isFinite(amount) ? amount : 0) * incomingDamageMul(run, source);
   if (n <= 0 || run.disposed) return 0;
   const timed = source !== 'star' && source !== 'hazard';
   if (timed && run.invuln > 0) return 0;
+  if (crit) n = Math.max(n, run.shield + run.hull); // Finale P1: a critical is lethal (invulnerability above still absorbs it)
   const absorbed = Math.min(run.shield, n);
   run.shield -= absorbed;
   const toHull = n - absorbed;
@@ -125,6 +127,7 @@ export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamag
     else if (toHull > 0) run.invuln = COMBAT.hitInvulnTicks;
     events.push({ type: 'hit', source, damage: Math.round(n * 10) / 10 });
   }
+  if (crit && run.hull <= 0) landCritical(run, 'player', 'npc', 'pilot', run.ship.x, run.ship.y, events);
   return n;
 }
 
@@ -137,10 +140,12 @@ export function damagePlayer(run: SectorRun, amount: number, source: PlayerDamag
  * own ship (a fleet vessel): the struck ship turns on that point, never on the
  * pilot it did not see. Attribution is unchanged: one heatHit per call.
  */
-export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side | 'environment', events: SectorEvent[], from: { readonly x: number; readonly y: number } = run.ship): boolean {
+export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side | 'environment', events: SectorEvent[], from: { readonly x: number; readonly y: number } = run.ship, crit = false): boolean {
   if (a.state === 'destroyed' || run.disposed) return false;
-  const n = Math.max(0, Number.isFinite(amount) ? amount : 0) * (by === 'player' || by === 'environment' ? 1 : COMBAT.npcDamageMul);
+  let n = Math.max(0, Number.isFinite(amount) ? amount : 0) * (by === 'player' || by === 'environment' ? 1 : COMBAT.npcDamageMul);
   if (n <= 0) return false;
+  crit &&= by !== 'environment' && critShip(a);
+  if (crit) n = Math.max(n, a.shield + a.hull); // Finale P1: a critical destroys the ship through this same path
   const absorbed = Math.min(a.shield, n);
   a.shield -= absorbed;
   a.hull = Math.max(0, a.hull - (n - absorbed));
@@ -163,6 +168,7 @@ export function damageAgent(run: SectorRun, a: Agent, amount: number, by: Side |
     a.vy *= 0.3;
     if (by === 'player') run.kills += 1;
     events.push({ type: 'destroyed', hostile: a.id, family: a.family, faction: a.faction, source: a.source, by: by === 'player' ? 'player' : 'npc', role: a.role, x: a.x, y: a.y, size: FAMILIES[a.family].size });
+    if (crit) landCritical(run, 'hostile', by === 'player' ? 'player' : 'npc', a.family, a.x, a.y, events);
     return true;
   }
   events.push({ type: 'struck', hostile: a.id, x: a.x, y: a.y, shield: absorbed > 0 && a.shield > 0, by: by === 'player' ? 'player' : 'npc' });

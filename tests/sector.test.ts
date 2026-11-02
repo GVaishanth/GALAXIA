@@ -8,6 +8,7 @@ import { sectorContext } from '../src/modes/freeroam/sector/context.ts';
 import { generateSector, rareChance, repairLayout, unreachableTargets } from '../src/modes/freeroam/sector/generate.ts';
 import { buildGrid, canReach, cellOf, dist, reachable, solidsOf, type OccupancyGrid } from '../src/modes/freeroam/sector/grid.ts';
 import { EMPTY_SECTOR_SAVE, globalPoiId, maxTierFor, POI_ID, RARE_RESOURCES, SECTOR_GEN, type Point, type Poi, type SectorLayout, type SectorSave } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, disposeSectorRun, interact, isDone, marksLeft, pauseSector, restartSector, resumeSector, stepSector, type SectorEvent, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { validateSector } from '../src/modes/freeroam/sector/validate.ts';
 import { COMBAT, difficultyRow } from '../src/modes/freeroam/combat/difficulty.ts';
@@ -377,6 +378,7 @@ describe('local sector run: hostiles and encounters (temporary entities)', () =>
     const L = hostileSector;
     const inst = poisOf(L, 'installation')[0]!;
     const run = createSectorRun({ ...L, sites: [], hazards: [] }, EMPTY_SECTOR_SAVE, { seed: 6 });
+    forceCritical(run, 'normal'); // Finale P1: the encounter lifecycle on the ordinary damage path (a critical could end the pilot's survival early)
     run.ship.x = inst.x + inst.alertR - 20;
     run.ship.y = inst.y;
     // no encounter starts during the arrival grace

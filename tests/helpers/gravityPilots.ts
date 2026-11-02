@@ -12,6 +12,7 @@ import { createGravityLab, installGravityLab, type GravityLab } from '../../src/
 import { NO_CONTROLS, type VectorControls } from '../../src/modes/freeroam/gravity/physics.ts';
 import { sectorContext } from '../../src/modes/freeroam/sector/context.ts';
 import { generateSector } from '../../src/modes/freeroam/sector/generate.ts';
+import { forceCritical } from '../../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, stepSector, type SectorInput, type SectorRun } from '../../src/modes/freeroam/sector/run.ts';
 
 const SOL = getCatalogue().systems.find((s) => s.id === LAB_SYSTEM_ID)!;
@@ -39,6 +40,7 @@ export function labRun(scenario: ScenarioId, params: Partial<LabParams> = {}, se
   const p = sanitizeParams({ ...DEFAULT_PARAMS, ...params });
   const { layout, body } = gravityLabLayout(BASE, p);
   const run = createSectorRun(layout, LAB_SAVE, { seed });
+  forceCritical(run, 'normal'); // Finale P1: the evasion study counts ordinary damage taken; criticals are measured in criticalHits.test.ts
   const l = createGravityLab(body, p);
   l.scenario = scenario;
   l.assist = assist;

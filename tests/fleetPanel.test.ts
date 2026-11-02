@@ -14,6 +14,7 @@ import { FLEET_COMMAND, NO_VESSELS, vesselNo, wingSummary, type FleetUnit, type 
 import type { RequirementInfo } from '../src/modes/freeroam/galaxy/progress.ts';
 import { formatMarks } from '../src/modes/freeroam/progression/ledger.ts';
 import { EMPTY_SECTOR_SAVE, type Landmark, type SectorLayout } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, RUN, shipTuning, stepSector, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { deriveShip } from '../src/modes/freeroam/ships/equipment.ts';
 import { acquireShip, missingFor, selectShip, STARTER_FLEET } from '../src/modes/freeroam/ships/hangar.ts';
@@ -326,6 +327,7 @@ describe('P11.2 balance review', () => {
     const { L, cx, cy } = arenaAt(o.shadow ? [body(0, -150, 90)] : []);
     const r = createSectorRun(L, { ...EMPTY_SECTOR_SAVE, surveyed: true }, { seed: 5, ship: deriveShip('petrel'), heat: o.heat ? { v: { 'red-tally': o.heat }, calm: {} } : undefined });
     r.grace = 0;
+    forceCritical(r, 'normal'); // Finale P1: the P11.2 review measures the ordinary damage model; criticals are measured in criticalHits.test.ts
     r.invuln = 0;
     Object.assign(r.ship, { x: cx, y: cy, px: cx, py: cy, vx: 0, vy: 0 });
     if (n) Kit.deploy(r, Kit, (o.specs ?? SPECS).slice(0, n), RUN.heat);

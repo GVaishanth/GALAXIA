@@ -16,9 +16,10 @@ import { FAMILIES } from './families.ts';
 import type { Agent, Mine, Target } from './state.ts';
 import { WEAPONS, type WeaponId } from './weapons.ts';
 import { damageAgent, damagePlayer, hostileTo, inSanctuary, shotBlocked, sweptHit, targetPos, TICK } from './world.ts';
+import { useCritical, type CritToken } from './critical.ts';
 
 /** Fire one projectile from a ship along a world angle (radians, 0 = +x). Refused at the cap. */
-export function spawnShot(run: SectorRun, a: Agent, weapon: WeaponId, angle: number, lateral = 0, target: Target | null = null): boolean {
+export function spawnShot(run: SectorRun, a: Agent, weapon: WeaponId, angle: number, lateral = 0, target: Target | null = null, crit: CritToken | null = null): boolean {
   if (run.enemyShots.length >= COMBAT.maxShots) return false;
   const w = WEAPONS[weapon];
   if (w.kind !== 'bolt' && w.kind !== 'shell' && w.kind !== 'missile') return false;
@@ -45,6 +46,7 @@ export function spawnShot(run: SectorRun, a: Agent, weapon: WeaponId, angle: num
     radius: w.radius,
     target: w.kind === 'missile' ? target : null,
     hp: w.hp,
+    crit,
   });
   return true;
 }
@@ -78,7 +80,7 @@ export function stepEnemyShots(run: SectorRun, events: SectorEvent[]): void {
     let dead = s.life <= 0 || (s.kind === 'missile' && s.hp <= 0) || s.x < 0 || s.y < 0 || s.x > L.width || s.y > L.height || inSanctuary(L, s) || shotBlocked(L, s.px, s.py, s.x, s.y, s.radius);
     if (!dead && hostileTo(run, s.faction, 'player') && !run.docked && sweptHit(s.px, s.py, s.x, s.y, run.ship.x, run.ship.y, run.tune.radius + s.radius)) {
       // one impact: the shot is spent even when invulnerability absorbs it
-      damagePlayer(run, s.damage, 'fire', events, { x: s.px, y: s.py });
+      damagePlayer(run, s.damage, 'fire', events, { x: s.px, y: s.py }, useCritical(s.crit));
       dead = true;
     }
     if (!dead && run.wing?.kit.shotHit(run, s, events)) dead = true; // P11.1: a fleet vessel in the way takes it (once)
@@ -86,7 +88,7 @@ export function stepEnemyShots(run: SectorRun, events: SectorEvent[]): void {
       for (const a of run.hostiles) {
         if (a.id === s.owner || a.state === 'destroyed' || !hostileTo(run, s.faction, a.faction)) continue;
         if (!sweptHit(s.px, s.py, s.x, s.y, a.x, a.y, FAMILIES[a.family].radius + s.radius)) continue;
-        damageAgent(run, a, s.damage, s.faction, events);
+        damageAgent(run, a, s.damage, s.faction, events, run.ship, useCritical(s.crit, a));
         dead = true;
         break;
       }
@@ -107,14 +109,14 @@ export function stepBeam(run: SectorRun, a: Agent, events: SectorEvent[]): void 
   const P = run.ship;
   if (!b.hit.has('player') && hostileTo(run, a.faction, 'player') && !inSanctuary(run.layout, P) && segmentDistance(P, a, { x: ex, y: ey }) <= w.width + run.tune.radius) {
     b.hit.add('player');
-    damagePlayer(run, w.damage * run.row.damage, 'fire', events, a);
+    damagePlayer(run, w.damage * run.row.damage, 'fire', events, a, useCritical(b.crit));
   }
-  run.wing?.kit.beamHit(run, a, ex, ey, w.width, w.damage * run.row.damage, b.hit, events); // P11.1: once per vessel per firing
+  run.wing?.kit.beamHit(run, a, ex, ey, w.width, w.damage * run.row.damage, b.hit, events, b.crit); // P11.1: once per vessel per firing
   for (const o of run.hostiles) {
     if (o === a || o.state === 'destroyed' || b.hit.has(o.id) || !hostileTo(run, a.faction, o.faction)) continue;
     if (segmentDistance(o, a, { x: ex, y: ey }) > w.width + FAMILIES[o.family].radius) continue;
     b.hit.add(o.id);
-    damageAgent(run, o, w.damage * run.row.damage, a.faction, events);
+    damageAgent(run, o, w.damage * run.row.damage, a.faction, events, run.ship, useCritical(b.crit, o));
   }
   if (b.ticks >= b.total) a.beam = null;
 }

@@ -15,6 +15,7 @@ import { gateOf } from '../src/modes/freeroam/combat/playerMissile.ts';
 import type { Agent } from '../src/modes/freeroam/combat/state.ts';
 import { armedLoadout, compatibleWeapons, defaultSetup } from '../src/modes/freeroam/ships/armory.ts';
 import { EMPTY_SECTOR_SAVE } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, disposeSectorRun, pauseSector, restartSector, resumeSector, setRunLoadout, setRunOrdnance, stepSector, type SectorEvent, type SectorInput, type SectorRun } from '../src/modes/freeroam/sector/run.ts';
 import { arena } from './helpers/combatProbe.ts';
 
@@ -234,6 +235,7 @@ describe('heavy AoE missile', () => {
 
   it('impact: the struck ship takes the impact once; ships in the radius take falloff blast once; outside take nothing', () => {
     const r = setup();
+    forceCritical(r, 'normal'); // Finale P1: ordinary damage path only (criticals off for this run: tests/criticalHits.test.ts covers them)
     const direct = foe(r, 'heavy', 0, -300);
     const near = foe(r, 'heavy', 50, -300);
     const out = foe(r, 'heavy', 0, -300 - HEAVY.blast!.radius - FAMILIES.heavy.radius - 120);

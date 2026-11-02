@@ -28,6 +28,7 @@ import { STORY } from '../src/modes/freeroam/progression/missionData.ts';
 import { sectorContext } from '../src/modes/freeroam/sector/context.ts';
 import { generateSector } from '../src/modes/freeroam/sector/generate.ts';
 import { EMPTY_SECTOR_SAVE, type SectorLayout } from '../src/modes/freeroam/sector/model.ts';
+import { forceCritical } from '../src/modes/freeroam/combat/critical.ts';
 import { createSectorRun, stepSector } from '../src/modes/freeroam/sector/run.ts';
 import { SHIPS, STARTER_SHIP } from '../src/modes/freeroam/ships/roster.ts';
 import { UPGRADES } from '../src/modes/freeroam/ships/upgrades.ts';
@@ -57,6 +58,7 @@ function duel(d: number, fams: readonly FamilyId[], seed: number): Duel {
   const L = arena(d);
   const r = createSectorRun(L, { ...EMPTY_SECTOR_SAVE, surveyed: true }, { seed });
   r.grace = 0;
+  forceCritical(r, 'normal'); // Finale P1: these guardrails measure the ordinary damage model; the 10 % critical layer is measured in criticalHits.test.ts
   const cx = L.width / 2;
   const cy = L.height / 2;
   Object.assign(r.ship, { x: cx, y: cy, px: cx, py: cy, vx: 0, vy: 0 });

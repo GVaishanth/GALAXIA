@@ -47,6 +47,7 @@ import type { FactionId } from '../catalogue/types.ts';
 import { inInterference } from './hazards.ts';
 import { HEAT, heatOf, heatTier } from './factionHeat.ts';
 import { dropMine, spawnShot, stepBeam } from './projectiles.ts';
+import { rollCritical } from './critical.ts';
 import type { Agent, AgentRole, AiState, Target } from './state.ts';
 import { bodyBetween, effectiveRange, signature, STEALTH } from './stealth.ts';
 import { WEAPONS } from './weapons.ts';
@@ -269,7 +270,7 @@ function release(run: SectorRun, a: Agent, slot: number, angle: number, events: 
   const id = FAMILIES[a.family].weapons[slot]!;
   const w = WEAPONS[id];
   if (w.kind === 'beam') {
-    a.beam = { start: angle, sweep: w.sweep * a.side, ticks: 0, total: w.active, angle: angle - (w.sweep * a.side) / 2, hit: new Set() };
+    a.beam = { start: angle, sweep: w.sweep * a.side, ticks: 0, total: w.active, angle: angle - (w.sweep * a.side) / 2, hit: new Set(), crit: rollCritical(run) };
   } else if (w.kind === 'launch') {
     const bay = { x: a.x - Math.sin(a.heading) * 30, y: a.y + Math.cos(a.heading) * 30 };
     const s = spawnAgent(run, 'raider', a.faction, a.source, 'launched', bay.x, bay.y, a.heading + Math.PI);
@@ -281,15 +282,16 @@ function release(run: SectorRun, a: Agent, slot: number, angle: number, events: 
   } else if (w.kind === 'mine') {
     dropMine(run, a);
   } else if (w.kind === 'missile') {
-    spawnShot(run, a, id, angle, 0, a.target);
+    spawnShot(run, a, id, angle, 0, a.target, rollCritical(run));
   } else {
-    // bolts / shells: pellets fanned over the spread; twin barrels side by side
+    // bolts / shells: pellets fanned over the spread; twin barrels side by side (one critical decision for the volley)
+    const crit = rollCritical(run);
     for (let p = 0; p < w.pellets; p++) {
       const ang = angle + (w.pellets > 1 ? (p / (w.pellets - 1) - 0.5) * w.spread : 0);
       if (w.twin > 0) {
-        spawnShot(run, a, id, ang, -w.twin / 2);
-        spawnShot(run, a, id, ang, w.twin / 2);
-      } else spawnShot(run, a, id, ang);
+        spawnShot(run, a, id, ang, -w.twin / 2, null, crit);
+        spawnShot(run, a, id, ang, w.twin / 2, null, crit);
+      } else spawnShot(run, a, id, ang, 0, null, crit);
     }
     if (w.burst > 1 && a.burstLeft === 0) {
       a.burstLeft = w.burst - 1;
@@ -327,7 +329,7 @@ function tryFire(run: SectorRun, a: Agent, t: { x: number; y: number; vx: number
       a.burstLeft -= 1;
       a.burstTimer = WEAPONS[F.weapons[a.burstSlot]!].burstGap;
       const w = WEAPONS[F.weapons[a.burstSlot]!];
-      spawnShot(run, a, w.id, aimAt(run, a, t, w.speed));
+      spawnShot(run, a, w.id, aimAt(run, a, t, w.speed), 0, null, rollCritical(run)); // each burst shot is its own firing
     }
     return;
   }

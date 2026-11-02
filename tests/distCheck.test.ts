@@ -30,13 +30,15 @@ function goodBuild(base: string): Files {
     'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])};',
     'assets/index-BBB.css': 'body{background:#000}',
     // P10.1: Free Roam loads its two lazy chunks by dynamic import; each carries its inventory marker
-    'assets/freeRoamMode-CCC.js': 'export function createFreeRoamMode(){}const t=()=>p(()=>import(`./tow-T0w_0w-1.js`),[]),s=()=>p(()=>import(`./shipyard-SHPyrd01.js`),[]),f=()=>p(()=>import(`./fleetKit-FLt00001.js`),[]),u=()=>p(()=>import(`./fleetPanel-FLp00001.js`),[]);export{a};',
+    'assets/freeRoamMode-CCC.js': 'export function createFreeRoamMode(){}const t=()=>p(()=>import(`./tow-T0w_0w-1.js`),[]),s=()=>p(()=>import(`./shipyard-SHPyrd01.js`),[]),f=()=>p(()=>import(`./fleetKit-FLt00001.js`),[]),u=()=>p(()=>import(`./fleetPanel-FLp00001.js`),[]),g=()=>p(()=>import(`./diagnostics-DGn00001.js`),[]);export{a};',
     'assets/tow-T0w_0w-1.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=[\`${TOW_MARKER}\`];`,
     'assets/shipyard-SHPyrd01.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=\`${BAY_MARKER}\`;`,
     // P11.1: the lazy Fleet Command chunk
     'assets/fleetKit-FLt00001.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=\`${FLEET_MARKER}\`;`,
     // P11.2: the lazy Fleet panel chunk
     'assets/fleetPanel-FLp00001.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=\`${PANEL_MARKER}\`;`,
+    // Finale P1: the lazy Admin DIAGNOSTICS chunk
+    'assets/diagnostics-DGn00001.js': `import{a as e}from"./freeRoamMode-CCC.js";const l=\`${DIAG_MARKER}\`;`,
   };
 }
 
@@ -44,6 +46,7 @@ const TOW_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'tow')!.marker!;
 const BAY_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'shipyard')!.marker!;
 const FLEET_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetKit')!.marker!;
 const PANEL_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetPanel')!.marker!;
+const DIAG_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'diagnostics')!.marker!;
 const gz = (t: string): number => gzipSync(Buffer.from(t), { level: 9 }).length;
 /** Incompressible filler: a deterministic SHA-256 chain, hex-encoded. */
 const hex = (chars: number): string => Array.from({ length: Math.ceil(chars / 64) }, (_, i) => createHash('sha256').update(`pad${i}`).digest('hex')).join('').slice(0, chars);
@@ -227,9 +230,10 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
       [BAY]: ['lazy', 13_000],
       'assets/fleetKit-FLt00001.js': ['lazy', 18_000],
       'assets/fleetPanel-FLp00001.js': ['lazy', 7_000],
+      'assets/diagnostics-DGn00001.js': ['lazy', 4_500],
     });
     expect(r.freeRoamEager).toBe(gz(f[FR]!));
-    expect(r.freeRoamTotal).toBe(gz(f[FR]!) + gz(f[TOW]!) + gz(f[BAY]!) + gz(f['assets/fleetKit-FLt00001.js']!) + gz(f['assets/fleetPanel-FLp00001.js']!));
+    expect(r.freeRoamTotal).toBe(gz(f[FR]!) + gz(f[TOW]!) + gz(f[BAY]!) + gz(f['assets/fleetKit-FLt00001.js']!) + gz(f['assets/fleetPanel-FLp00001.js']!) + gz(f['assets/diagnostics-DGn00001.js']!));
   });
 
   it('fails a JavaScript chunk that is not in the inventory, and a duplicated inventory name', () => {
@@ -286,7 +290,7 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
     expect(r.problems).toEqual([]);
     const size = (p: string): number => gz(f[p]!);
     expect(r.freeRoamEager).toBe(size(FR) + size('assets/world-W0rld000.js'));
-    expect(r.freeRoamTotal).toBe(size(FR) + size('assets/world-W0rld000.js') + size('assets/guideDialog-GD000000.js') + size(TOW) + size(BAY) + size('assets/fleetKit-FLt00001.js') + size('assets/fleetPanel-FLp00001.js'));
+    expect(r.freeRoamTotal).toBe(size(FR) + size('assets/world-W0rld000.js') + size('assets/guideDialog-GD000000.js') + size(TOW) + size(BAY) + size('assets/fleetKit-FLt00001.js') + size('assets/fleetPanel-FLp00001.js') + size('assets/diagnostics-DGn00001.js'));
   });
 
   it('fails Free Roam\'s eager closure over 225 kB even when its own chunk is under it', () => {
@@ -330,6 +334,8 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
     expect(CHUNK_BUDGETS.find((c) => c.name === 'fleetKit')).toMatchObject({ load: 'lazy', gzip: 18_000, required: true });
     // P11.2: the Fleet panel has its own explicit budget (measured 5.2 kB), lazy and required: never an unmeasured chunk
     expect(CHUNK_BUDGETS.find((c) => c.name === 'fleetPanel')).toMatchObject({ load: 'lazy', gzip: 7_000, required: true, marker: 'COMMISSION AN ESCORT HULL' });
+    // Finale P1: the Admin DIAGNOSTICS tab has its own explicit budget (measured 3.3 kB), lazy and required
+    expect(CHUNK_BUDGETS.find((c) => c.name === 'diagnostics')).toMatchObject({ load: 'lazy', gzip: 4_500, required: true, marker: 'TEST REWARD GUARDS' });
     expect(DIST_BUDGET).toEqual({ entryJsGzip: 110_000, freeRoamJsGzip: 225_000, cssGzip: 25_000, totalBytes: 1_500_000 });
   });
 });

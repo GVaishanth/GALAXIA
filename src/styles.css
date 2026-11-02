@@ -7791,6 +7791,7 @@ html.game-mode body {
 
 .fr-admin-tabs {
   display: flex;
+  flex-wrap: wrap; /* Finale P1: the third tab (DIAGNOSTICS) wraps on the narrowest phones instead of overflowing */
   gap: 6px;
 }
 

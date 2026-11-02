@@ -3,6 +3,7 @@
  * live on the SectorRun, exist only while the sector is loaded and are all
  * dropped by disposeSectorRun(); nothing here is ever saved.
  */
+import type { CritToken } from './critical.ts';
 import type { FactionId } from '../catalogue/types.ts';
 import type { EncounterKind } from '../sector/model.ts';
 import type { FamilyId } from './families.ts';
@@ -48,6 +49,8 @@ export interface BeamState {
   angle: number;
   /** Targets this firing already hit: a beam damages each target once per firing. */
   readonly hit: Set<Target>;
+  /** Finale P1: the firing's one critical decision; the first eligible ship the sweep touches spends it. */
+  readonly crit?: CritToken | null;
 }
 
 export interface Agent {
@@ -139,6 +142,8 @@ export interface EnemyShot {
   /** Missiles: what they home on, and their hit points (player bolts shoot them down). */
   readonly target: Target | null;
   hp: number;
+  /** Finale P1: this firing event's critical (shared by its pellets / twin barrels; null = ordinary). Never saved. */
+  readonly crit?: CritToken | null;
 }
 
 export interface Mine {

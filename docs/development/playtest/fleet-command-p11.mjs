@@ -5,7 +5,8 @@
 // stored vessels and the flying wing. Everything else is the game's own input path: E docks and leaves a
 // sector, WASD flies, Z is Silent Running, Escape pauses (R twice restarts). Test placement is used only to
 // put the ship at the station or the exit beacon, and a guard loop keeps the pilot's hull full (the pilot's
-// survival is not under test here). Scenarios:
+// survival is not under test here). Since Finale P1 every hostile placement pins the visit to ordinary damage
+// (qaCrit('normal'), see spawn below): critical hits are covered by critical-hits-f1.mjs. Scenarios:
 //   1.  lazy load: the fleetKit chunk is fetched once, on the first fleet action, never before;
 //   2.  a purchase deducts the price exactly once (marks once in the ledger, cargo once); the Hangar is untouched;
 //   3.  the captain is assigned and stored (only id, archetype, captain, status in the save);
@@ -97,6 +98,15 @@ const F = (p) => p.evaluate(() => {
   return { kit: c.kit, vessels: c.vessels, captains: c.captains, wing: c.wing, phase: r?.phase, hostiles: r?.hostiles ? r.hostiles.map((a) => a.id) : [], ship: r?.ship ? { x: r.ship.x, y: r.ship.y } : null, silent: r?.silent, owned: f.fleet().owned, active: f.fleet().active, marks: f.progression().marks, cargo: f.profile().cargo, history: f.economy().history.length, heat: f.heat().factions };
 });
 const act = (p, a) => p.evaluate((a) => window.__galaxiaFreeRoam.fleetAct(a), a);
+// Finale P1: critical hits are on by default (10 % per firing event; a confirmed critical destroys a ship at
+// once). These scenarios test fleet orders against a living hostile, not critical hits (critical-hits-f1.mjs
+// does), so every placement first pins the sector visit to ordinary damage through the QA-only qaCrit hook (it
+// exists only in builds with test hooks). A pin that does not take stops the run instead of passing silently.
+const spawn = (p, fam, dx, dy) => p.evaluate(([fam, dx, dy]) => {
+  const f = window.__galaxiaFreeRoam;
+  if (!f.qaCrit('normal')) throw new Error('qaCrit(normal) was refused');
+  return f.qaSpawn(fam, dx, dy);
+}, [fam, dx, dy]);
 const stored = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('galaxia:freeroam')).vessels ?? null);
 /** Keep the pilot alive (not under test) without moving it. */
 const guard = (p) => p.evaluate(() => {
@@ -296,13 +306,13 @@ async function main(browser) {
 
   // 9: Defend Me
   await act(p, { kind: 'order', who: 'all', order: { kind: 'defend' } });
-  const d = await p.evaluate(() => window.__galaxiaFreeRoam.qaSpawn('raider', 220, -160));
+  const d = await spawn(p, 'raider', 220, -160);
   const engaged = await until(p, (id) => { const w = window.__galaxiaFreeRoam.fleetCommand().wing; return w?.units[0].target === id && w.bolts > 0; }, 6000, d);
   check('9: Defend Me: the escort engages the hostile near the pilot and fires', d !== null && engaged, { d, wing: (await F(p)).wing });
   await until(p, (id) => !window.__galaxiaFreeRoam.state.hostiles.some((a) => a.id === id), 15000, d);
 
   // 10, 11, 16: Attack Target, refusals, fallback and heat exactly once
-  const t = await p.evaluate(() => window.__galaxiaFreeRoam.qaSpawn('raider', 320, 120));
+  const t = await spawn(p, 'raider', 320, 120);
   const bad = [];
   bad.push(await act(p, { kind: 'order', who: 'all', order: { kind: 'attack', target: 'player' } }));
   const stn = await p.evaluate(() => window.__galaxiaFreeRoam.state.layout.pois.find((q) => q.kind === 'station').id);
@@ -348,7 +358,7 @@ async function main(browser) {
   await act(p, { kind: 'order', who: 'all', order: { kind: 'follow' } });
   await p.keyboard.press('KeyZ');
   await until(p, () => window.__galaxiaFreeRoam.state.silent === true, 2000);
-  await p.evaluate(() => window.__galaxiaFreeRoam.qaSpawn('raider', 640, 0));
+  await spawn(p, 'raider', 640, 0);
   await sleep(2500);
   s = await F(p);
   const sr = await p.evaluate(() => { const r = window.__galaxiaFreeRoam.state; return { silent: r.silent, sig: r.wing.units[0].sig, tracking: r.hostiles.filter((a) => a.target === 'player').length }; });
@@ -637,7 +647,7 @@ async function uiMain(browser) {
   await fly(p, 'KeyD', 500);
   check('U24: after closing, WASD flies again', (await F(p)).ship.x > x0 + 5);
   // U16: lock a hostile with X, then ATTACK: the escorts take the locked target
-  const t = await p.evaluate(() => window.__galaxiaFreeRoam.qaSpawn('raider', 260, -60));
+  const t = await spawn(p, 'raider', 260, -60);
   await sleep(400);
   await p.keyboard.press('KeyX');
   await sleep(200);
