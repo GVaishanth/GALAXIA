@@ -12,6 +12,15 @@ This guide covers how to play GALAXIA: both modes, every control, the Hangar, th
 
 The title screen offers two modes, **CLASSIC** and **FREE ROAM**. Choose with the arrow keys and press Enter, click a card, or tap one.
 
+### Music on the home page
+
+The home page plays GALAXIA's own theme, **BEYOND THE BEACON**. It plays only on the home page: starting a game fades it out, and coming back starts it again from the beginning.
+
+- Browsers only allow sound after you interact with the page, so at first the home page shows **PLAY MUSIC**. Press it (or click, tap or press any key on the home page) to start the music. If the browser still holds the audio, the line under the buttons says so; press PLAY MUSIC again. The game itself never needs the music.
+- **MUTE MUSIC** silences the music: the home theme and the short music jingles (stage start, stage clear, game over, mission complete and similar). Shots, explosions, menu clicks and alerts keep playing.
+- **MUSIC** sets the music volume (0–100 %). Drag it, tap it, or use the arrow keys. A volume of 0 silences the music too, without turning on MUTE MUSIC.
+- Both settings are remembered on this device and are the same ones you find in Classic SETTINGS and Free Roam SOUND. Muting keeps your volume, so unmuting brings it back as it was.
+
 ### First-run tutorial
 
 The first time you open GALAXIA, a short tutorial appears over the title screen. It has six steps, with a step counter and progress bar:
@@ -393,11 +402,13 @@ Advice uses only what your sensors can see. A condition is mentioned once, and a
 
 ## Settings and accessibility
 
-- **Classic SETTINGS:** sound, volume, effects and jingle levels, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
-- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode, Ship Mind advice, **SIGNALS**: Simple Signals) and → **SOUND** (including fullscreen).
+- **Classic SETTINGS:** sound, volume, effects and music levels, **MUTE MUSIC**, glow, pixel scaling, motion, fullscreen, and **ARCADE DISPLAY MODE**: off is **Responsive Display** (the default, as large as the screen allows), on is **Arcade Display** (a centred, framed arcade screen).
+- **Free Roam:** pause → **SETTINGS & HELP** → **CONTROLS** (key bindings, mouse aim, zoom, flight mode, Ship Mind advice, **SIGNALS**: Simple Signals) and → **SOUND** (volumes, **MUTE MUSIC** and fullscreen).
 - **Reduced motion** follows your system setting by default and can be changed in SETTINGS.
 - Menus work fully from the keyboard with visible focus; nothing depends on hover.
-- Sound starts only after your first click, tap or key press. The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.
+- Sound starts only after your first click, tap or key press (the home page offers **PLAY MUSIC** for that).
+- **Music** plays only on the home page. MUTE MUSIC and the MUSIC volume affect only the theme and the music jingles, never the sound effects, and both are remembered. A game controller cannot reach the home-page music buttons; use Classic SETTINGS or Free Roam SOUND.
+- The game pauses by itself when the tab is hidden, the window loses focus or a phone is rotated mid-game.
 
 ## Saves
 

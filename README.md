@@ -100,7 +100,8 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - Free Roam keys can be rebound. Menus work fully from the keyboard, with visible focus.
 - The game pauses and releases held inputs when the tab is hidden, the window loses focus or a phone is rotated.
 - Reduced motion (follows the system setting by default), glow and pixel-scaling options, and fullscreen where the browser supports it.
-- All sprites, the font and the sounds are generated in code; there are no image, font or audio files to download, and no network requests after loading except the one-time download of Free Roam's code from the same site.
+- An original main theme, **BEYOND THE BEACON**, plays on the home page only, with **MUSIC** volume and **MUTE MUSIC** on the home page, in Classic SETTINGS and in Free Roam's SOUND panel. Both are remembered. Muting music never silences the sound effects.
+- All sprites, the font, the sounds and the music are generated in code; there are no image, font or audio files to download. After loading, the only network requests are the one-time downloads of Free Roam's code and of the home-page music from the same site.
 
 ---
 
@@ -116,7 +117,7 @@ npm run preview   # serve it at http://localhost:4173/
 
 Open the address shown in the terminal. For quick experiments, `npm run dev` starts a development server at http://localhost:5173/ instead.
 
-**What to expect:** the title screen shows the GALAXIA logo and two mode cards, **CLASSIC** and **FREE ROAM**. On your first visit, a six-step tutorial opens over it; you can step through it or press **SKIP TUTORIAL**. Choose a mode with the arrow keys and Enter, by clicking, or by tapping. Sound starts after your first key press, click or tap.
+**What to expect:** the title screen shows the GALAXIA logo and two mode cards, **CLASSIC** and **FREE ROAM**. On your first visit, a six-step tutorial opens over it; you can step through it or press **SKIP TUTORIAL**. Choose a mode with the arrow keys and Enter, by clicking, or by tapping. Sound starts after your first key press, click or tap; until then the home page offers **PLAY MUSIC**, because browsers only allow audio after you interact with the page.
 
 To try it on a phone, the preview and development servers listen on your local network; open the computer's network address shown in the terminal. Touch controls appear automatically on a touch screen.
 
@@ -441,6 +442,7 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`missions-heat-p09.mjs`](docs/development/playtest/missions-heat-p09.mjs) | Guild chains and Faction Heat (P09.1 + P09.2): chain stages through the real board, kills, rewards and consequences once, decay and pause, detection by heat, the GUILD CHAINS and FACTION STANDING sections, notices, reloads, legacy saves and eight viewports | `npm run preview:e2e` |
   | [`fleet-command-p11.mjs`](docs/development/playtest/fleet-command-p11.mjs) | Fleet Command (P11.1 + P11.2): commissioning escorts through the FLEET tab (prices, materials, licences, refusals, one purchase per double click, key or tap), captains and transfers, the four orders for one vessel or all, ATTACK on the locked target, the HUD line, disabled vessels and docking, sector changes, restarts, reloads, legacy saves, a failed panel load and eight viewports | `npm run preview:e2e` |
   | [`critical-hits-f1.mjs`](docs/development/playtest/critical-hits-f1.mjs) | Critical hits through the real FIRE keys: a new visit starts with chance decisions, a critical destroys the struck ship once through the ordinary kill, ordinary hits only wear it down, capital ships are immune, nothing is decided while paused, a hostile critical on the pilot uses the normal recall, nothing is saved (uses test-build hooks to fix the outcome) | `npm run preview:e2e` |
+  | [`music-theme-f2.mjs`](docs/development/playtest/music-theme-f2.mjs) | The home-page theme and its settings: PLAY MUSIC when the browser waits for a gesture, an honest BLOCKED state when audio is refused (simulated), the MUSIC slider by keyboard, mouse and touch, MUTE MUSIC silencing only music, both remembered after a reload, the theme stopping when a game starts and restarting at home, rapid navigation, keyboard focus, a 320 px phone, and no music download during gameplay (uses test-build hooks to read the player's state and render levels offline) | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview
@@ -546,7 +548,7 @@ Everything is stored as versioned JSON in the browser's `localStorage`, on the c
 | Key | Contents |
 |---|---|
 | `galaxia:save` | Classic high score and best stage |
-| `galaxia:prefs` | Shared settings: sound and volumes, glow, pixel scaling, motion, Arcade Display |
+| `galaxia:prefs` | Shared settings: sound and volumes (including music volume and Mute Music), glow, pixel scaling, motion, Arcade Display |
 | `galaxia:freeroam:prefs` | Free Roam controls: key bindings, mouse aim, zoom, flight mode, Ship Mind advice (ALL / CRITICAL ONLY) |
 | `galaxia:freeroam`, `galaxia:freeroam:slot2`, `galaxia:freeroam:slot3` | The three Free Roam save slots (including crew signed on, fees paid, seats and Navigator doctrine) |
 | `galaxia:freeroam:slots` | Which Free Roam slot is in use |
@@ -700,13 +702,14 @@ Neither change has been playtested by a person or tried on a physical device; se
 - **Fleet Command:** escort strength and the commission come from automated checks, not players. There is no controller button for FLEET ORDERS and the panel was not tested with a controller. Escort markers were checked from screenshots only. Touch was checked in Chromium's emulation only.
 - **Free Roam is a prototype:** route risk, lane hazards and transit events are shown on the maps but have no gameplay effect yet; prices are fixed, with no market between stations; touch play has no aim assist; target lock, next target and STOP are not mapped on a controller.
 - **Classic:** a single high score (no name entry or table); the score caps at 9,999,990; a few original arcade rules that could not be confirmed are configurable.
-- **General:** sound effects and short jingles only (no music); English only; saves are local to one browser.
+- **Music:** one original theme that loops on the home page; there is no music during play (only the short jingles). It was checked by automated measurements in headless Chromium, not by a person listening on speakers or headphones. Browsers may hold the music until you press PLAY MUSIC. A game controller cannot reach the home-page music controls; the same settings are in Classic SETTINGS and Free Roam SOUND.
+- **General:** English only; saves are local to one browser.
 - **Before any public release:** the copyright holder in `LICENSE` must be filled in, and the open owner decisions on the name and the Classic presentation remain (see below).
 
 ## Licence and attribution
 
 - **GALAXIA's own code and content** are released under the [MIT licence](LICENSE). The software comes with no warranty. The copyright holder line is a clearly marked placeholder that the owner must replace before publishing.
-- **Original assets:** all sprites, the bitmap font and the icons are defined in code, and all sounds are synthesised at runtime. The project contains no sprites, logos, sounds, music, ROM data or source code from any commercial game, and loads no external fonts, images or scripts.
+- **Original assets:** all sprites, the bitmap font and the icons are defined in code, and all sounds, including the home-page theme, are synthesised at runtime from notes written for GALAXIA (no samples or recordings). The project contains no sprites, logos, sounds, music, ROM data or source code from any commercial game, and loads no external fonts, images or scripts.
 - **Third-party code:** the only third-party code in the published site is Vite's module-preload helper (MIT); its notice is in [`public/THIRD_PARTY_NOTICES.txt`](public/THIRD_PARTY_NOTICES.txt). Build and test tools are not shipped.
 - **Astronomy references:** Free Roam's real-world facts are written in GALAXIA's own words from cited sources (NASA, ESA, ESA/Webb, ESA/Hubble, ESO, NOIRLab and others), listed in [`docs/freeroam/ASTRONOMY_SOURCES.md`](docs/freeroam/ASTRONOMY_SOURCES.md). No agency images or logos are used, and no agency endorses GALAXIA.
 - **Asset register:** every asset, package and reference, with its origin and licence, is listed in [`docs/freeroam/CONTENT_AND_ASSET_LICENSES.md`](docs/freeroam/CONTENT_AND_ASSET_LICENSES.md).

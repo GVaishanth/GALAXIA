@@ -1,5 +1,6 @@
 /**
- * SOUND panel (Prompt 12): mute and the master / effects / music volumes,
+ * SOUND panel (Prompt 12): mute and the master / effects / music volumes
+ * (Finale P2: and MUTE MUSIC, the music bus only),
  * reachable from the pause menu and the sector briefing. DOM only. Every
  * press writes the shared preferences (`galaxia:prefs`, the same settings
  * Classic shows) and plays a short preview through the new levels, so the
@@ -76,10 +77,14 @@ export function createSoundPanel(d: SoundDeps): SoundPanel {
     rows.set(bus, { value, down, up });
     rowEls.push(row);
   }
+  const musicBtn = btn('fr-sound-mute', 'MUTE MUSIC: OFF', 'musicMute', () => {
+    d.set({ musicMuted: d.get().musicMuted !== true });
+    refresh();
+  });
   const fs = d.fullscreen;
   const fullBtn = btn('fr-sound-fullscreen', 'FULLSCREEN: OFF', 'fullscreen', () => fs?.toggle());
   const back = btn('fr-sound-back', 'BACK', 'back', () => d.back());
-  menu.append(muteBtn, ...rowEls, fullBtn, back);
+  menu.append(muteBtn, ...rowEls, musicBtn, fullBtn, back);
 
   function syncFullscreen(): void {
     const supported = !!fs && fs.supported();
@@ -94,6 +99,9 @@ export function createSoundPanel(d: SoundDeps): SoundPanel {
     const a = d.get();
     muteBtn.textContent = a.muted ? 'SOUND: OFF (MUTED)' : 'SOUND: ON';
     muteBtn.setAttribute('aria-pressed', String(a.muted));
+    const mm = a.musicMuted === true;
+    musicBtn.textContent = mm ? 'MUTE MUSIC: ON' : 'MUTE MUSIC: OFF';
+    musicBtn.setAttribute('aria-pressed', String(mm));
     for (const [bus, r] of rows) {
       r.value.textContent = volumeText(a[bus]);
       // at the ends the step does nothing: shown, never hidden (the layout does not jump)

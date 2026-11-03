@@ -46,12 +46,15 @@ export const DIST_BUDGET = Object.freeze({
  *     Roam's eager closure (FREE_ROAM_EAGER check).
  *   - `shared`: also loaded on its own by the entry (the title screen), so it
  *     is reported with Free Roam's download but not charged to its closure.
+ *   - `title` (Finale P2): reached only by dynamic import from the entry, for
+ *     the home page (the theme); never in the entry's static closure and never
+ *     reachable from Free Roam, statically or lazily. `marker` as for `lazy`.
  *   - `required`: the build must emit it (the split exists).
  */
 export interface ChunkBudget {
   readonly name: string;
   readonly role: string;
-  readonly load: 'lazy' | 'eager' | 'shared';
+  readonly load: 'lazy' | 'eager' | 'shared' | 'title';
   readonly gzip: number;
   readonly required: boolean;
   readonly marker?: string;
@@ -64,6 +67,7 @@ export const CHUNK_BUDGETS: readonly ChunkBudget[] = Object.freeze([
   { name: 'diagnostics', role: 'Admin panel DIAGNOSTICS tab (only inside an active Admin session, first opened)', load: 'lazy', gzip: 4_500, required: true, marker: 'TEST REWARD GUARDS' }, // Finale P1: measured 3.3 kB (about 1.35x, as fleetPanel)
   { name: 'world', role: 'Free Roam modules shared with the recovery chunk', load: 'eager', gzip: 10_000, required: false }, // measured 8.3 kB
   { name: 'guideDialog', role: 'guide (title screen; Free Roam imports its content)', load: 'shared', gzip: 14_000, required: false }, // measured 11.8 kB
+  { name: 'galaxiaTheme', role: 'home-page music: the original theme and its player (the home page, music enabled)', load: 'title', gzip: 6_500, required: true, marker: 'galaxia-theme:' }, // Finale P2: measured 5,138 B gz; ~1.27x headroom for fixes, too small for samples or a library (MUSIC_THEME.md)
 ]);
 
 /** Automation hook names (window.__galaxia, __galaxiaGame, __galaxiaFreeRoam, __galaxiaHangar); \b keeps __galaxiaBooted out. */
@@ -96,7 +100,7 @@ export interface DistReport {
 
 export interface ChunkReport extends DistFile {
   readonly name: string;
-  readonly kind: 'entry' | 'freeRoam' | 'lazy' | 'eager' | 'shared' | 'unlisted';
+  readonly kind: 'entry' | 'freeRoam' | 'lazy' | 'eager' | 'shared' | 'title' | 'unlisted';
   readonly limit: number | null;
 }
 
@@ -308,6 +312,17 @@ export function checkDist(dir: string, base: string): DistReport {
       continue;
     }
     const c = found[0]!;
+    if (b.load === 'title') {
+      const entryStatic = entry ? staticClosure(entry.path) : new Set<string>();
+      if (entryStatic.has(c.path)) problems.push(`${c.path}: the ${b.role} chunk is loaded with the entry (it must load by dynamic import only)`);
+      else if (!entry || !(graph.get(entry.path)?.dynamic ?? []).includes(c.path)) problems.push(`${c.path}: the entry does not import it dynamically`);
+      if (frAll.has(c.path)) problems.push(`${c.path}: Free Roam loads the ${b.role} chunk`);
+      if (b.marker) {
+        for (const o of js) if (o.path !== c.path && read(o.path).includes(b.marker)) problems.push(`${o.path}: carries code of the ${b.name} chunk (marker "${b.marker}")`);
+        if (!read(c.path).includes(b.marker)) problems.push(`${c.path}: marker "${b.marker}" not found (the inventory no longer describes this chunk)`);
+      }
+      continue;
+    }
     if (!freeRoam) continue;
     if (b.load === 'lazy') {
       if (frEager.has(c.path) || titleLoads.has(c.path)) problems.push(`${c.path}: the ${b.role} chunk is loaded eagerly (it must load by dynamic import only)`);

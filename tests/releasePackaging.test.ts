@@ -114,8 +114,11 @@ describe('file selection', () => {
       // Finale P1: the critical-hit harness ships (a player feature, QA build hooks only); the internal Admin
       // diagnostics session and the design notes stay out
       'docs/development/playtest/critical-hits-f1.mjs', 'docs/development/playtest/admin-diagnostics-f1.mjs', 'docs/freeroam/CRITICAL_HITS.md',
+      // Finale P2: the music harness and the theme's design and licensing record ship (an original asset in the
+      // release: its source, licence and limits travel with it); scratch probes stay out
+      'docs/development/playtest/music-theme-f2.mjs', 'docs/development/MUSIC_THEME.md', 'docs/development/playtest/music-scratch.mjs',
     ]);
-    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/critical-hits-f1.mjs', 'docs/development/playtest/fleet-command-p11.mjs', 'docs/development/playtest/missions-heat-p09.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/ship-abilities-p08.mjs', 'docs/development/playtest/ship-recovery-p10.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
+    expect(sel.files).toEqual(['docs/PLAYER_GUIDE.md', 'docs/development/MUSIC_THEME.md', 'docs/development/playtest/crew-advisor-p05.mjs', 'docs/development/playtest/crew-bridge-p05.mjs', 'docs/development/playtest/critical-hits-f1.mjs', 'docs/development/playtest/fleet-command-p11.mjs', 'docs/development/playtest/missions-heat-p09.mjs', 'docs/development/playtest/music-theme-f2.mjs', 'docs/development/playtest/release-smoke.mjs', 'docs/development/playtest/ship-abilities-p08.mjs', 'docs/development/playtest/ship-recovery-p10.mjs', 'docs/development/playtest/signal-p06.mjs', 'docs/development/playtest/stealth-p07.mjs', 'docs/freeroam/CONTENT_AND_ASSET_LICENSES.md']);
   });
 
   it('rejects unsafe paths', () => {

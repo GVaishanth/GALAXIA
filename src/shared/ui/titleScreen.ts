@@ -39,6 +39,8 @@ export interface TitleCallbacks {
   readonly reducedMotion?: (() => boolean) | undefined;
   /** P04.2 guide: HOW TO PLAY (button, H key, gamepad Y): open the guide. */
   readonly onGuide?: (() => void) | undefined;
+  /** Finale P2: extra controls under HOW TO PLAY (the music controls); inert with the rest while the guide is open. */
+  readonly extras?: readonly HTMLElement[] | undefined;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
@@ -114,7 +116,7 @@ export class TitleScreen {
     this.guideButton.addEventListener('click', () => this.cb.onGuide?.()); // element-owned
     this.notices = el('div', 'title-notices');
     this.notices.setAttribute('role', 'status');
-    inner.append(heading, kicker, list, hint, this.guideButton, this.notices);
+    inner.append(heading, kicker, list, hint, this.guideButton, ...(cb.extras ?? []), this.notices);
     this.root.append(this.stars, inner);
     parent.append(this.root);
   }
@@ -179,6 +181,8 @@ export class TitleScreen {
     this.scope = scope;
     scope.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (this.blocked || e.ctrlKey || e.metaKey || e.altKey || isEditableTarget(e.target)) return;
+      // Finale P2: keys on the music controls belong to them (the slider's arrows, Enter on MUTE MUSIC)
+      if ((e.target as Element | null)?.closest?.('.title-music')) return;
       if (e.code === 'KeyH' && !e.shiftKey && !e.repeat && this.cb.onGuide) {
         e.preventDefault();
         this.cb.onGuide();
@@ -190,6 +194,9 @@ export class TitleScreen {
         e.preventDefault();
         this.menu.move(prev ? -1 : 1);
       } else if ((e.code === 'Enter' || e.code === 'Space') && this.menu.focusedIndex() < 0) {
+        // Finale P2 (inherited fix): a focused button outside the cards (HOW TO PLAY) answers its own Enter/Space;
+        // before, the highlighted mode started instead and the guide never opened from the keyboard
+        if ((e.target as Element | null)?.closest?.('button')) return;
         // focus is outside the cards (e.g. after a click elsewhere): Enter still starts the highlighted mode
         e.preventDefault();
         if (!e.repeat) this.menu.activate();

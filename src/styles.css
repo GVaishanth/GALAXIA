@@ -9206,8 +9206,9 @@ html.game-mode body {
   }
 }
 
-/* title screen: HOW TO PLAY (opens the guide; never resets the tutorial) */
-.title-guide {
+/* title screen: HOW TO PLAY (opens the guide; never resets the tutorial); Finale P2: the music buttons share it */
+.title-guide,
+.title-music button {
   min-height: 44px;
   padding: 0 18px;
   border: 1px solid var(--panel-edge);
@@ -9219,15 +9220,71 @@ html.game-mode body {
   cursor: pointer;
 }
 
-.title-guide:focus-visible {
+.title-guide:focus-visible,
+.title-music :focus-visible {
   outline: 2px solid var(--highlight);
   outline-offset: 2px;
 }
 
 @media (hover: hover) {
-  .title-guide:hover {
+  .title-guide:hover,
+  .title-music button:hover {
     border-color: var(--highlight);
   }
+}
+
+/* Finale P2: home-page music (PLAY MUSIC, MUTE MUSIC, volume, status) */
+.title-music {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 12px;
+  max-width: 34em;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+}
+
+/* PLAY MUSIC keeps its box when not needed (no layout shift): a touch tap's click is hit-tested after
+   pointerup, so collapsing it mid-tap would send that click to whatever moved under the finger
+   (HOW TO PLAY). visibility: hidden also takes it out of the tab order and the accessibility tree. */
+.title-music-play[hidden] {
+  display: inline-block;
+  visibility: hidden;
+}
+
+.title-music [aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.title-music-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-music-vol input {
+  width: min(36vw, 150px);
+  min-height: 44px;
+  margin: 0;
+  accent-color: var(--highlight);
+}
+
+.title-music-vol output {
+  min-width: 3.4em;
+}
+
+.title-music-status {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+  /* two lines reserved: the longest status wraps to two on a 320 px phone, so a status change never moves the page */
+  line-height: 1.4;
+  min-height: 2.8em;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  text-align: center;
 }
 
 /* ---- P04.3: REALISTIC flight's mode tag and STOP control (hidden in NORMAL flight and behind panels) ----

@@ -490,6 +490,9 @@ export function mountGame(root: HTMLElement, options: MountOptions = {}): GameSt
       case 'muted':
         prefs.setAudio({ muted: change.value });
         break;
+      case 'musicMuted':
+        prefs.setAudio({ musicMuted: change.value });
+        break;
       case 'volume':
         if (change.commit) prefs.setAudio({ [change.bus]: change.value });
         else sound.setPrefs({ ...prefs.get().audio, [change.bus]: change.value });

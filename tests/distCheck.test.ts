@@ -27,7 +27,9 @@ function goodBuild(base: string): Files {
     'favicon-32.png': 'png',
     'apple-touch-icon.png': 'png',
     'THIRD_PARTY_NOTICES.txt': 'Copyright (c) 2019-present, VoidZero Inc. and Vite contributors',
-    'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])};',
+    // Finale P2: the entry also loads the home-page theme by dynamic import
+    'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])},h=()=>p(()=>import(`./galaxiaTheme-MUS00001.js`),[]);',
+    'assets/galaxiaTheme-MUS00001.js': `const id=\`${MUSIC_MARKER}beyond\`;export{id};`,
     'assets/index-BBB.css': 'body{background:#000}',
     // P10.1: Free Roam loads its two lazy chunks by dynamic import; each carries its inventory marker
     'assets/freeRoamMode-CCC.js': 'export function createFreeRoamMode(){}const t=()=>p(()=>import(`./tow-T0w_0w-1.js`),[]),s=()=>p(()=>import(`./shipyard-SHPyrd01.js`),[]),f=()=>p(()=>import(`./fleetKit-FLt00001.js`),[]),u=()=>p(()=>import(`./fleetPanel-FLp00001.js`),[]),g=()=>p(()=>import(`./diagnostics-DGn00001.js`),[]);export{a};',
@@ -47,6 +49,7 @@ const BAY_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'shipyard')!.marker!;
 const FLEET_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetKit')!.marker!;
 const PANEL_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetPanel')!.marker!;
 const DIAG_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'diagnostics')!.marker!;
+const MUSIC_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'galaxiaTheme')!.marker!;
 const gz = (t: string): number => gzipSync(Buffer.from(t), { level: 9 }).length;
 /** Incompressible filler: a deterministic SHA-256 chain, hex-encoded. */
 const hex = (chars: number): string => Array.from({ length: Math.ceil(chars / 64) }, (_, i) => createHash('sha256').update(`pad${i}`).digest('hex')).join('').slice(0, chars);
@@ -231,6 +234,7 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
       'assets/fleetKit-FLt00001.js': ['lazy', 18_000],
       'assets/fleetPanel-FLp00001.js': ['lazy', 7_000],
       'assets/diagnostics-DGn00001.js': ['lazy', 4_500],
+      'assets/galaxiaTheme-MUS00001.js': ['title', CHUNK_BUDGETS.find((c) => c.name === 'galaxiaTheme')!.gzip],
     });
     expect(r.freeRoamEager).toBe(gz(f[FR]!));
     expect(r.freeRoamTotal).toBe(gz(f[FR]!) + gz(f[TOW]!) + gz(f[BAY]!) + gz(f['assets/fleetKit-FLt00001.js']!) + gz(f['assets/fleetPanel-FLp00001.js']!) + gz(f['assets/diagnostics-DGn00001.js']!));
@@ -321,6 +325,39 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
     const all = checkDist(makeDist(fr), '/galaxia/').problems;
     expect(all.some((p) => p.startsWith('Free Roam JS 225.0 kB gzip exceeds'))).toBe(true);
     expect(all.some((p) => p.startsWith('Free Roam eager JS'))).toBe(true);
+  });
+
+  it('Finale P2: the home-page music chunk loads only by dynamic import from the entry, never from Free Roam', () => {
+    const MUS = 'assets/galaxiaTheme-MUS00001.js';
+    const music = CHUNK_BUDGETS.find((c) => c.name === 'galaxiaTheme')!;
+    expect(music).toMatchObject({ load: 'title', required: true });
+    expect(music.gzip).toBeLessThanOrEqual(8_000); // "a few KB": an explicit, small budget
+    // statically imported by the entry: loaded with the title screen
+    const eager = goodBuild('/galaxia/');
+    eager['assets/index-AAA.js'] = `import"./galaxiaTheme-MUS00001.js";${eager['assets/index-AAA.js']!.replace(',h=()=>p(()=>import(`./galaxiaTheme-MUS00001.js`),[])', '')}`;
+    expect(checkDist(makeDist(eager), '/galaxia/').problems).toContain(`${MUS}: the ${music.role} chunk is loaded with the entry (it must load by dynamic import only)`);
+    // reached from Free Roam (statically or lazily): normal gameplay would download it
+    const fromFr = goodBuild('/galaxia/');
+    fromFr[FR] = `${fromFr[FR]!}const q=()=>import(\`./galaxiaTheme-MUS00001.js\`);`;
+    expect(checkDist(makeDist(fromFr), '/galaxia/').problems).toContain(`${MUS}: Free Roam loads the ${music.role} chunk`);
+    const staticFr = goodBuild('/galaxia/');
+    staticFr[FR] = `import"./galaxiaTheme-MUS00001.js";${staticFr[FR]!}`;
+    expect(checkDist(makeDist(staticFr), '/galaxia/').problems).toContain(`${MUS}: Free Roam loads the ${music.role} chunk`);
+    // its code copied into another chunk (the marker), or the chunk no longer carrying it
+    const copied = goodBuild('/galaxia/');
+    copied[FR] = `${copied[FR]!}const z=\`${MUSIC_MARKER}\`;`;
+    expect(checkDist(makeDist(copied), '/galaxia/').problems).toContain(`${FR}: carries code of the galaxiaTheme chunk (marker "${MUSIC_MARKER}")`);
+    const unmarked = goodBuild('/galaxia/');
+    unmarked[MUS] = 'export const id=1;';
+    expect(checkDist(makeDist(unmarked), '/galaxia/').problems).toContain(`${MUS}: marker "${MUSIC_MARKER}" not found (the inventory no longer describes this chunk)`);
+    // missing (folded into another chunk), and over its budget
+    const gone = goodBuild('/galaxia/');
+    delete gone[MUS];
+    gone['assets/index-AAA.js'] = gone['assets/index-AAA.js']!.replace(',h=()=>p(()=>import(`./galaxiaTheme-MUS00001.js`),[])', '');
+    expect(checkDist(makeDist(gone), '/galaxia/').problems.some((p) => p.startsWith('required chunk galaxiaTheme-*.js missing'))).toBe(true);
+    const big = goodBuild('/galaxia/');
+    big[MUS] = gzipExactly(`const id=\`${MUSIC_MARKER}\`,pad=\``, '`;', music.gzip + 1);
+    expect(checkDist(makeDist(big), '/galaxia/').problems.some((p) => p.startsWith(`${MUS} `) && p.includes('exceeds its'))).toBe(true);
   });
 
   it('the inventory is explicit: every entry has a role, a positive limit, and the lazy ones a marker', () => {

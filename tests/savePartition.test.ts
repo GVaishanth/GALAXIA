@@ -54,7 +54,7 @@ describe('shared preferences (galaxia:prefs)', () => {
     store.data.set(SAVE_KEY, CLASSIC_RECORD);
     const prefs = new PreferencesStore(store);
     expect(prefs.source).toBe('migrated-from-classic');
-    expect(prefs.get().audio).toEqual({ muted: true, master: 0.5, sfx: 0.9, music: 0.2 });
+    expect(prefs.get().audio).toEqual({ muted: true, master: 0.5, sfx: 0.9, music: 0.2, musicMuted: false }); // Finale P2: a Classic save has no Mute Music: off
     // a pre-TD-73 record has no arcadeDisplay: Responsive Display (false), no repair
     expect(prefs.get().display).toEqual({ glow: false, pixelPerfect: true, reducedMotion: 'on', arcadeDisplay: false });
     expect(store.data.get(SAVE_KEY)).toBe(CLASSIC_RECORD); // byte-identical

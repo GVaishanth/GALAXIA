@@ -4,7 +4,11 @@
  * - Autoplay-safe: no AudioContext exists until unlock() is called from a
  *   user gesture (key / pointer). Before that every play request is a no-op.
  * - Buses: master -> destination; sfx and music gains feed master. Mute sets
- *   master to 0 (and skips starting new voices).
+ *   master to 0 (and skips starting new voices). Mute Music (Finale P2) sets
+ *   only the music bus to 0, so the effects are never touched. After unlock,
+ *   gain changes ease over a few milliseconds (no zipper noise or clicks).
+ * - musicOutput(): the context and music bus for the home-page theme, which
+ *   ships in its own lazy chunk and builds its nodes there.
  * - Bounded: per-sound voice limits with stealing, a minimum repeat gap, a
  *   global voice cap and one-at-a-time jingles on the music bus.
  * - Loops (tractor beam hum) are keyed and always stoppable; stopLoops()
@@ -173,7 +177,7 @@ export class SoundSystem {
       sfx.connect(this.master);
       music.connect(this.master);
       this.buses = { sfx, music };
-      this.applyGains();
+      this.applyGains(false);
     }
     if (!this.paused && this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
   }
@@ -190,6 +194,7 @@ export class SoundSystem {
   /** Effective gain of a bus (0 when muted). */
   busGain(bus: 'sfx' | 'music'): number {
     if (this.prefs.muted) return 0;
+    if (bus === 'music' && this.prefs.musicMuted === true) return 0;
     return clamp01(this.prefs.master) * clamp01(bus === 'sfx' ? this.prefs.sfx : this.prefs.music);
   }
 
@@ -355,14 +360,26 @@ export class SoundSystem {
     return b;
   }
 
-  private applyGains(): void {
+  /**
+   * Finale P2: the context and the music bus (after unlock; null before). The
+   * home-page theme connects its own graph to the bus, so the music volume,
+   * Mute Music, the master volume and SOUND OFF all apply to it.
+   */
+  musicOutput(): { readonly ctx: AudioContextLike; readonly bus: GainNodeLike } | null {
+    return this.ctx && this.buses ? { ctx: this.ctx, bus: this.buses.music } : null;
+  }
+
+  private applyGains(smooth = true): void {
     if (!this.ctx || !this.master || !this.buses) return;
     const master = this.prefs.muted ? 0 : clamp01(this.prefs.master);
+    const now = this.ctx.currentTime;
+    // a short ease (time constant 25 ms) instead of a jump: a dragged slider or a mute never clicks
     const set = (p: AudioParamLike, v: number): void => {
-      p.value = v;
+      if (smooth && p.setTargetAtTime) p.setTargetAtTime(v, now, 0.025);
+      else p.value = v;
     };
     set(this.master.gain, master);
     set(this.buses.sfx.gain, clamp01(this.prefs.sfx));
-    set(this.buses.music.gain, clamp01(this.prefs.music));
+    set(this.buses.music.gain, this.prefs.musicMuted === true ? 0 : clamp01(this.prefs.music));
   }
 }

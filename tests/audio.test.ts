@@ -264,7 +264,7 @@ describe('audio preferences persistence', () => {
     a.setAudio({ muted: true, master: 0.35, sfx: 0.5 });
     a.setAudio({ music: -2 });
     const b = new SaveManager(store);
-    expect(b.get().audio).toEqual({ muted: true, master: 0.35, sfx: 0.5, music: DEFAULT_SAVE.audio.music });
+    expect(b.get().audio).toEqual({ muted: true, master: 0.35, sfx: 0.5, music: DEFAULT_SAVE.audio.music, musicMuted: false }); // Finale P2: Mute Music, false when absent
   });
 
   it('display prefs (glow, reduced motion) persist and reject invalid values', () => {

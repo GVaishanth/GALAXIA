@@ -20,7 +20,16 @@ export interface AudioPrefs {
   /** 0..1 */
   readonly master: number;
   readonly sfx: number;
+  /** Music volume (Finale P2: the home-page theme and the music-bus jingles). */
   readonly music: number;
+  /**
+   * Mute Music (Finale P2): silences the music bus only (theme and jingles),
+   * never the effects. Independent of `muted` (all sound) and of the music
+   * volume, which is kept while muted. Optional on disk: a profile written
+   * before Finale P2 has no such field and reads as false (no version bump);
+   * the sanitizer always fills it in, so stored and loaded data carry it.
+   */
+  readonly musicMuted?: boolean;
 }
 
 export interface DisplayPrefs {
@@ -66,7 +75,7 @@ export const DEFAULT_SAVE: SaveData = Object.freeze({
   version: 1,
   highScore: 0,
   bestStage: 0,
-  audio: Object.freeze({ muted: false, master: 0.8, sfx: 1, music: 0.7 }),
+  audio: Object.freeze({ muted: false, master: 0.8, sfx: 1, music: 0.7, musicMuted: false }),
   display: Object.freeze({ glow: true, pixelPerfect: false, reducedMotion: 'system' as const, arcadeDisplay: false }),
 });
 
@@ -136,6 +145,7 @@ export function sanitizeV1(raw: unknown): { data: SaveDataV1; repaired: boolean 
         master: unit(s, a.master, D.audio.master),
         sfx: unit(s, a.sfx, D.audio.sfx),
         music: unit(s, a.music, D.audio.music),
+        musicMuted: bool(s, a.musicMuted, false),
       },
       display: {
         glow: bool(s, d.glow, D.display.glow),

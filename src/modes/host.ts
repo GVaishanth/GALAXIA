@@ -5,7 +5,9 @@
  *    (one AudioContext), one sprite cache;
  *  - the title screen (mode select);
  *  - the ModeController, which runs at most one mode at a time;
- *  - page signals: audio unlock, and blur / hidden tab -> pause the active mode.
+ *  - page signals: audio unlock, and blur / hidden tab -> pause the active mode;
+ *  - Finale P2: the home-page theme (shared/audio/titleMusic.ts), which plays
+ *    only while the title is shown and loads its chunk only then.
  *
  * Each launch gets a fresh, empty container that is removed after the mode's
  * dispose(), so nothing a mode created (DOM, canvases, element listeners) can
@@ -17,6 +19,8 @@ import { openStore } from '../persistence/storage.ts';
 import { SpriteCache } from '../render/sprite/spriteCache.ts';
 import { formatScore } from '../ui/presentation.ts';
 import { createSharedSound, installAudioUnlock } from '../shared/audio/audioService.ts';
+import { browserAllowsAutoplay, createTitleMusic, type TitleMusicDebug } from '../shared/audio/titleMusic.ts';
+import { createTitleMusicControls } from '../shared/ui/titleMusicControls.ts';
 import { DisposableScope } from '../shared/lifecycle/scope.ts';
 import { NOTICE_TEXT, STORAGE_KEYS, type StorageNotice } from '../shared/persistence/namespaces.ts';
 import { PreferencesStore } from '../shared/persistence/preferences.ts';
@@ -53,6 +57,10 @@ export interface HostDebug {
   readonly notices: readonly string[];
   /** P04.2 guide: the first-run guide (dialog state and the stored record). */
   readonly guide: GuideStatus & { readonly record: GuideRecord; readonly autoOpened: boolean };
+  /** Finale P2: the home-page theme (status, context, player). */
+  readonly music: TitleMusicDebug;
+  /** Finale P2: the shared SoundSystem (counters, context) and the effective bus gains (Mute Music is the music bus only). */
+  readonly sound: ReturnType<SharedServices['sound']['stats']> & { readonly sfxGain: number; readonly musicGain: number };
 }
 
 export interface GalaxiaHost {
@@ -65,6 +73,8 @@ declare global {
   interface Window {
     /** Host diagnostics for automated checks (read-only; launch/menu mirror the buttons). */
     __galaxia?: GalaxiaHost;
+    /** QA builds only (Finale P2): offline render + measurement of the theme (shared/audio/musicProbe.ts). */
+    __galaxiaMusicProbe?: (spec: import('../shared/audio/musicProbe.ts').ProbeSpec) => Promise<import('../shared/audio/musicProbe.ts').ProbeResult>;
   }
 }
 
@@ -97,6 +107,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   const choose = (choice: TitleChoice): void => {
     if (pendingChoice) return; // double click / Enter + click in the same moment
     pendingChoice = true;
+    music.leave(); // Finale P2: the theme fades out now; the mode's start never waits for it
     sound.unlock(); // a click / Enter is a user gesture
     sound.play('uiSelect');
     title.hide();
@@ -107,7 +118,27 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
       void launch(choice);
     }, 0);
   };
+  /* ---- Finale P2: the home-page theme and its controls ---- */
+  const music = createTitleMusic({
+    sound,
+    prefs: () => prefs.get().audio,
+    load: () => import('../audio/music/galaxiaTheme.ts'),
+    autoplayAllowed: () => browserAllowsAutoplay(),
+    onChange: () => musicControls.refresh(),
+  });
+  const musicControls = createTitleMusicControls({
+    get: () => prefs.get().audio,
+    save: (change) => {
+      prefs.setAudio(change); // shared galaxia:prefs (the same settings Classic and Free Roam show)
+      sound.setPrefs(prefs.get().audio);
+      music.prefsChanged();
+    },
+    preview: (a) => sound.setPrefs(a),
+    play: () => music.gesture(),
+    status: () => music.status(),
+  });
   const title = new TitleScreen(root, sprites, {
+    extras: [musicControls.root],
     onSelect: choose,
     onMove: () => sound.play('uiMove'),
     // the same rule as the modes: the shared setting, with 'system' following the browser
@@ -215,6 +246,9 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         setUrlMode(null);
         document.title = 'GALAXIA';
         title.show(titleModel(error));
+        sound.setPrefs(prefs.get().audio); // the saved levels (a mode may have previewed others)
+        music.enter();
+        musicControls.refresh();
         // P04.2 guide: a player who has not finished or skipped the current guide gets it once, over the title
         if (!guideAutoOpened && !error && guideDue(readGuide(store))) {
           guideAutoOpened = true;
@@ -222,6 +256,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         }
       },
       hide: () => {
+        music.leave();
         guide?.dismiss();
         title.hide();
       },
@@ -250,6 +285,20 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   }
 
   installAudioUnlock(hostScope, window, sound);
+  // Finale P2: a real gesture on the home page may start the theme (autoplay rules). Not the press that
+  // picks a mode (a card, or Enter / Space outside the music controls): that press leaves the page.
+  // pointerup, not pointerdown: the press has picked its target, so PLAY MUSIC disappearing (the row
+  // re-flows) can never move a different control under the finger; the context itself was already
+  // created by the pointerdown unlock above.
+  const musicGesture = (e: Event): void => {
+    if (!title.visible || pendingChoice) return;
+    const t = e.target as Element | null;
+    const inMusic = !!t?.closest?.('.title-music');
+    if (e.type === 'pointerup' ? !!t?.closest?.('.mode-card') : !inMusic && ['Enter', 'Space', 'NumpadEnter'].includes((e as KeyboardEvent).code)) return;
+    music.gesture();
+  };
+  hostScope.on<PointerEvent>(window, 'pointerup', musicGesture, { capture: true });
+  hostScope.on<KeyboardEvent>(window, 'keydown', musicGesture, { capture: true });
 
   // P04: hidden Admin Access on the title screen (docs/development/ADMIN_ACCESS.md; nothing on screen
   // mentions it). The detectors only observe: no title key or tap behaves differently unless the whole
@@ -293,6 +342,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   // audio suspension stays with the modes (Classic suspends while its pause menu is open)
   hostScope.on(document, 'visibilitychange', () => {
     if (document.hidden) controller.pause('hidden');
+    music.visibility(document.hidden); // the home-page theme holds while hidden (nothing else changes on the title)
   });
 
   const host: GalaxiaHost = {
@@ -308,10 +358,14 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
       containers: root.querySelectorAll(':scope > [data-mode-root]').length,
       notices: [...notices],
       guide: { ...(guide?.status() ?? GUIDE_CLOSED), record: readGuide(store), autoOpened: guideAutoOpened },
+      music: music.debug(),
+      sound: { ...sound.stats(), sfxGain: sound.busGain('sfx'), musicGain: sound.busGain('music') },
     }),
   };
   // TD-78: test the literal so the release build drops the hook entirely
+  // (one guarded line per hook: tests/release.test.ts checks each assignment's line)
   if (__GALAXIA_TEST_HOOKS__) window.__galaxia = host;
+  if (__GALAXIA_TEST_HOOKS__) window.__galaxiaMusicProbe = (spec) => import('../shared/audio/musicProbe.ts').then((m) => m.probe(spec));
 
   // ?mode=classic|freeroam opens a mode directly (bookmarks, automated checks); anything else shows the title
   const requested = new URLSearchParams(location.search).get('mode');

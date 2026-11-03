@@ -41,6 +41,8 @@ import { MENUS, type MenuAction, type MenuItem, type ScreenId } from './screenMo
 
 export type SettingChange =
   | { readonly kind: 'muted'; readonly value: boolean }
+  /** Finale P2: Mute Music (the music bus only; effects stay). */
+  | { readonly kind: 'musicMuted'; readonly value: boolean }
   | { readonly kind: 'volume'; readonly bus: 'master' | 'sfx' | 'music'; readonly value: number; readonly commit: boolean }
   | { readonly kind: 'glow'; readonly value: boolean }
   | { readonly kind: 'pixelPerfect'; readonly value: boolean }
@@ -126,6 +128,7 @@ export class Screens {
   private readonly opts: ScreensOptions;
   private readonly controls: {
     mute: HTMLButtonElement;
+    musicMute: HTMLButtonElement;
     volumes: Record<'master' | 'sfx' | 'music', HTMLInputElement>;
     volumeOut: Record<'master' | 'sfx' | 'music', HTMLElement>;
     glow: HTMLButtonElement;
@@ -177,7 +180,7 @@ export class Screens {
     const volumes = {} as Record<'master' | 'sfx' | 'music', HTMLInputElement>;
     const volumeOut = {} as Record<'master' | 'sfx' | 'music', HTMLElement>;
     list.append(mute.row);
-    for (const [bus, label] of [['master', 'VOLUME'], ['sfx', 'EFFECTS'], ['music', 'JINGLES']] as const) {
+    for (const [bus, label] of [['master', 'VOLUME'], ['sfx', 'EFFECTS'], ['music', 'MUSIC']] as const) {
       const row = el('label', 'screen-row');
       const name = el('span', 'screen-row-label', label);
       const input = el('input', 'screen-range');
@@ -194,6 +197,9 @@ export class Screens {
       volumes[bus] = input;
       volumeOut[bus] = out;
     }
+    // Finale P2: the home-page theme and the jingles share the music bus; this mutes only that bus
+    const musicMute = this.toggle('MUTE MUSIC', () => this.opts.onSetting({ kind: 'musicMuted', value: this.audio?.musicMuted !== true }));
+    list.append(musicMute.row);
     const arcade = this.displaySwitch();
     list.append(arcade.row);
     const glow = this.toggle('GLOW', () => this.opts.onSetting({ kind: 'glow', value: !(this.display?.glow ?? true) }));
@@ -206,7 +212,7 @@ export class Screens {
     full.button.disabled = true;
     list.append(glow.row, pixel.row, motion.row, full.row);
     settings.append(el('h2', 'screen-heading', 'SETTINGS'), list, this.menu([{ id: 'back', label: 'BACK', action: 'back' }]));
-    this.controls = { mute: mute.button, volumes, volumeOut, glow: glow.button, pixel: pixel.button, motion: motion.button, fullscreen: full.button, fullscreenRow: full.row, arcade };
+    this.controls = { mute: mute.button, musicMute: musicMute.button, volumes, volumeOut, glow: glow.button, pixel: pixel.button, motion: motion.button, fullscreen: full.button, fullscreenRow: full.row, arcade };
 
     this.panels = { title, pause, gameOver: over, howTo: how, settings };
     for (const p of Object.values(this.panels)) {
@@ -283,6 +289,8 @@ export class Screens {
     this.display = display;
     const c = this.controls;
     this.setToggle(c.mute, !audio.muted, audio.muted ? 'OFF' : 'ON');
+    this.setToggle(c.musicMute, audio.musicMuted === true, audio.musicMuted === true ? 'ON' : 'OFF');
+    c.musicMute.disabled = audio.muted;
     for (const bus of ['master', 'sfx', 'music'] as const) {
       const pct = Math.round(audio[bus] * 100);
       if (document.activeElement !== c.volumes[bus]) c.volumes[bus].value = String(pct);

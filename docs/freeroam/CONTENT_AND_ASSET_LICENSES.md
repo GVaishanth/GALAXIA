@@ -54,6 +54,9 @@ Everything visual and audible in the game is produced by code in this repository
   - Every effect and jingle is a recipe: oscillator waveform, frequencies or note names, envelope.
   - The recipes live in `src/config/audio.ts` (Classic) and `src/modes/freeroam/audio/frSounds.ts` (Free Roam), and are synthesised by the Web Audio API in the player's browser.
   - No samples or recordings.
+- **Music (Finale Part 2):**
+  - The home-page theme "Beyond the Beacon" (D minor, 84 BPM, 32 bars) is an original score written for GALAXIA as data in `src/audio/music/themeScore.ts` and synthesised at runtime by `src/audio/music/galaxiaTheme.ts` (oscillators, filters, a seeded generated reverb). No melody, progression or arrangement was taken from another work; no samples, recordings or audio files.
+  - Design, levels, lifecycle and limits: `docs/development/MUSIC_THEME.md`.
 - **Backdrops, map art, sector art, HUD:**
   - Drawn procedurally with Canvas 2D and CSS: starfields, nebula washes, galaxy-map nodes, asteroid fields, station rings.
   - Sector content comes from seeded generators (`src/modes/freeroam/sector/generate.ts`).
@@ -85,6 +88,7 @@ Everything visual and audible in the game is produced by code in this repository
 | Free Roam enemy families: raider, recon, picket, lancer, hauler, heavy, elite, capital | `src/assets/sprites/foes.ts` | Free Roam | Text grid | Original (documented) | Lancer's four-blade outline: optional human look (F-1, low) |
 | Faction palettes, emblems, trails (Tessellate, Red Tally, Cordon, Gleaners, Haven Guild) | `src/assets/sprites/variants.ts`, `combat/factions.ts`, sector renderer | Free Roam | Palette remaps + procedural emblems | Original (documented) | Names checked in FR-TD-51 |
 | Free Roam sounds and motifs | `src/modes/freeroam/audio/frSounds.ts` | Free Roam | Synth recipes | Original (documented) | — |
+| Home-page theme "Beyond the Beacon" (734 note events, 91 s loop) | `src/audio/music/themeScore.ts`, `src/audio/music/galaxiaTheme.ts` | Shell (home page only) | Written score + runtime synthesis | Original (documented, MIT with the project) | Not compared by ear or by a rights service with existing music; no human listening test (`MUSIC_THEME.md` §1, §11) |
 | Galaxy Map, System Map, sector and station art | `src/modes/freeroam/galaxy/`, `sector/render.ts`, `ui/` | Free Roam | Procedural Canvas 2D / CSS | Original (documented) | Layouts are node graphs and radial maps (generic) |
 | Lore, names, missions (170 systems, 10 story missions, contracts, resources) | `src/modes/freeroam/catalogue/data/`, `progression/missionData.ts`, docs | Free Roam | Written | Original (documented) | Incidental overlaps with common words (N-1) |
 | Interface artwork (panels, buttons, notices) | `src/styles.css`, `src/ui/`, `src/modes/freeroam/ui/` | Both | CSS | Original (documented) | — |
