@@ -101,6 +101,7 @@ The two modes meet in one place: after you complete Wave 20 in Classic, the ship
 - The game pauses and releases held inputs when the tab is hidden, the window loses focus or a phone is rotated.
 - Reduced motion (follows the system setting by default), glow and pixel-scaling options, and fullscreen where the browser supports it.
 - An original main theme, **BEYOND THE BEACON**, plays on the home page only, with **MUSIC** volume and **MUTE MUSIC** on the home page, in Classic SETTINGS and in Free Roam's SOUND panel. Both are remembered. Muting music never silences the sound effects.
+- The first time the home page appears after loading, a short opening cinematic flies past: your ship wins a quick scripted battle and the camera follows it into the cockpit, where the real home page opens on the ship's display and then fills the screen. It is about nine seconds once per page load, **SKIP INTRO** (or Escape) jumps ahead at any time, and with reduced motion it is a one-second fade. It reuses the game's own sprites, touches nothing in your saves, and deep links land in the game directly.
 - All sprites, the font, the sounds and the music are generated in code; there are no image, font or audio files to download. After loading, the only network requests are the one-time downloads of Free Roam's code and of the home-page music from the same site.
 
 ---
@@ -400,7 +401,8 @@ npm run dev     # development server at http://localhost:5173/ (also on your loc
 
 | Option | Builds | Effect |
 |---|---|---|
-| `?mode=classic` / `?mode=freeroam` | All | Open that mode directly (skips the automatic tutorial) |
+| `?mode=classic` / `?mode=freeroam` | All | Open that mode directly (skips the automatic tutorial and the opening cinematic) |
+| `?intro=skip` | All | Open the home page directly, without the once-per-load opening cinematic |
 | `?seed=<n>` | All | Reproducible Classic enemy behaviour |
 | `?controls=touch` / `?controls=keyboard` | All | Force the touch or desktop layout |
 
@@ -443,6 +445,7 @@ npm run check            # typecheck + all tests + production build + verify:dis
   | [`fleet-command-p11.mjs`](docs/development/playtest/fleet-command-p11.mjs) | Fleet Command (P11.1 + P11.2): commissioning escorts through the FLEET tab (prices, materials, licences, refusals, one purchase per double click, key or tap), captains and transfers, the four orders for one vessel or all, ATTACK on the locked target, the HUD line, disabled vessels and docking, sector changes, restarts, reloads, legacy saves, a failed panel load and eight viewports | `npm run preview:e2e` |
   | [`critical-hits-f1.mjs`](docs/development/playtest/critical-hits-f1.mjs) | Critical hits through the real FIRE keys: a new visit starts with chance decisions, a critical destroys the struck ship once through the ordinary kill, ordinary hits only wear it down, capital ships are immune, nothing is decided while paused, a hostile critical on the pilot uses the normal recall, nothing is saved (uses test-build hooks to fix the outcome) | `npm run preview:e2e` |
   | [`music-theme-f2.mjs`](docs/development/playtest/music-theme-f2.mjs) | The home-page theme and its settings: PLAY MUSIC when the browser waits for a gesture, an honest BLOCKED state when audio is refused (simulated), the MUSIC slider by keyboard, mouse and touch, MUTE MUSIC silencing only music, both remembered after a reload, the theme stopping when a game starts and restarting at home, rapid navigation, keyboard focus, a 320 px phone, and no music download during gameplay (uses test-build hooks to read the player's state and render levels offline) | `npm run preview:e2e` |
+  | [`cinematic-opening-f3.mjs`](docs/development/playtest/cinematic-opening-f3.mjs) | The opening cinematic (see OPENING_CINEMATIC.md): every phase in order, the scripted battle's destruction, the cockpit handoff to the real home page, PLAY MUSIC and navigation before and after, skip by button, double-click, tap and Escape, reduced motion, the failure fallback, deep links, saved-state isolation and four touch viewports (uses test-build hooks; deterministic under the fake clock) | `npm run preview:e2e` |
 
   ```sh
   BASE_PATH=/galaxia/ npm run build && BASE_PATH=/galaxia/ npm run preview

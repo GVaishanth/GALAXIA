@@ -7,7 +7,10 @@
  *  - the ModeController, which runs at most one mode at a time;
  *  - page signals: audio unlock, and blur / hidden tab -> pause the active mode;
  *  - Finale P2: the home-page theme (shared/audio/titleMusic.ts), which plays
- *    only while the title is shown and loads its chunk only then.
+ *    only while the title is shown and loads its chunk only then;
+ *  - Finale P3: the opening cinematic (shared/intro/), played over the first
+ *    showing of the home page per page load; the theme, the first-run guide and
+ *    the title's controls start at its handoff (docs/development/OPENING_CINEMATIC.md).
  *
  * Each launch gets a fresh, empty container that is removed after the mode's
  * dispose(), so nothing a mode created (DOM, canvases, element listeners) can
@@ -37,6 +40,9 @@ import { acknowledgeGuide, guideDue, readGuide, type GuideRecord } from './guide
 import { parseRecord } from '../shared/persistence/record.ts';
 import { createGestureDetector, createSequenceDetector, keyStroke, requestAdminLaunch } from './freeroam/admin/activation.ts';
 import { isEditableTarget } from '../input/keyboard.ts';
+import { SPRITES } from '../assets/sprites/index.ts';
+import { heroSpriteFor, INTRO_FAILED_NOTICE, introRequested } from '../shared/intro/introPolicy.ts';
+import { runIntro, type IntroDebug, type IntroRun } from '../shared/intro/introShell.ts';
 import { MODE_IDS, type ModeContext, type ModeDebug, type ModeId, type ModeRegistry, type SharedServices } from './types.ts';
 
 export const MODE_REGISTRY: ModeRegistry = Object.freeze({
@@ -61,6 +67,8 @@ export interface HostDebug {
   readonly music: TitleMusicDebug;
   /** Finale P2: the shared SoundSystem (counters, context) and the effective bus gains (Mute Music is the music bus only). */
   readonly sound: ReturnType<SharedServices['sound']['stats']> & { readonly sfxGain: number; readonly musicGain: number };
+  /** Finale P3: the opening cinematic of this page load (null when it was not played). */
+  readonly intro: IntroDebug | null;
 }
 
 export interface GalaxiaHost {
@@ -79,6 +87,9 @@ declare global {
 }
 
 declare const __GALAXIA_TEST_HOOKS__: boolean; // vite.config.ts `define` (TD-78: automation hooks, absent from release builds)
+
+/** Finale P3: the opening cinematic's choreography seed (fixed: the same intro on every visit). */
+const INTRO_SEED = 0x6a1a2026;
 
 const CLASSIC_SAVE_UNREADABLE = 'Classic save data could not be read: Classic starts fresh and keeps a backup copy of the old data.';
 
@@ -194,7 +205,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
       },
     ));
   const openGuide = (kind: 'tutorial' | 'reference'): void => {
-    if (!title.visible || pendingChoice || guideActive()) return;
+    if (!title.visible || pendingChoice || guideActive() || introActive()) return;
     guideOpening = true;
     title.setBlocked(true); // from the request on: nothing on the title reacts while the guide loads
     const opener = kind === 'reference' ? title.guideButton : null;
@@ -213,6 +224,45 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         highlight: (step) => (step === 'welcome' ? title.root.querySelector('.mode-cards') : step === 'start' ? title.guideButton : null),
         opener,
       });
+    });
+  };
+
+  /* ---- Finale P3: the opening cinematic (shared/intro/; the cinematic itself is a lazy chunk) ---- */
+  /** Played at most once per page load: the first showing of the home page, unless `?intro=skip` or a deep link. */
+  let introPending = introRequested(location.search);
+  let intro: IntroRun | null = null;
+  /** The last run (diagnostics). */
+  let introRun: IntroRun | null = null;
+  const introActive = (): boolean => intro?.active ?? false;
+  /** The home page is really here: the theme, the controls, and (once) the first-run guide. */
+  const arriveHome = (error?: string): void => {
+    music.enter();
+    musicControls.refresh();
+    // P04.2 guide: a player who has not finished or skipped the current guide gets it once, over the title
+    if (!guideAutoOpened && !error && guideDue(readGuide(store))) {
+      guideAutoOpened = true;
+      openGuide('tutorial');
+    }
+  };
+  const startIntro = (): void => {
+    title.setBlocked(true); // the live home page rides on the cockpit display, inert until the handoff
+    // the hero: the Free Roam active hull when it is a known sprite, else the Classic fighter (read-only peek)
+    const hero = heroSpriteFor(readSlot(store, activeSlot(store)).facts?.ship, (id) => Object.hasOwn(SPRITES, id));
+    intro = introRun = runIntro({
+      root,
+      target: title.root,
+      sprites,
+      hero,
+      seed: INTRO_SEED,
+      reduced: reducedMotion(),
+      load: () => import('../shared/intro/openingCinematic.ts'),
+      onDone: (outcome) => {
+        intro = null;
+        if (outcome === 'cancelled' || !title.visible) return;
+        title.setBlocked(false); // focus returns to the highlighted mode card
+        if (outcome === 'failed' || outcome === 'timeout') title.notice(INTRO_FAILED_NOTICE);
+        arriveHome();
+      },
     });
   };
 
@@ -247,15 +297,14 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
         document.title = 'GALAXIA';
         title.show(titleModel(error));
         sound.setPrefs(prefs.get().audio); // the saved levels (a mode may have previewed others)
-        music.enter();
-        musicControls.refresh();
-        // P04.2 guide: a player who has not finished or skipped the current guide gets it once, over the title
-        if (!guideAutoOpened && !error && guideDue(readGuide(store))) {
-          guideAutoOpened = true;
-          openGuide('tutorial');
-        }
+        // Finale P3: the first showing per page load plays the opening cinematic; the rest waits for its handoff
+        const playIntro = introPending && !error;
+        introPending = false;
+        if (playIntro) startIntro();
+        else arriveHome(error);
       },
       hide: () => {
+        intro?.cancel(); // a mode starting mid-intro: the cinematic stops at once, without the home-page handoff
         music.leave();
         guide?.dismiss();
         title.hide();
@@ -291,7 +340,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   // re-flows) can never move a different control under the finger; the context itself was already
   // created by the pointerdown unlock above.
   const musicGesture = (e: Event): void => {
-    if (!title.visible || pendingChoice) return;
+    if (!title.visible || pendingChoice || introActive()) return; // the intro's own presses (SKIP INTRO) only unlock audio
     const t = e.target as Element | null;
     const inMusic = !!t?.closest?.('.title-music');
     if (e.type === 'pointerup' ? !!t?.closest?.('.mode-card') : !inMusic && ['Enter', 'Space', 'NumpadEnter'].includes((e as KeyboardEvent).code)) return;
@@ -306,7 +355,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
   const adminKeys = createSequenceDetector();
   const adminGesture = createGestureDetector();
   const startAdmin = (): void => {
-    if (!title.visible || pendingChoice || guideActive()) return;
+    if (!title.visible || pendingChoice || guideActive() || introActive()) return;
     requestAdminLaunch(performance.now());
     choose('freeroam');
   };
@@ -314,7 +363,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
     window,
     'keydown',
     (e) => {
-      if (!title.visible || guideActive() || e.isComposing || isEditableTarget(e.target)) {
+      if (!title.visible || guideActive() || introActive() || e.isComposing || isEditableTarget(e.target)) {
         adminKeys.reset();
         return;
       }
@@ -360,6 +409,7 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
       guide: { ...(guide?.status() ?? GUIDE_CLOSED), record: readGuide(store), autoOpened: guideAutoOpened },
       music: music.debug(),
       sound: { ...sound.stats(), sfxGain: sound.busGain('sfx'), musicGain: sound.busGain('music') },
+      intro: introRun?.debug() ?? null,
     }),
   };
   // TD-78: test the literal so the release build drops the hook entirely
@@ -369,7 +419,9 @@ export function mountHost(root: HTMLElement): GalaxiaHost {
 
   // ?mode=classic|freeroam opens a mode directly (bookmarks, automated checks); anything else shows the title
   const requested = new URLSearchParams(location.search).get('mode');
-  if (requested !== null && (MODE_IDS as readonly string[]).includes(requested)) void launch(requested as ModeId);
-  else controller.returnToMenu();
+  if (requested !== null && (MODE_IDS as readonly string[]).includes(requested)) {
+    introPending = false; // a deep link never shows the intro, not even on the first return to the home page
+    void launch(requested as ModeId);
+  } else controller.returnToMenu();
   return host;
 }

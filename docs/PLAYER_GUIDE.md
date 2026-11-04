@@ -12,6 +12,16 @@ This guide covers how to play GALAXIA: both modes, every control, the Hangar, th
 
 The title screen offers two modes, **CLASSIC** and **FREE ROAM**. Choose with the arrow keys and press Enter, click a card, or tap one.
 
+### The opening cinematic
+
+The first time you open GALAXIA after a page load, a short cinematic plays before the home page: your ship drops out of a jump, wins a quickly scripted battle, and the camera follows it into its cockpit, where the home page opens on its display and then fills the screen. It takes about nine seconds, runs once per page load, and never changes your saves or settings.
+
+- Press **SKIP INTRO** (top of the screen after the first moment) or **Escape** at any time to jump straight to the home page. The skip is always answered, even during the battle.
+- If you use reduced motion, it is a one-second fade into the home page instead.
+- Waiting through it is never required: the game is ready when the home page appears, and the home-page music starts then (not during the cinematic).
+- Bookmarked links that open a mode directly (`?mode=classic`, `?mode=freeroam`) never show it; neither does `?intro=skip`.
+- If your connection hiccups while the cinematic is loading, GALAXIA opens the home page instead and tells you so. It does not retry on a loop.
+
 ### Music on the home page
 
 The home page plays GALAXIA's own theme, **BEYOND THE BEACON**. It plays only on the home page: starting a game fades it out, and coming back starts it again from the beginning.

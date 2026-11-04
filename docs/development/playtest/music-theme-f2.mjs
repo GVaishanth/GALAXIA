@@ -71,7 +71,10 @@ function watch(p, errs, warns, reqs) {
 }
 const themeRequests = (reqs) => reqs.filter((u) => /galaxiaTheme-[^/]*\.js/.test(u)).length;
 async function home(p, url = PAGE) {
-  await p.goto(url, { waitUntil: 'load' });
+  // Finale P3: the home page plays its opening cinematic on first sight; the theme waits for its handoff.
+  // This harness tests the music on the settled home page, so it bypasses the intro (?intro=skip).
+  const u = url === PAGE ? `${PAGE}?intro=skip` : url;
+  await p.goto(u, { waitUntil: 'load' });
   await p.waitForFunction(() => window.__galaxia?.debug().title.visible === true, null, { timeout: 15000 });
 }
 async function settle(p, ms = 400) {

@@ -60,6 +60,10 @@ async function animates(p, sel, n = 6, ms = 180) {
 const press = async (p, sel, touch) => (touch ? p.tap(sel) : p.click(sel));
 
 async function launch(bname, { w, h, touch = false, dpr = 1, query = '', fresh = false }) {
+  // Finale P3: this harness exercises the settled home page; the opening cinematic
+  // (first home-page showing per load) is bypassed with ?intro=skip, as its own harness does.
+  const skipIntro = (q) => (q === '' ? '?intro=skip' : q.startsWith('?') ? q.replace(/^\?/, '?intro=skip&') : '?intro=skip&' + q);
+  query = skipIntro(query);
   const browser = await BT[bname].launch();
   const opts = { viewport: { width: w, height: h }, hasTouch: touch, deviceScaleFactor: dpr };
   if (touch && bname !== 'firefox') opts.isMobile = true;
@@ -217,7 +221,7 @@ async function session(bname) {
     check(`${bname}: C RESUME closes the panel and flight continues`, frResumed && frAgain >= 3, { frResumed, frAgain });
 
     /* E prefs survive a reload */
-    await p.goto(URL0, { waitUntil: 'load' });
+    await p.goto(URL0 + '?intro=skip', { waitUntil: 'load' });
     await openClassic(p, false);
     const disp = await setArcade(p, false, true);
     await p.click('.screen-title [data-action=settings]');
@@ -229,7 +233,7 @@ async function session(bname) {
     await sleep(150);
     const s1 = await soundState();
     const prefsBefore = await p.evaluate(() => localStorage.getItem('galaxia:prefs'));
-    await p.goto(URL0, { waitUntil: 'load' });
+    await p.goto(URL0 + '?intro=skip', { waitUntil: 'load' });
     await openClassic(p, false);
     const afterDisp = await p.evaluate(() => document.querySelector('.game-app').dataset.display);
     const prefsAfter = await p.evaluate(() => localStorage.getItem('galaxia:prefs'));
@@ -308,7 +312,7 @@ async function firstVisit(bname) {
     await p.click('.guide:not([hidden]) .guide-close');
     await sleep(200);
     const rec = await p.evaluate(() => JSON.parse(localStorage.getItem('galaxia:guide') ?? 'null'));
-    await p.goto(URL0, { waitUntil: 'load' });
+    await p.goto(URL0 + '?intro=skip', { waitUntil: 'load' });
     await waitVisible(p, '.mode-card-classic');
     await sleep(500);
     const again = await p.evaluate(() => !!document.querySelector('.guide:not([hidden])'));

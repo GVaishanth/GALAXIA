@@ -27,8 +27,9 @@ function goodBuild(base: string): Files {
     'favicon-32.png': 'png',
     'apple-touch-icon.png': 'png',
     'THIRD_PARTY_NOTICES.txt': 'Copyright (c) 2019-present, VoidZero Inc. and Vite contributors',
-    // Finale P2: the entry also loads the home-page theme by dynamic import
-    'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])},h=()=>p(()=>import(`./galaxiaTheme-MUS00001.js`),[]);',
+    // Finale P2 + P3: the entry also loads the home-page theme and the opening cinematic by dynamic import
+    'assets/index-AAA.js': 'const m={freeroam:()=>p(()=>import(`./freeRoamMode-CCC.js`).then(e=>e.createFreeRoamMode),[])},h=()=>p(()=>import(`./galaxiaTheme-MUS00001.js`),[]),op=()=>p(()=>import(`./openingCinematic-CIN00001.js`),[]);',
+    'assets/openingCinematic-CIN00001.js': `const id=\`${INTRO_MARKER}cabin\`;export{id};`,
     'assets/galaxiaTheme-MUS00001.js': `const id=\`${MUSIC_MARKER}beyond\`;export{id};`,
     'assets/index-BBB.css': 'body{background:#000}',
     // P10.1: Free Roam loads its two lazy chunks by dynamic import; each carries its inventory marker
@@ -50,6 +51,7 @@ const FLEET_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetKit')!.marker!;
 const PANEL_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'fleetPanel')!.marker!;
 const DIAG_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'diagnostics')!.marker!;
 const MUSIC_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'galaxiaTheme')!.marker!;
+const INTRO_MARKER = CHUNK_BUDGETS.find((c) => c.name === 'openingCinematic')!.marker!;
 const gz = (t: string): number => gzipSync(Buffer.from(t), { level: 9 }).length;
 /** Incompressible filler: a deterministic SHA-256 chain, hex-encoded. */
 const hex = (chars: number): string => Array.from({ length: Math.ceil(chars / 64) }, (_, i) => createHash('sha256').update(`pad${i}`).digest('hex')).join('').slice(0, chars);
@@ -235,6 +237,7 @@ describe('chunk inventory and Free Roam budgets (P10.1)', () => {
       'assets/fleetPanel-FLp00001.js': ['lazy', 7_000],
       'assets/diagnostics-DGn00001.js': ['lazy', 4_500],
       'assets/galaxiaTheme-MUS00001.js': ['title', CHUNK_BUDGETS.find((c) => c.name === 'galaxiaTheme')!.gzip],
+      'assets/openingCinematic-CIN00001.js': ['title', CHUNK_BUDGETS.find((c) => c.name === 'openingCinematic')!.gzip],
     });
     expect(r.freeRoamEager).toBe(gz(f[FR]!));
     expect(r.freeRoamTotal).toBe(gz(f[FR]!) + gz(f[TOW]!) + gz(f[BAY]!) + gz(f['assets/fleetKit-FLt00001.js']!) + gz(f['assets/fleetPanel-FLp00001.js']!) + gz(f['assets/diagnostics-DGn00001.js']!));

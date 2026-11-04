@@ -137,6 +137,61 @@ describe('layer dependencies', () => {
   });
 });
 
+describe('the opening cinematic (Finale P3)', () => {
+  const intro = files(resolve(src, 'shared/intro'));
+  const inDir = (prefix: string): string[] => files(src).filter((f) => rel(f).startsWith(prefix));
+
+  it('contains exactly the policy, the shell and the four pure painters', () => {
+    expect(intro.map(rel).sort()).toEqual([
+      'shared/intro/introPolicy.ts',
+      'shared/intro/introShell.ts',
+      'shared/intro/openingCinematic.ts',
+      'shared/intro/openingCockpit.ts',
+      'shared/intro/openingDirector.ts',
+      'shared/intro/openingScene.ts',
+    ]);
+  });
+
+  it('the pure modules never read the DOM, storage, the wall clock or a random draw', () => {
+    for (const relPath of ['shared/intro/introPolicy.ts', 'shared/intro/openingDirector.ts', 'shared/intro/openingScene.ts', 'shared/intro/openingCockpit.ts']) {
+      const body = readFileSync(resolve(src, relPath), 'utf8');
+      expect(body, relPath).not.toMatch(/\b(document|window|localStorage|sessionStorage|performance|Date\.now|Math\.random)\b/);
+      expect(body.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, ''), relPath).not.toMatch(/setTimeout|setInterval|requestAnimationFrame/);
+    }
+    // the painter and the shell may draw and listen, but only through a DisposableScope (loops) and element listeners
+    for (const relPath of ['shared/intro/introShell.ts', 'shared/intro/openingCinematic.ts']) {
+      const body = readFileSync(resolve(src, relPath), 'utf8');
+      expect(body, relPath).not.toMatch(/\b(localStorage|sessionStorage)\b|Date\.now|Math\.random/);
+      expect(body, relPath).not.toMatch(/\bperformance\.now\b/);
+    }
+  });
+
+  it('only the mode host knows the intro exists, and only the shell loads the lazy cinematic chunk', () => {
+    const all = files(src);
+    // only the mode host reaches shared/intro at all; the intro files reference only each other internally
+    const mention = all.filter((f) => !rel(f).startsWith('shared/intro/') && importSpecs(f).some((t) => t.startsWith('shared/intro/')));
+    expect(mention.map(rel).sort()).toEqual(['modes/host.ts']);
+    // the dynamic chunk import lives in the host exactly once; the pure graph holds types only
+    const dynamicLoaders = all.filter((f) => importSpecs(f).some((t) => t === 'shared/intro/openingCinematic.ts'));
+    expect(dynamicLoaders.map(rel)).toEqual(['modes/host.ts']);
+    const hostBody = readFileSync(resolve(src, 'modes/host.ts'), 'utf8');
+    expect(hostBody).toMatch(/import\('\.\.\/shared\/intro\/openingCinematic\.ts'\)/);
+    const fr = inDir('modes/freeroam/');
+    for (const f of fr) {
+      for (const t of importSpecs(f)) expect(t, `${rel(f)} imports ${t}`).not.toMatch(/^shared\/intro\//);
+    }
+  });
+
+  it('the cinematic never writes storage or starts gameplay itself (nothing persistent)', () => {
+    for (const f of intro) {
+      const body = readFileSync(f, 'utf8');
+      expect(body, rel(f)).not.toMatch(/localStorage|sessionStorage|saveSlot|writeRecord/);
+      expect(body, rel(f)).not.toMatch(/\blaunch\(/);
+    }
+    expect(readFileSync(resolve(src, 'shared/intro/introShell.ts'), 'utf8')).not.toMatch(/play\(|music\.(enter|gesture)\(/);
+  });
+});
+
 describe('mode separation (Free Roam Prompt 2)', () => {
   const all = files(src);
   const inDir = (prefix: string): string[] => all.filter((f) => rel(f).startsWith(prefix));

@@ -145,6 +145,11 @@ export class TitleScreen {
     return this.blocked;
   }
 
+  /** Finale P3: one transient line in the notices (a polite status region), e.g. the intro could not be shown. Cleared by the next show(). */
+  notice(text: string): void {
+    this.notices.append(el('p', 'title-notice', text));
+  }
+
   show(model: TitleModel): void {
     this.shows += 1;
     this.setBlocked(false);

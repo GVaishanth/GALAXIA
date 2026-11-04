@@ -70,7 +70,7 @@ These figures are machine measurements in headless Chromium. They are **not** pr
 - **Rapid back-and-forth:** the player keeps at most one fading run beside the new one. An older fade is ramped to silence in 30 ms (no click) and released.
 - **Hidden tab:** the theme holds and the audio context is suspended. When the tab is visible again it continues where it was.
 - **Deep links** (`?mode=classic`, `?mode=freeroam`) skip the home page, so the theme is never requested.
-- **For Finale Part 3 (Nov 4):** the director's `enter()` and `leave()` are the only entry points, so the cinematic opening can decide when the home page (and therefore the theme) begins without changes to the player. Part 2 implements no cinematic behaviour.
+- **Finale Part 3 (Nov 4, then-current):** the opening cinematic owns the home page's first showing per page load. The host calls `enter()` only when the cinematic hands over (played, skipped, reduced or failed; `leave()` already ran when a cut starts a mode). While the intro runs the director is idle: no chunk load, no player, no fake "playing". The cinematic itself has no second music system (see docs/development/OPENING_CINEMATIC.md).
 
 ## 5. Browser autoplay
 
