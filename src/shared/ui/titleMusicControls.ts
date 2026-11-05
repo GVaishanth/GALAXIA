@@ -1,14 +1,17 @@
 /**
  * Home-page music controls (Finale P2): PLAY MUSIC (only while the browser is
- * holding the music), MUTE MUSIC and the music volume, with a short status
- * line. The same saved settings as Classic's SETTINGS and Free Roam's SOUND
- * panel (`galaxia:prefs`); they work and save even when the theme never loads
+ * holding the music) and the music volume, with a short status line. The same
+ * saved settings as Classic's SETTINGS and Free Roam's SOUND panel
+ * (`galaxia:prefs`); they work and save even when the theme never loads
  * (blocked, unavailable). Entry code, DOM only, no frame loop.
  *
- *   - MUTE MUSIC: a toggle button (aria-pressed). Music only; effects stay.
  *   - Music volume: a native range input 0-100 (pointer, touch and keyboard),
  *     the value shown beside it. Dragging changes the level live; the value is
  *     saved once, on release (`change`), not on every step of a drag.
+ *   - MUTE MUSIC lives in Settings (Classic SETTINGS, Free Roam SOUND), next
+ *     to the music volume there — one saved preference, never a second one.
+ *     PLAY MUSIC stays on the home page: it is the autoplay-unlock gesture,
+ *     not a settings control.
  */
 import type { AudioPrefs } from '../../persistence/saveData.ts';
 import type { MusicStatus } from '../audio/titleMusic.ts';
@@ -55,15 +58,6 @@ export function createTitleMusicControls(d: TitleMusicControlsDeps): TitleMusicC
   play.textContent = '▶ PLAY MUSIC';
   play.addEventListener('click', () => d.play());
 
-  const mute = document.createElement('button');
-  mute.type = 'button';
-  mute.className = 'title-music-mute';
-  mute.textContent = 'MUTE MUSIC';
-  mute.addEventListener('click', () => {
-    d.save({ musicMuted: d.get().musicMuted !== true });
-    refresh();
-  });
-
   const vol = document.createElement('label');
   vol.className = 'title-music-vol';
   const name = document.createElement('span');
@@ -94,7 +88,7 @@ export function createTitleMusicControls(d: TitleMusicControlsDeps): TitleMusicC
   line.className = 'title-music-status';
   line.setAttribute('role', 'status');
 
-  root.append(play, mute, vol, line);
+  root.append(play, vol, line);
 
   function refresh(): void {
     const a = d.get();
@@ -102,15 +96,14 @@ export function createTitleMusicControls(d: TitleMusicControlsDeps): TitleMusicC
     const wasFocused = document.activeElement === play;
     // hidden keeps its box (styles.css): starting the music mid-tap never moves the page under the finger
     play.hidden = !(s === 'locked' || s === 'blocked');
-    // keyboard focus never falls to the page; moved in a later task, because Enter on PLAY MUSIC starts the
-    // music in its keydown and the key's own activation (keypress -> click) would otherwise land on MUTE MUSIC
+    // keyboard focus never falls to the page: Enter on PLAY MUSIC starts the music in its keydown and the
+    // key's own activation (keypress -> click) would otherwise land here; the volume slider is the next control
     if (play.hidden && wasFocused) {
       setTimeout(() => {
         const f = document.activeElement;
-        if (root.isConnected && play.hidden && (f === play || f === document.body || f === null)) mute.focus();
+        if (root.isConnected && play.hidden && (f === play || f === document.body || f === null)) range.focus();
       }, 0);
     }
-    mute.setAttribute('aria-pressed', String(a.musicMuted === true));
     const n = pct(a.music);
     if (document.activeElement !== range) range.value = String(n); // never yank a slider being dragged
     show(Number(range.value));

@@ -8,9 +8,10 @@
  */
 import type { UnlockRequirement } from '../catalogue/types.ts';
 import type { CommandRefusal, PurchaseWorld } from '../fleet/command.ts';
-import { unitWord, vesselNo, type FleetKit, type FleetUnit, type FleetVessel, type Vessels } from '../fleet/vessels.ts';
+import { unitWord, vesselCapacity, vesselHold, vesselNo, type FleetKit, type FleetUnit, type FleetVessel, type Vessels } from '../fleet/vessels.ts';
 import type { OrderRefusal } from '../fleet/wing.ts';
 import type { RequirementInfo } from '../galaxy/progress.ts';
+import { collectiveCargo, holdUnits, inventoryRows, type CollectiveCargo, type Hold } from '../inventory/inventory.ts';
 import { resourceName } from '../inventory/resources.ts';
 import { formatMarks } from '../progression/ledger.ts';
 import { SHIP_BY_ID, SHIPS } from '../ships/roster.ts';
@@ -53,6 +54,8 @@ export interface VesselRow {
   readonly stateText: string;
   /** Hull and shield of the flying unit; null when the vessel is not in the sector. */
   readonly hull: string | null;
+  /** Cargo aboard: \"CARGO 12 / 30\" (the vessel's hold against its stock archetype capacity). */
+  readonly cargo: string;
   readonly order: string;
   readonly status: FleetVessel['status'];
 }
@@ -89,6 +92,7 @@ export function vesselRows(c: FleetContext): VesselRow[] {
       state,
       stateText: STATE_TEXT[state],
       hull: u ? `HULL ${Math.ceil(u.hull)} / ${u.spec.stats.hull} · SHIELD ${Math.ceil(u.shield)} / ${u.spec.stats.shield}` : null,
+      cargo: `CARGO ${holdUnits(vesselHold(c.vessels, v.id))} / ${vesselCapacity(v.ship)}`,
       order,
       status: v.status,
     };
@@ -219,3 +223,47 @@ export function fleetHead(c: FleetContext, cap: number): string {
   const crewed = c.vessels.list.filter((v) => v.captain).length;
   return `FLEET ${n} / ${cap} · ${crewed} ${crewed === 1 ? 'CAPTAIN' : 'CAPTAINS'} · ${formatMarks(c.world.marks)}`;
 }
+
+/* ------------------------------------------------------- collective cargo */
+
+/** The pilot's own hold as the panel sees it (deps mirror the shell's inventory panel). */
+export interface PlayerHold {
+  readonly shipName: string;
+  readonly hold: Hold;
+  readonly capacity: number;
+}
+
+/**
+ * The aboard-ship cargo of the pilot and every owned fleet vessel: one total, per-hold lines and a
+ * grouped types line. Published from the live state every refresh (no cache, no polling): a flying
+ * unit is its saved vessel's runtime shape, so its cargo lands under the vessel id exactly once.
+ */
+export function collectiveView(c: FleetContext, own: PlayerHold): CollectiveCargo {
+  return collectiveCargo(own.shipName, own.hold, own.capacity, c.vessels.list.map((v) => ({ name: vesselName(v), hold: vesselHold(c.vessels, v.id), capacity: vesselCapacity(v.ship) })));
+}
+
+/** `42 / 85 UNITS · 43 FREE` + per-hold lines + the grouped types line (empty types line omitted). */
+export function collectiveLines(cc: CollectiveCargo): string[] {
+  const out = [`${cc.used} / ${cc.capacity} UNITS · ${cc.free} FREE`];
+  for (const h of cc.holds) out.push(`${h.name.toUpperCase()} · ${h.used} / ${h.capacity}`);
+  if (cc.byType.length) out.push(cc.byType.map((e) => `${resourceName(e.resource).toUpperCase()} ${e.amount}`).join(' · '));
+  return out;
+}
+
+/* --------------------------------------------------------- transfer view */
+
+/** One cargo kind in the transfer step: how much sits at each end (0 where absent). */
+export interface TransferRow {
+  readonly resource: string;
+  readonly name: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+/** The rows the transfer step offers: every known kind present at either end, in the cargo panel's order. */
+export function transferRows(fromHold: Hold, toHold: Hold): TransferRow[] {
+  return inventoryRows({ ...toHold, ...fromHold }, Number.MAX_SAFE_INTEGER).map((r) => ({ resource: r.def.id as string, name: r.def.name.toUpperCase(), from: fromHold[r.def.id] ?? 0, to: toHold[r.def.id] ?? 0 }));
+}
+
+/** The most an end-to-end move may still carry: source amount and destination free space. */
+export const transferMax = (rowFrom: number, toHold: Hold, toCap: number): number => Math.min(rowFrom, Math.max(0, Math.floor(toCap) - holdUnits(toHold)));

@@ -186,7 +186,7 @@ export class TitleScreen {
     this.scope = scope;
     scope.on<KeyboardEvent>(window, 'keydown', (e) => {
       if (this.blocked || e.ctrlKey || e.metaKey || e.altKey || isEditableTarget(e.target)) return;
-      // Finale P2: keys on the music controls belong to them (the slider's arrows, Enter on MUTE MUSIC)
+      // Finale P2: keys on the music controls belong to them (the volume slider's arrows, Enter on PLAY MUSIC)
       if ((e.target as Element | null)?.closest?.('.title-music')) return;
       if (e.code === 'KeyH' && !e.shiftKey && !e.repeat && this.cb.onGuide) {
         e.preventDefault();

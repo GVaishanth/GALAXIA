@@ -210,6 +210,50 @@ export function categoryCounts(h: Hold): Readonly<Record<ResourceCategory, numbe
 /** Ids in the hold the catalogue does not know (kept, shown as unknown, never counted as loot). */
 export const unknownCargo = (h: Hold): string[] => Object.keys(h).filter((k) => !isResourceId(k) && validQty(h[k]));
 
+/* ----------------------------------------------------- collective cargo */
+
+/** One hold's slice of the collective view (the pilot's ship or a fleet vessel). */
+export interface CollectiveHold {
+  /** Label, e.g. the ship's name or "SHRIKE · ESCORT 1". */
+  readonly name: string;
+  readonly hold: Hold;
+  readonly capacity: number;
+  readonly used: number;
+}
+
+export interface CollectiveCargo {
+  /** Units aboard every included hold. */
+  readonly used: number;
+  /** Total capacity of the included holds. */
+  readonly capacity: number;
+  /** Remaining space across the included holds (never negative). */
+  readonly free: number;
+  /** Amounts grouped by resource, in catalogue order. */
+  readonly byType: LootEntry[];
+  /** Per hold, in the order passed. */
+  readonly holds: readonly CollectiveHold[];
+}
+
+/**
+ * Post-release fleet cargo: the combined aboard-ship cargo of the pilot's ship and the given
+ * fleet vessels. Every hold is counted exactly once (a deployed escort is its saved vessel's
+ * runtime shape, never a second holder); station module storage and wreck loot are not holds and
+ * are never folded in. Capacities below zero count as zero; holds above capacity keep their units
+ * and contribute no free space (the established over-full hold rule).
+ */
+export function collectiveCargo(shipName: string, shipHold: Hold, shipCapacity: number, fleet: readonly { readonly name: string; readonly hold: Hold; readonly capacity: number }[]): CollectiveCargo {
+  const holds: CollectiveHold[] = [
+    { name: shipName, hold: shipHold, capacity: Math.max(0, Math.floor(shipCapacity)), used: holdUnits(shipHold) },
+    ...fleet.map((f) => ({ name: f.name, hold: f.hold, capacity: Math.max(0, Math.floor(f.capacity)), used: holdUnits(f.hold) })),
+  ];
+  const used = holds.reduce((n, h) => n + h.used, 0);
+  const capacity = holds.reduce((n, h) => n + h.capacity, 0);
+  const totals = new Map<ResourceId, number>();
+  for (const h of holds) for (const [id, n] of Object.entries(h.hold)) if (isResourceId(id) && validQty(n)) totals.set(id, Math.min(MAX_UNITS, (totals.get(id) ?? 0) + n));
+  const byType = RESOURCE_IDS.filter((id) => totals.has(id)).map((id) => ({ resource: id, amount: totals.get(id)! }));
+  return { used, capacity, free: Math.max(0, capacity - used), byType, holds };
+}
+
 /* --------------------------------------------------------- module storage */
 
 export const storedTotal = (m: ModuleStore): number => Object.values(m).reduce((n, v) => n + (validQty(v) ? v : 0), 0);

@@ -265,6 +265,8 @@ export interface SavedVessel {
 export interface SavedVessels {
   readonly seq: number;
   readonly list: readonly SavedVessel[];
+  /** Post-release (additive, still v10): cargo stored aboard each vessel, vessel id -> resource id -> units. Absent = every hold empty. */
+  readonly holds?: Readonly<Record<string, Readonly<Record<string, number>>>>;
 }
 
 export const STARTER_SAVED_FLEET: SavedFleet = Object.freeze({ active: STARTER_SHIP_ID, owned: Object.freeze([STARTER_SHIP_ID]), loadouts: Object.freeze({}) });
@@ -631,7 +633,22 @@ function vesselsField(f: Fix, v: unknown): SavedVessels | undefined {
   }
   // no vessel ever issued is no field at all (an old save and a save that never commissioned look the same)
   if (!list.length && !seq) return ((f.repaired = true), undefined);
-  return { seq: seq ?? 0, list };
+  // post-release per-vessel holds: kept only for surviving vessel ids, same rules as the hold
+  let holds: SavedVessels['holds'];
+  if (isObj(v) && isObj(v['holds'])) {
+    const out: Record<string, Readonly<Record<string, number>>> = {};
+    for (const [vid, rawHold] of Object.entries(v['holds'] as Record<string, unknown>)) {
+      if (!list.some((x) => x.id === vid)) {
+        f.repaired = true;
+        continue;
+      }
+      const h = cargoMap(f, rawHold);
+      if (Object.keys(h).length > 0) out[vid] = h;
+    }
+    if (Object.keys(out).length > 0) holds = out;
+    else if (Object.keys(v['holds'] as Record<string, unknown>).length > 0) f.repaired = true;
+  } else if (isObj(v) && v['holds'] !== undefined) f.repaired = true;
+  return holds ? { seq: seq ?? 0, list, holds } : { seq: seq ?? 0, list };
 }
 
 function ordnanceField(f: Fix, v: unknown): Readonly<Record<string, number>> {

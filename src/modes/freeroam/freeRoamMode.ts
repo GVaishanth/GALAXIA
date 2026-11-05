@@ -54,7 +54,7 @@ import { activeSlot, AUTOSAVE_SECONDS, loadFreeRoamPrefs, loadSlot, readSlots, s
 import { auditProfile, auditText } from './saveAudit.ts';
 import { createSavesPanel, SAVE_RETRY, type SavesCommand, type SavesDeps, type SavesPanel, type SlotNames } from './ui/savesPanel.ts';
 import { backupKey } from '../../shared/persistence/namespaces.ts';
-import { planSwap, removeLoot, lootUnits } from './inventory/inventory.ts';
+import { holdUnits, planSwap, removeLoot, lootUnits } from './inventory/inventory.ts';
 import { applyCollection } from './inventory/persistence.ts';
 import { resourceName } from './inventory/resources.ts';
 import { createFabricatorPanel, type FabricatorPanel } from './inventory/ui/fabricatorPanel.ts';
@@ -103,7 +103,7 @@ import type { GuideInput } from '../guide/guideContent.ts';
 import { GuideDialog } from '../guide/guideDialog.ts';
 import { parseRecord } from '../../shared/persistence/record.ts';
 import { cargoUsed, fleetFromSaved, fleetToSaved, formatStat, loadoutOf, missingFor, pay, recoverShip, type FleetState } from './ships/hangar.ts';
-import { captainsOf, cleanVessels, deployable, NO_VESSELS, serviceAtDock, vesselsToSaved, wingSummary, type FleetAct, type FleetKit, type Vessels, type VesselSpec } from './fleet/vessels.ts';
+import { captainsOf, cleanVessels, deployable, NO_VESSELS, serviceAtDock, vesselCapacity, vesselHold, vesselNo, vesselsToSaved, wingSummary, type FleetAct, type FleetKit, type Vessels, type VesselSpec } from './fleet/vessels.ts';
 import type { PurchaseWorld } from './fleet/command.ts';
 import type { FleetAdmin, FleetPanel, FleetPanelStatus } from './ui/fleetPanel.ts';
 import type { FleetFlight } from './ui/fleetView.ts';
@@ -1419,6 +1419,18 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
       notify(m.commissionedText(crewShipName(r.price.ship)), undefined, 'info');
       return { ok: true, text: `${crewShipName(r.price.ship)} commissioned, captained by ${crewName(a.captain)}.` };
     }
+    if (a.kind === 'cargo') {
+      // post-release fleet cargo: one atomic transfer (vessels + hold are read fresh here, so a stale panel amount is refused), one save
+      const t = m.transfer(vessels, a.from, a.to, a.resource, a.amount, profile.cargo, holdCap(), cw);
+      if (!t.ok) return { ok: false, text: m.transferRefusalText(t.reason), reason: t.reason };
+      vessels = t.vessels;
+      profile = withCargo(withVessels(profile, vesselsToSaved(vessels)), t.hold);
+      save();
+      const names = t.moved.map((x) => `${x.amount} ${resourceName(x.resource).toUpperCase()}`).join(' · ');
+      const rest = t.left.length ? ' The rest stays put: the destination hold is full.' : '';
+      notify(`CARGO TRANSFERRED · ${names}`, undefined, 'info');
+      return { ok: true, text: `Transferred ${names}.${rest}` };
+    }
     const r = a.kind === 'captain' ? m.assignCaptain(vessels, a.vessel, a.crew, cw) : a.kind === 'release' ? m.releaseCaptain(vessels, a.vessel, cw) : m.setService(vessels, a.vessel, a.status, cw);
     if (!r.ok) return { ok: false, text: m.refusalText(r.reason), reason: r.reason };
     commitVessels(r.vessels);
@@ -1471,6 +1483,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
           crewRole: (id) => CREW_BY_ID.get(id)?.role ?? '',
           describe: (req) => describeRequirement(deriveView(graph, progress), req),
           station: () => (dockedAt() ? dockLabel : null),
+          own: () => ({ shipName: crewShipName(craft.ship), hold: profile.cargo, capacity: holdCap() }),
           act: fleetAct,
           hangar: () => openStation('hangar'),
           back: () => actions.stationBack(),
@@ -2749,7 +2762,7 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
     prepare: () => {
       if (!isAdmin(admin)) return '';
       adminFleetWas ??= vessels;
-      vessels = { seq: 3, list: (['shrike', 'swift', 'condor'] as const).map((ship, i) => ({ id: `fv-${i + 1}`, ship, captain: CREW[i]!.id, status: 'active' as const })) };
+      vessels = { seq: 3, list: (['shrike', 'swift', 'condor'] as const).map((ship, i) => ({ id: `fv-${i + 1}`, ship, captain: CREW[i]!.id, status: 'active' as const })), holds: {} };
       if (run) deployWing(run);
       return 'Test fleet ready in the sandbox: Shrike, Swift and Condor with captains. Launch or fly to see them; nothing is saved.';
     },
@@ -3990,6 +4003,8 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
         capacity: () => holdCap(),
         shipName: () => shipName(),
         modules: () => profile.modules,
+        // post-release fleet cargo: each owned vessel's hold, keyed display only (transfers happen docked, at the FLEET tab)
+        fleet: () => vessels.list.map((v) => ({ name: `${crewShipName(v.ship).toUpperCase()} · ESCORT ${vesselNo(v.id)}`, hold: vesselHold(vessels, v.id), capacity: vesselCapacity(v.ship) })),
         jettison: (res) => jettisonStack(res),
         resume: () => actions.resume(),
         sound: (cue) => services.sound.play(cue),
@@ -4058,6 +4073,10 @@ export function createFreeRoamMode(ctx: ModeContext): GameMode {
             offers: board ? board.offers.length : 0,
             stored: Object.values(profile.modules).reduce((a, n) => a + n, 0),
             escorts: vessels.list.length,
+            // post-release fleet cargo: aboard the escorts (the ship's own hold is the CELLS/hold line)
+            holdUnits: vessels.list.length
+              ? { used: vessels.list.reduce((a, v) => a + holdUnits(vesselHold(vessels, v.id)), 0), capacity: vessels.list.reduce((a, v) => a + vesselCapacity(v.ship), 0) }
+              : undefined,
           };
         },
         open: (tab) => openStation(tab),

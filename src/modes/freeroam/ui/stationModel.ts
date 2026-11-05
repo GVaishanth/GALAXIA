@@ -53,6 +53,8 @@ export interface StationSummary {
   readonly stored: number;
   /** P11.2: fleet vessels owned (absent = none). */
   readonly escorts?: number;
+  /** Post-release fleet cargo: units aboard the escorts and their total capacity (absent = none owned). */
+  readonly holdUnits?: { readonly used: number; readonly capacity: number } | undefined;
 }
 
 export interface OverviewLine {
@@ -90,7 +92,7 @@ export function stationOverview(s: StationSummary): StationOverview {
     { tab: 'missions', title: 'MISSIONS', detail: s.ready > 0 ? 'Turn in completed work, take new jobs.' : 'Take contracts and story missions.', badge: s.ready > 0 ? `${s.ready} READY` : s.offers > 0 ? plural(s.offers, 'OFFER') : '' },
     { tab: 'hangar', title: 'HANGAR', detail: 'Choose, buy and inspect ships.', badge: '' },
     { tab: 'armory', title: 'ARMORY', detail: 'Choose the weapons your ship carries and starts with.', badge: '' },
-    { tab: 'fleet', title: 'FLEET', detail: 'Commission escort hulls and choose their captains.', badge: s.escorts ? plural(s.escorts, 'ESCORT') : '' },
+    { tab: 'fleet', title: 'FLEET', detail: s.escorts ? 'Captains, orders, service and cargo transfers across your escorts.' : 'Commission escort hulls and choose their captains.', badge: s.escorts ? `${plural(s.escorts, 'ESCORT')}${s.holdUnits && s.holdUnits.used > 0 ? ` · CARGO ${s.holdUnits.used}/${s.holdUnits.capacity}` : ''}` : '' },
     { tab: 'equipment', title: 'EQUIPMENT', detail: 'Fit stored modules to the ship’s slots.', badge: s.stored > 0 ? `${s.stored} STORED` : '' },
     { tab: 'fabricator', title: 'FABRICATOR', detail: 'Build modules from cargo.', badge: '' },
     { tab: 'exchange', title: 'EXCHANGE', detail: 'Trade cargo with the Guild for marks.', badge: '' },

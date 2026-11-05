@@ -17,7 +17,7 @@
  */
 import { MenuList } from '../../../../shared/ui/menuList.ts';
 import { EQUIPMENT_BY_ID } from '../../ships/equipment.ts';
-import { categoryCounts, holdUnits, inventoryRows, SORT_KEYS, SORT_LABEL, type CategoryFilter, type Hold, type ModuleStore, type SortKey } from '../inventory.ts';
+import { categoryCounts, collectiveCargo, holdUnits, inventoryRows, SORT_KEYS, SORT_LABEL, type CategoryFilter, type Hold, type ModuleStore, type SortKey } from '../inventory.ts';
 import { CATEGORY_INFO, LOOT_SOURCES, RARITY_LABEL, RESOURCE_CATEGORIES, RESOURCES, type LootSource } from '../resources.ts';
 import type { ResourceId } from '../../catalogue/types.ts';
 import { iconImg } from './iconImages.ts';
@@ -28,6 +28,8 @@ export interface InventoryDeps {
   readonly capacity: () => number;
   readonly shipName: () => string;
   readonly modules: () => ModuleStore;
+  /** Post-release fleet cargo: owned fleet vessels' holds (name/lid are display-only; empty = no fleet). */
+  readonly fleet?: () => readonly { readonly name: string; readonly hold: Hold; readonly capacity: number }[];
   /** Throw a whole stack out; returns the message to show (the shell commits the profile). */
   readonly jettison: (resource: string) => string;
   readonly resume: () => void;
@@ -78,6 +80,9 @@ export function createInventoryPanel(d: InventoryDeps): InventoryPanel {
   body.append(list, detail);
   const note = el('p', 'fr-text fr-text-dim fr-cargo-note');
   note.setAttribute('role', 'status');
+  // post-release fleet cargo: the aboard-ship cargo of the ship plus every owned escort (text only; transfers are at the station FLEET tab)
+  const collective = el('div', 'fr-inv-collective');
+  collective.hidden = true;
   const menu = el('div', 'fr-menu');
   const tools = el('div', 'fr-inv-tools');
   const sortBtn = el('button', 'fr-btn fr-inv-sort', '');
@@ -90,7 +95,7 @@ export function createInventoryPanel(d: InventoryDeps): InventoryPanel {
   resumeBtn.addEventListener('click', () => d.resume());
   // the tools, the rows' buttons and RESUME form one roving menu
   menu.append(tools, body, mods, resumeBtn);
-  root.append(el('p', 'fr-kicker', 'FREE ROAM'), el('h2', 'fr-title', 'CARGO HOLD'), cap, bar, note, menu);
+  root.append(el('p', 'fr-kicker', 'FREE ROAM'), el('h2', 'fr-title', 'CARGO HOLD'), cap, bar, collective, note, menu);
   const menuList = new MenuList(menu, () => d.sound('uiMove'));
 
   let sort: SortKey = 'category';
@@ -130,6 +135,15 @@ export function createInventoryPanel(d: InventoryDeps): InventoryPanel {
     cap.classList.toggle('is-full', full);
     bar.classList.toggle('is-full', full);
     fill.style.width = `${Math.min(100, Math.round((100 * used) / Math.max(1, capacity)))}%`;
+    collective.replaceChildren();
+    const fleet = d.fleet?.() ?? [];
+    collective.hidden = fleet.length === 0;
+    if (fleet.length > 0) {
+      const cc = collectiveCargo(d.shipName().toUpperCase(), hold, capacity, fleet);
+      collective.append(el('p', 'fr-kicker', 'COLLECTIVE CARGO'));
+      collective.append(el('p', 'fr-text fr-text-dim', `${cc.used} / ${cc.capacity} UNITS USED · ${cc.free} FREE ABOARD ${fleet.length + 1} ${fleet.length + 1 === 1 ? 'SHIP' : 'SHIPS'}`));
+      for (const h of cc.holds.slice(1)) collective.append(el('p', 'fr-text fr-text-dim', `${h.name} · ${h.used} / ${h.capacity}`));
+    }
     if (!filters().includes(filter)) filter = 'all';
     sortBtn.textContent = `SORT: ${SORT_LABEL[sort]}`;
     sortBtn.setAttribute('aria-label', `Sort by ${SORT_LABEL[sort].toLowerCase()} (press to change)`);

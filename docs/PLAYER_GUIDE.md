@@ -27,9 +27,9 @@ The first time you open GALAXIA after a page load, a short cinematic plays befor
 The home page plays GALAXIA's own theme, **BEYOND THE BEACON**. It plays only on the home page: starting a game fades it out, and coming back starts it again from the beginning.
 
 - Browsers only allow sound after you interact with the page, so at first the home page shows **PLAY MUSIC**. Press it (or click, tap or press any key on the home page) to start the music. If the browser still holds the audio, the line under the buttons says so; press PLAY MUSIC again. The game itself never needs the music.
-- **MUTE MUSIC** silences the music: the home theme and the short music jingles (stage start, stage clear, game over, mission complete and similar). Shots, explosions, menu clicks and alerts keep playing.
-- **MUSIC** sets the music volume (0–100 %). Drag it, tap it, or use the arrow keys. A volume of 0 silences the music too, without turning on MUTE MUSIC.
-- Both settings are remembered on this device and are the same ones you find in Classic SETTINGS and Free Roam SOUND. Muting keeps your volume, so unmuting brings it back as it was.
+- **MUTE MUSIC** silences the music: the home theme and the short music jingles (stage start, stage clear, game over, mission complete and similar). Shots, explosions, menu clicks and alerts keep playing. It lives in **Classic SETTINGS** and **Free Roam SOUND** — a setting, next to the volume — not on the home page, so the home page's every control does something right away.
+- **MUSIC** sets the music volume (0–100 %). It sits on the home page and in the two settings panels. Drag it, tap it, or use the arrow keys. A volume of 0 silences the music too, without turning on MUTE MUSIC.
+- Both settings are remembered on this device and are the same ones in Classic SETTINGS and Free Roam SOUND. Muting keeps your volume, so unmuting brings it back as it was.
 
 ### First-run tutorial
 
@@ -371,6 +371,8 @@ You never need crew: flying solo is fully supported and the game can be finished
 You never need a fleet. An **escort** is a second hull of a Guild-built ship type, flown beside you by one of your recruited crew as its **captain**. You always fly your own ship.
 
 **Commission an escort.** Dock and open the **FLEET** tab. Choose a hull, choose a captain, then press **CONFIRM COMMISSION**.
+
+**Escort cargo holds and transfers.** Every escort has its own cargo hold (its capacity is the catalogue hold of its stock hull). The FLEET tab heads its list with **COLLECTIVE CARGO** — the whole formation's cargo counted once, hold by hold — and the same block leads the **CARGO HOLD** panel (I). Dock, open an escort's **CARGO** button, pick the direction, the resource and the amount, then **CONFIRM TRANSFER**: cargo moves between your hold and the escort's. Transfers run only while docked; if the destination is full it takes what fits and the rest stays aboard the source — nothing is lost or duplicated. A disabled or stored escort keeps its cargo.
 - **Cost:** the hull's usual materials plus a Guild commission in marks: Petrel 100, Albatross 160, Swift 160, Harrier 170, Magpie 190, Crane 190, Shrike 200, Condor 250. You need that ship's licence.
 - **Limit:** up to three escorts. The Heron and Raven are never built as escorts.
 - **Refusals:** anything you cannot choose is greyed out, with the reason beside it. A double click, a second Enter or a second tap never buys twice.

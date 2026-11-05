@@ -4,8 +4,9 @@
 // Automated Chromium (Playwright) only. Headless Chromium runs the AudioContext with no speakers: this
 // proves states, scheduling, levels and lifecycle, never how the music sounds to a person.
 //   A  desktop, the browser's own autoplay rule (no context before a gesture): PLAY MUSIC starts the theme;
-//      slider (keyboard, pointer), volume 0, MUTE MUSIC (music bus only: effects still play), volume while
-//      muted, reload persistence, gameplay stops the theme, returning home restarts it from the top,
+//      slider (keyboard, pointer), volume 0, MUTE MUSIC via Classic SETTINGS (music bus only: effects still
+//      play; it is no longer a home-page control), volume while muted, reload persistence, gameplay stops
+//      the theme, returning home restarts it from the top,
 //      rapid navigation, a hidden tab (simulated visibilitychange), Classic SETTINGS, offline render levels;
 //   B  autoplay refused (simulated: every resume() rejected): truthful BLOCKED state, no retry loop,
 //      gameplay unaffected, PLAY MUSIC works once the browser allows it;
@@ -14,7 +15,7 @@
 //   E  a browser that allows autoplay (--autoplay-policy flag + getAutoplayPolicy): plays with no gesture;
 //   K  keyboard: Enter / Space on PLAY MUSIC (music only, never a mute), MUTE MUSIC, the Tab order and focus rings,
 //      HOW TO PLAY opens the guide from the keyboard, Enter with nothing focused still starts a mode;
-//   F  Free Roam: the SOUND panel's MUTE MUSIC; flight works with the theme gone (critical-hit hook still answers);
+//   F  Free Roam: the SOUND panel's MUTE MUSIC (the same galaxia:prefs preference); flight works with the theme gone;
 //   +  no page errors, no AudioContext console warnings.
 import { chromium } from 'playwright';
 
@@ -45,17 +46,29 @@ const ui = (p) => p.evaluate(() => {
     playVisible: (() => { const b = q('.title-music-play'); if (!b) return null; const cs = getComputedStyle(b); return cs.visibility === 'visible' && cs.display !== 'none'; })(),
     playBoxKept: (q('.title-music-play')?.getBoundingClientRect().height ?? 0) >= 44,
     playText: q('.title-music-play')?.textContent ?? null,
-    pressed: q('.title-music-mute')?.getAttribute('aria-pressed') ?? null,
-    muteText: q('.title-music-mute')?.textContent ?? null,
+    hasMute: !!q('.title-music-mute'), // post-release: MUTE MUSIC lives in Settings only; the home page has none
     value: r?.value ?? null,
     label: r?.getAttribute('aria-label') ?? null,
     valuetext: r?.getAttribute('aria-valuetext') ?? null,
     out: q('.title-music-vol output')?.textContent ?? null,
     line: q('.title-music-status')?.textContent ?? null,
-    focus: document.activeElement?.className ?? null,
+    focus: document.activeElement?.className || (document.activeElement?.getAttribute('aria-label') ?? null),
   };
 });
 const prefs = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('galaxia:prefs') ?? 'null')?.audio ?? null);
+// Post-release: MUTE MUSIC lives in Settings (Classic SETTINGS / Free Roam SOUND), not on the home page.
+// From the home page: enter Classic, open SETTINGS, set aria-pressed to `on`, come back. Every click is a gesture.
+const setMuted = async (p, on) => {
+  await p.click('.mode-card-classic');
+  await p.waitForSelector('.screen-title [data-action=settings]', { state: 'visible', timeout: 10000 });
+  await p.click('.screen-title [data-action=settings]');
+  await p.waitForSelector('.screen-settings [data-action=back]', { state: 'visible' });
+  const cur = await p.evaluate(() => document.querySelector('.screen-settings .screen-toggle[aria-label="MUTE MUSIC"]')?.getAttribute('aria-pressed') === 'true');
+  if (cur !== on) await p.click('.screen-settings .screen-toggle[aria-label="MUTE MUSIC"]');
+  await sleep(200);
+  await p.click('.screen-settings [data-action=back]');
+  await p.evaluate(() => window.__galaxia.menu());
+};
 function guideSkipped() {
   try {
     if (!localStorage.getItem('galaxia:guide')) localStorage.setItem('galaxia:guide', JSON.stringify({ version: 1, seen: 1, outcome: 'skipped' }));
@@ -103,21 +116,21 @@ try {
       group: document.querySelector('.title-music')?.getAttribute('aria-label'),
       role: document.querySelector('.title-music-status')?.getAttribute('role'),
     }));
-    check('A1: accessible controls: PLAY MUSIC shown, MUTE MUSIC not pressed, "Music volume" slider 70 with its value shown, a status line',
-      !u.playHidden && /PLAY MUSIC/.test(u.playText) && u.pressed === 'false' && u.label === 'Music volume' && u.value === '70' && u.out === '70%' && u.valuetext === '70 percent' && names.group === 'Music' && names.role === 'status' && /PLAY MUSIC/.test(u.line),
+    check('A1: accessible controls: PLAY MUSIC shown, no MUTE MUSIC on the home page (it lives in Settings), "Music volume" slider 70 with its value shown, a status line',
+      !u.playHidden && /PLAY MUSIC/.test(u.playText) && u.hasMute === false && u.label === 'Music volume' && u.value === '70' && u.out === '70%' && u.valuetext === '70 percent' && names.group === 'Music' && names.role === 'status' && /PLAY MUSIC/.test(u.line),
       { u, names });
 
-    const muteBox0 = await p.locator('.title-music-mute').boundingBox();
+    const volBox0 = await p.locator('.title-music-vol input').boundingBox();
     await p.click('.title-music-play');
     const playing = await waitStatus(p, 'playing');
     await sleep(400);
     d = await dbg(p);
     u = await ui(p);
-    const muteBox1 = await p.locator('.title-music-mute').boundingBox();
-    check('A2: starting the music moves nothing: PLAY MUSIC turns invisible but keeps its box, MUTE MUSIC stays where it was',
-      u.playVisible === false && u.playBoxKept && Math.abs(muteBox1.x - muteBox0.x) < 0.5 && Math.abs(muteBox1.y - muteBox0.y) < 0.5, { u, muteBox0, muteBox1 });
-    check('A2: PLAY MUSIC (a real click) starts the theme: PLAYING, context running, one run scheduling, PLAY hidden, focus moved to MUTE MUSIC',
-      playing && d.music.context === 'running' && d.music.player?.playing && d.music.player.runs === 1 && d.music.player.timers === 1 && d.music.player.voices > 0 && u.playHidden === true && u.focus === 'title-music-mute' && /BEYOND THE BEACON/.test(u.line),
+    const volBox1 = await p.locator('.title-music-vol input').boundingBox();
+    check('A2: starting the music moves nothing: PLAY MUSIC turns invisible but keeps its box, the volume slider stays where it was',
+      u.playVisible === false && u.playBoxKept && Math.abs(volBox1.x - volBox0.x) < 0.5 && Math.abs(volBox1.y - volBox0.y) < 0.5, { u, volBox0, volBox1 });
+    check('A2: PLAY MUSIC (a real click) starts the theme: PLAYING, context running, one run scheduling, PLAY hidden, focus moved to the volume slider',
+      playing && d.music.context === 'running' && d.music.player?.playing && d.music.player.runs === 1 && d.music.player.timers === 1 && d.music.player.voices > 0 && u.playHidden === true && u.focus === 'Music volume' && /BEYOND THE BEACON/.test(u.line),
       { m: d.music, u });
     check('A2: the music bus sits at the saved music volume (70 %)', Math.abs((d.music.bus ?? -1) - 0.7) < 0.02, { bus: d.music.bus });
     const b0 = d.music.player.beat;
@@ -161,15 +174,16 @@ try {
     check('A4: a click mid-slider raises it (about 50 %), saved once on release; the theme starts again from the top',
       a?.music >= 0.4 && a.music <= 0.6 && d.music.status === 'playing' && d.music.player.starts === 2 && d.music.player.beat < 2, { a, m: d.music });
 
-    // MUTE MUSIC: music bus only
+    // MUTE MUSIC (in Classic SETTINGS — gone from the home page): music bus only
     const played0 = (await dbg(p)).sound.played;
-    await p.click('.title-music-mute');
+    await setMuted(p, true);
+    await waitStatus(p, 'muted');
     await sleep(400);
     d = await dbg(p);
     u = await ui(p);
     a = await prefs(p);
-    check('A5: MUTE MUSIC: pressed, saved, MUTED; the theme stops; the music bus goes to 0; the volume is kept',
-      u.pressed === 'true' && a?.musicMuted === true && d.music.status === 'muted' && !d.music.player.playing && Math.abs(d.music.bus) < 0.01 && d.sound.musicGain === 0 && a.music >= 0.4,
+    check('A5: MUTE MUSIC: saved, MUTED on the home status line (no home button, never unmuted by navigating); the theme stops; the music bus goes to 0; the volume is kept',
+      u.hasMute === false && /MUSIC MUTED/.test(u.line) && a?.musicMuted === true && d.music.status === 'muted' && !d.music.player.playing && Math.abs(d.music.bus) < 0.01 && d.sound.musicGain === 0 && a.music >= 0.4,
       { u, a, m: d.music, s: d.sound });
     await p.focus('.mode-card-classic');
     await p.keyboard.press('ArrowRight');
@@ -192,15 +206,15 @@ try {
     u = await ui(p);
     a = await prefs(p);
     check('A6: after a reload: still muted (never unmuted by a reload), the volume kept and shown, and no music chunk downloaded',
-      u.pressed === 'true' && d.music.status === 'muted' && u.value === String(Math.round(vMuted.music * 100)) && a.musicMuted === true && themeRequests(reqs) === n0 && d.music.loads === 0,
+      u.hasMute === false && d.music.status === 'muted' && /MUSIC MUTED/.test(u.line) && u.value === String(Math.round(vMuted.music * 100)) && a.musicMuted === true && themeRequests(reqs) === n0 && d.music.loads === 0,
       { u, m: d.music, a, n0, n: themeRequests(reqs) });
 
-    await p.click('.title-music-mute'); // the click is also the gesture
+    await setMuted(p, false); // the Settings clicks are also the gesture
     const unmuted = await waitStatus(p, 'playing');
     await sleep(350);
     d = await dbg(p);
     a = await prefs(p);
-    check('A7: unmute (a click, so also a gesture): loads the chunk, plays, and the bus returns to the kept volume',
+    check('A7: unmute from SETTINGS (its clicks are gestures): loads the chunk, plays on return home, and the bus returns to the kept volume',
       unmuted && a.musicMuted === false && Math.abs(d.music.bus - a.music) < 0.02 && themeRequests(reqs) === n0 + 1, { m: d.music, a });
 
     // gameplay stops it; home restarts from the top
@@ -280,8 +294,8 @@ try {
     await p.evaluate(() => window.__galaxia.menu());
     await waitStatus(p, 'muted');
     u = await ui(p);
-    check('A11: the home page shows the same setting (muted, pressed)', u.pressed === 'true', u);
-    await p.click('.title-music-mute');
+    check('A11: the home page reflects the same saved setting: MUSIC MUTED on the status line (and still no home mute button)', /MUSIC MUTED/.test(u.line) && u.hasMute === false, u);
+    await setMuted(p, false);
     await waitStatus(p, 'playing');
 
     // offline render: levels, silence after stop, the loop seam
@@ -345,8 +359,8 @@ try {
     await sleep(300);
     let d = await dbg(p);
     let u = await ui(p);
-    check('B1: autoplay refused (every resume() rejected): BLOCKED, not muted; PLAY MUSIC stays offered with a plain explanation',
-      blocked && d.music.status === 'blocked' && d.music.context === 'suspended' && u.pressed === 'false' && u.playHidden === false && /BROWSER/.test(u.line), { m: d.music, u });
+    check('B1: autoplay refused (every resume() rejected): BLOCKED, not muted; PLAY MUSIC stays offered with a plain explanation (and no home mute button appears as a fallback)',
+      blocked && d.music.status === 'blocked' && d.music.context === 'suspended' && u.hasMute === false && (await prefs(p))?.musicMuted !== true && u.playHidden === false && /BROWSER/.test(u.line), { m: d.music, u });
     const c1 = await p.evaluate(() => window.__resumeCalls);
     await sleep(2000);
     const c2 = await p.evaluate(() => window.__resumeCalls);
@@ -445,7 +459,7 @@ try {
 
   /* ================= K: keyboard on the home page ================= */
   {
-    const kst = (p) => p.evaluate(() => { const d = window.__galaxia.debug(); return { mode: d.mode, guide: d.guide.open, music: d.music.status, pressed: document.querySelector('.title-music-mute')?.getAttribute('aria-pressed'), focus: document.activeElement?.className ?? null }; });
+    const kst = (p) => p.evaluate(() => { const d = window.__galaxia.debug(); const el = document.activeElement; return { mode: d.mode, guide: d.guide.open, music: d.music.status, muted: JSON.parse(localStorage.getItem('galaxia:prefs') ?? 'null')?.audio?.musicMuted ?? null, vol: document.querySelector('.title-music-vol input')?.value ?? null, focus: el?.className || (el?.getAttribute('aria-label') ?? null) }; });
     const fresh = async () => {
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
       await ctx.addInitScript(guideSkipped);
@@ -461,30 +475,31 @@ try {
     await p.keyboard.press('Enter');
     await sleep(500);
     let k = await kst(p);
-    check('K1: Enter on PLAY MUSIC starts the music and nothing else: not muted, no mode, focus on MUTE MUSIC (moved after the key)',
-      k.music === 'playing' && k.pressed === 'false' && k.mode === null && k.focus === 'title-music-mute', k);
-    await p.keyboard.press('Space');
+    check('K1: Enter on PLAY MUSIC starts the music and nothing else: not muted, no mode, focus on the volume slider (moved after the key — the next control now that MUTE MUSIC lives in Settings)',
+      k.music === 'playing' && k.muted !== true && k.mode === null && k.focus === 'Music volume', k);
+    await p.keyboard.press('ArrowLeft');
     await sleep(250);
     const k2 = await kst(p);
-    await p.keyboard.press('Enter');
+    await p.keyboard.press('ArrowRight');
     await sleep(250);
     const k3 = await kst(p);
-    check('K2: Space and Enter on MUTE MUSIC toggle it (muted, then playing); no mode starts', k2.music === 'muted' && k2.pressed === 'true' && k3.music === 'playing' && k3.pressed === 'false' && k3.mode === null, { k2, k3 });
+    check('K2: the volume slider answers the arrow keys (down, then back up); the music keeps playing, nothing is muted, no mode starts',
+      Number(k2.vol) < Number(k.vol) && Number(k3.vol) > Number(k2.vol) && k2.music === 'playing' && k3.music === 'playing' && k2.muted === false && k3.muted === false && k3.mode === null, { k, k2, k3 });
     const order = [];
     await p.focus('.mode-card-freeroam');
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       await p.keyboard.press('Tab');
       order.push(await p.evaluate(() => { const a = document.activeElement; const cs = getComputedStyle(a); return { c: a.className || a.getAttribute('aria-label'), ring: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2 }; }));
     }
-    check('K3: Tab order after the cards: HOW TO PLAY, MUTE MUSIC, the volume slider (the hidden PLAY MUSIC is skipped); each shows a 2 px focus ring',
-      order.map((o) => o.c).join(',') === 'title-guide,title-music-mute,Music volume' && order.every((o) => o.ring), order);
+    check('K3: Tab order after the cards: HOW TO PLAY, then the volume slider (the hidden PLAY MUSIC is skipped, no home MUTE MUSIC anymore); each shows a 2 px focus ring',
+      order.map((o) => o.c).join(',') === 'title-guide,Music volume' && order.every((o) => o.ring), order);
     await ctx.close();
     ({ ctx, p, errs } = await fresh());
     await p.focus('.title-music-play');
     await p.keyboard.press('Space');
     await sleep(500);
     k = await kst(p);
-    check('K4: Space on PLAY MUSIC starts the music and nothing else (not muted, no mode)', k.music === 'playing' && k.pressed === 'false' && k.mode === null, k);
+    check('K4: Space on PLAY MUSIC starts the music and nothing else (not muted, no mode)', k.music === 'playing' && k.muted !== true && k.mode === null, k);
     await ctx.close();
     for (const key of ['Enter', 'Space']) {
       ({ ctx, p, errs } = await fresh());

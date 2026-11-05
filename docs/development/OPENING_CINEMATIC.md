@@ -34,6 +34,7 @@ Four modules; the boundary is `src/shared/intro/introPolicy.ts`.
 | `openingDirector.ts` | lazy chunk | the explicit phase schedule (`arrival → battle → victory → track → approach → cabin → display → push → handoff → complete`), clamped time stepping, once-only outcomes |
 | `openingScene.ts` | lazy chunk | the seeded battle as a **pure function of time**: actors, bolts, misses, debris — nothing accumulates, every count is hard-bounded |
 | `openingCockpit.ts` | lazy chunk | the pinhole-camera layer math and the rect→quad homography that maps the home page onto the display |
+| `openingCabin.ts` | lazy chunk | *post-release cockpit upgrade:* the fighter cabin itself — the per-resize geometry cache (`cabinGeom`) and the cockpit painter (`paintCabin`) |
 | `openingCinematic.ts` | lazy chunk | one canvas, one frame loop, one ResizeObserver, one `visibilitychange` listener; the painter |
 
 The home page (`TitleScreen`'s own DOM, same instance) is placed on the
@@ -48,6 +49,57 @@ The choreography (spawn order, kill order, bolt and debris angles) is seeded
 from it; re-rendered frames reproduce exactly. Frame gaps are clamped to
 50 ms, so a hidden tab holds the sequence instead of jumping it; on return it
 resumes where it was.
+
+## The cockpit interior (post-release upgrade)
+
+Still layered 2.5D Canvas 2D — the camera never enters a modelled 3D interior.
+What the cabin phases paint was rebuilt into an engineered fighter cockpit
+(`openingCabin.ts`), on the unchanged layer math (`near` 0.55, `display` 1,
+`canopy` 1.4, `space` 8) and the unchanged camera schedule:
+
+- **Canopy and frame.** The glass opening keeps its accepted outline. The slab
+  around it is a dark graphite gradient; the rim is a metal edge stroke that
+  brightens toward the upper-left (the exterior light). Three tapered,
+  bevelled structural members (a centre bow strut, two A-pillars) converge
+  toward the dash corners; nine small fasteners sit just off the glass. The
+  glass itself is a near-transparent blue tint, one long diagonal reflection
+  band, the exterior starfield drifting behind it, and a faint arched catch
+  along the top curve.
+- **Dashboard.** A two-tone shell: a lighter top surface (the deck band)
+  meets the darker front face at a lit joint line; face seams flank the
+  housing, cooling slots and fasteners sit under it, and a soft cyan pool from
+  the live screen washes the deck while the display is powered (instrument
+  light, timeline-driven).
+- **Side consoles** (wide screens; on narrow ones a pair of slim lamp columns
+  instead, as before). Each wing is a recessed bay in a faced panel:
+  RADAR (three range rings, a lone sweep, `HOSTILES 0` — the battle is over)
+  with a BANK/…toggles bank on the left; a NAV course trace plus the accepted
+  SHLD/HULL/PWR bars on the right; three status lamps each. Everything is
+  decorative: fixed labels and levels, never live game state, and the canvas
+  takes no input (`pointer-events: none`, `aria-hidden`).
+- **Display housing.** Drawn in screen space so it hugs the live, keystoned
+  quad: a gunmetal mounting collar with four corner brackets, the accepted
+  bezel band with its dimmer cyan hairline, and the unchanged screen punch —
+  the real home page shows through, the transform and the identity handoff
+  are byte-for-byte the accepted ones (`openingCockpit.ts` is untouched).
+- **Pilot station (near layer).** Arm consoles (throttle left with an amber
+  cap, stick right with a cyan cap, one live lamp each) and the pilot seat
+  rising into the lower frame: padded seatback with shoulder rim light,
+  bolster shading, harness straps with buckles, headrest. The seatback's top
+  edge never projects above the display's bottom edge — pinned by tests on
+  the real camera timeline at five viewport sizes — so the home page is never
+  obscured; at the handoff the whole station is off frame.
+- **Reflections.** Brief and deterministic only: the accepted canopy glint
+  during the approach (unchanged), plus a warm battle-afterglow wash over the
+  glass that fades out by the middle of the cabin phase. Both are pure
+  functions of the timeline, not of any combat state.
+
+Geometry is computed once per resize in `cabinGeom` (fasteners, vents, keys,
+console rects, the nav trace); frames paint from that cache with a bounded
+set of fills, strokes and evenly-stopped gradients — no images, no base64, no
+library. Reduced motion shows the same cabin as a still (instruments frozen)
+between the accepted fades. The overall timeline is unchanged: 8.5 s full,
+1.65 s reduced, the 0.6 s skip reveal, the 6 s watchdog.
 
 ## The hero ship
 
@@ -71,11 +123,14 @@ muted through it.
 
 - The cinematic chunk (`openingCinematic-*.js`): **10,000 B gzip** budget
   (`scripts/lib/distCheck.ts`, kind `title`: lazy from the entry, never reached
-  from Free Roam), marker `galaxia-opening:`. First measured 7,719 B gzip —
-  the ~1.3× headroom matches the other chunks. It has no art of its own: it
-  reuses the sprite registry already in the entry.
-- The entry grows by the shell and policy only (~1.9 kB gzip); CSS is
-  unchanged (the overlay styles are inline).
+  from Free Roam), marker `galaxia-opening:`. First measured 7,719 B gzip;
+  with the post-release cockpit upgrade it measures **9,872 B gzip** — the
+  budget was not raised. It has no art of its own: it reuses the sprite
+  registry already in the entry.
+- The entry grows by the shell and policy only (~1.9 kB gzip, measured
+  100,337 B gzip against a 110,000 B budget — unchanged by the upgrade); the
+  CSS is unchanged (24,515 B gzip, budget 25,000) — the overlay styles are
+  inline.
 - Normal gameplay never downloads the cinematic: Classic and Free Roam entry
   is unchanged, and a `?mode=` deep link never even shows the home page.
   `verify:dist` enforces every existing budget and the new one.
@@ -91,13 +146,22 @@ muted through it.
   the handoff geometry (the display equals the viewport at the push end and at
   the reduced handoff; the transform is the identity there; phase/camera
   continuity across boundaries).
+- `tests/introCabin.test.ts` (9, post-release cockpit upgrade): cabin-geometry
+  determinism across identical runs, the display rest anchoring, bounded
+  part counts, the consoles-vs-columns rule at narrow widths, glass bounds
+  off the rest quad, the seat-clearance invariant (seatback top never above
+  the display bottom; seat fully out of frame at the handoff) sampled along
+  the real camera timeline at five viewport sizes with and without reduced
+  motion, and hash stability.
 - `docs/development/playtest/cinematic-opening-f3.mjs` (65 checks, QA build,
   fake-clock Chromium): the full run and its phases, cleanup, the live
   unobstructed home page, Classic and Free Roam navigation before and after,
   skip from arrival/battle/display by click, double click and Escape, reduced
   motion, the chunk-failure fallback, deep links, mute persistence, four
   touch viewports, and localStorage isolation. Screenshots land in
-  `.cinematic-f3-shots/` next to the harness and are meant to be looked at.
+  `.cinematic-f3-shots/` next to the harness — the desk run captures the
+  approach, cabin, display and push phases of the cockpit upgrade — and are
+  meant to be looked at.
 
 ## Limits (honest ones)
 

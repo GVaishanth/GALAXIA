@@ -938,10 +938,149 @@ async function uiViewports(browser) {
   }
 }
 
+
+/* ============================== post-release: per-vessel cargo holds, the collective readout and docked transfers */
+// C1  the collective block counts the ship and the escort once, with the catalogue capacities; the row shows its hold;
+// C2  an out-transfer moves exactly what was asked (a synchronous double activation of CONFIRM duplicates nothing);
+// C3  a full destination takes what fits and keeps the rest aboard the source; the collective total is conserved;
+// C4  a full destination and an empty source are explained, not silently refused; CANCEL backs out;
+// C5  reloading keeps the vessel holds and the pilot's cargo exactly;
+// C6  the cargo HOLD panel (I) shows the same collective readout;
+// C7  the flight FLEET panel offers no transfers (docked only), said in the docked step's help;
+// C8  the station's FLEET card shows the escort cargo badge; focus returns to the vessel's CARGO button afterwards.
+async function uiCargo(browser) {
+  const SEED = 30; // scrap aboard the escort at the start: enough that moving the ship's 12 scrap back cannot all fit
+  const SHIP_SCRAP = 8;
+  const TOTAL = 40; // 8 scrap + 2 fuel aboard the ship, 30 aboard the escort — conserved by every transfer
+  const o = await open(browser, {
+    vessels: { seq: 1, list: [{ id: 'fv-1', ship: 'shrike', captain: MAREN, status: 'active' }], holds: { 'fv-1': { scrap: SEED } } },
+    extra: { fleet: { active: 'petrel', owned: ['petrel', 'swift'], loadouts: {} }, cargo: { scrap: SHIP_SCRAP, fuel: 2 } },
+  });
+  const { p } = o;
+  const errs = [];
+  p.on('pageerror', (e) => errs.push(String(e)));
+  await guard(p);
+  await enterAny(p);
+  check('cargo setup: docked', await dock(p));
+  await sleep(300);
+  // the station overview's FLEET card carries the badge before the panel ever opens
+  const card = await p.evaluate(() => ({ badge: document.querySelector('.fr-hub-fleet .fr-hub-badge')?.textContent ?? '', detail: document.querySelector('.fr-hub-fleet .fr-hub-card-detail')?.textContent ?? '' }));
+  const capM = card.badge.match(/CARGO \d+\/(\d+)/);
+  const capOf = capM ? Number(capM[1]) : 0;
+  check('C8: the station FLEET card shows the escort count and its aboard-cargo badge against the vessel\'s explicit capacity, with the transfer route in the detail',
+    /1 ESCORT/.test(card.badge) && new RegExp(`CARGO ${SEED}/${capOf}`).test(card.badge) && capOf > SHIP_SCRAP + 4 && capOf - (SEED - 4) < SHIP_SCRAP + 4 && /cargo transfers/.test(card.detail), { card, capOf });
+  check('C1: the FLEET tab opens', await fleetTab(p));
+  let s = await PS(p);
+  let text = await panelText(p);
+  const rowCargo = s.rows.find((r) => r.id === 'fv-1')?.cargo ?? '';
+  const ownLine = s.collective.find((l) => /^[^·]+ · 10 \/ \d+$/.test(l) && !/ESCORT/.test(l)) ?? '';
+  check('C1: the collective block counts every hold once (40 units: 10 aboard the ship + 30 aboard the escort), names both holds and their capacities, and the row carries its hold',
+    /COLLECTIVE CARGO/.test(text) && s.collective.some((l) => new RegExp(`^${TOTAL} / \\d+ UNITS · \\d+ FREE$`).test(l)) && ownLine.length > 0 && s.collective.some((l) => new RegExp(`^SHRIKE · ESCORT 1 · ${SEED} / ${capOf}$`).test(l)) && s.collective.some((l) => /SCRAP 38/.test(l)) && rowCargo === `CARGO ${SEED} / ${capOf}`, { collective: s.collective, rowCargo, capOf });
+
+  // C2: vessel -> ship, one command, CONFIRM activated twice in the same task
+  await p.click(B('transfer:fv-1'));
+  s = await PS(p);
+  check('C2: the vessel\'s CARGO button opens the transfer step (docked only, said in the help)', s.step === 'transfer' && s.transferFor === 'fv-1' && /only while docked/.test(await panelText(p)), { step: s.step });
+  check('C2: focus is inside the panel', await focusInPanel(p));
+  await p.click(B('dir:out'));
+  await sleep(120);
+  await p.click(B('res:scrap'));
+  await sleep(120);
+  await p.click(B('amt:+'));
+  await p.click(B('amt:+'));
+  await p.click(B('amt:+')); // 1 + 3 = 4 units asked
+  await sleep(120);
+  await p.evaluate(() => { // a double activation inside one task: the second must be inert (busy), never a duplication
+    const b = document.querySelector('.fr-panel-fleet button[data-key="confirm"]');
+    b.click();
+    b.click();
+  });
+  await until(p, () => !window.__galaxiaFreeRoam.fleetPanel().busy, 3000);
+  await sleep(200);
+  let f = await F(p);
+  let kept = await stored(p);
+  check('C2: exactly one command moved (4 units), saved to both sides of the same record; the double activation duplicated nothing',
+    (f.cargo['scrap'] ?? 0) === SHIP_SCRAP + 4 && (f.cargo['fuel'] ?? 0) === 2 && (kept?.holds?.['fv-1']?.scrap ?? -1) === SEED - 4 && errs.length === 0, { scrap: f.cargo['scrap'], holds: kept?.holds });
+  s = await PS(p);
+  check('C2/C8: after the transfer the panel is back at the list, focus returned to the vessel\'s CARGO button and the collective still reads 40 UNITS',
+    s.step === 'list' && s.collective.some((l) => l.startsWith(`${TOTAL} / `) && /UNITS · \d+ FREE$/.test(l)) && (await p.evaluate(() => document.activeElement?.dataset?.key ?? '')) === 'transfer:fv-1', { step: s.step });
+
+  // C3: ship -> vessel past the room left: MAX moves what fits, the rest stays aboard the source
+  await p.click(B('transfer:fv-1'));
+  await sleep(120);
+  await p.click(B('res:scrap'));
+  await sleep(120);
+  await p.click(B('amt:max'));
+  await sleep(120);
+  const ask = SHIP_SCRAP + 4; // the ship holds this much scrap now
+  const room = capOf - (SEED - 4); // the vessel can take only this much
+  const fit = Math.min(ask, room);
+  await p.click(B('confirm'));
+  await until(p, () => !window.__galaxiaFreeRoam.fleetPanel().busy, 3000);
+  await sleep(200);
+  f = await F(p);
+  kept = await stored(p);
+  const held = kept?.holds?.['fv-1']?.scrap ?? -1;
+  check('C3: MAX moves exactly what fits and the rest stays aboard the ship; the collective total is conserved',
+    (f.cargo['scrap'] ?? 0) === ask - fit && ask - fit > 0 && held === capOf && (ask - fit) + (f.cargo['fuel'] ?? 0) + held === TOTAL, { moved: ask - (f.cargo['scrap'] ?? 0), fit, held });
+  s = await PS(p);
+  check('C3: the vessel row now shows a full hold (CARGO n / n) and the panel message reports exactly the moved amount (9)',
+    (s.rows.find((r) => r.id === 'fv-1')?.cargo ?? '') === `CARGO ${capOf} / ${capOf}` && new RegExp(`Transferred ${fit} `).test(s.message), { row: s.rows.find((r) => r.id === 'fv-1')?.cargo, msg: s.message });
+
+  // C4: a full destination and an empty source are explained, never silent; CANCEL backs out
+  await p.click(B('transfer:fv-1'));
+  await sleep(120);
+  await p.click(B('res:scrap'));
+  await sleep(120);
+  s = await PS(p);
+  const fullLabel = (await p.getAttribute(B('confirm'), 'aria-label')) ?? '';
+  check('C4: the vessel is full: CONFIRM is disabled and its accessible name warns the destination hold is full',
+    s.buttons.find((x) => x.key === 'confirm')?.disabled && /hold is full/.test(fullLabel), { fullLabel });
+  await p.click(B('dir:out'));
+  await sleep(120);
+  await p.click(B('res:fuel'));
+  await sleep(120);
+  s = await PS(p);
+  const emptyLabel = (await p.getAttribute(B('confirm'), 'aria-label')) ?? '';
+  check('C4: the vessel holds no fuel: CONFIRM is disabled and says there is nothing to move (not a "full" message)', s.buttons.find((x) => x.key === 'confirm')?.disabled && /[Nn]othing to move/.test(emptyLabel), { emptyLabel });
+  await p.click(B('cancel'));
+  await sleep(150);
+  check('C4: CANCEL returns to the list with focus in the panel', (await PS(p)).step === 'list' && (await focusInPanel(p)));
+
+  // C5: reload keeps both holds exactly
+  await p.reload();
+  await p.waitForFunction(() => !!window.__galaxiaFreeRoam, null, { timeout: 15000 });
+  await enterAny(p);
+  kept = await stored(p);
+  f = await F(p);
+  check('C5: after a reload the vessel hold is exactly the saved one and the pilot\'s cargo is untouched',
+    kept?.holds?.['fv-1']?.scrap === capOf && (f.cargo['scrap'] ?? 0) === ask - fit && (f.cargo['fuel'] ?? 0) === 2, { holds: kept?.holds, cargo: f.cargo });
+
+  // C6: the cargo hold panel (I) shows the same collective readout
+  check('C6: docked again', await dock(p));
+  await launch(p);
+  await p.keyboard.press('KeyI');
+  await sleep(400);
+  const holdText = await p.evaluate(() => document.querySelector('.fr-panel-cargo')?.innerText ?? '');
+  check('C6: the HOLD panel lists the collective cargo of the ship and the escort (40 units once, both holds named and the escort read full)',
+    /COLLECTIVE CARGO/.test(holdText) && new RegExp(`${TOTAL} / \\d+ UNITS USED`).test(holdText) && holdText.includes(`${capOf} / ${capOf}`), { t: holdText.slice(0, 400) });
+  await p.keyboard.press('Escape');
+  await panelIs(p, null);
+
+  // C7: in flight the panel offers no transfers
+  await pauseFleet(p);
+  s = await PS(p);
+  check('C7: the flight FLEET panel shows the vessel but no CARGO buttons (transfers are docked only)',
+    s.mode === 'flight' && s.rows.some((r) => r.id === 'fv-1') && !s.buttons.some((b) => b.key.startsWith('transfer:')), { mode: s.mode, keys: s.buttons.map((b) => b.key).slice(0, 12) });
+  await closeToFlight(p);
+  check('cargo: no page errors', errs.length === 0, errs);
+  await close(o, 'ui-cargo');
+}
+
 const browser = await chromium.launch();
 console.log(`browser: chromium ${browser.version()} (Playwright, automated; no physical device)`);
 const ONLY = (process.env.P11_ONLY ?? '').split(',').filter(Boolean);
-for (const [name, fn] of [['main', main], ['failure', failure], ['ui', uiMain], ['ui-edges', uiEdges], ['ui-touch', uiTouch], ['ui-viewports', uiViewports]]) {
+for (const [name, fn] of [['main', main], ['failure', failure], ['ui', uiMain], ['ui-edges', uiEdges], ['ui-touch', uiTouch], ['ui-viewports', uiViewports], ['ui-cargo', uiCargo]]) {
   if (ONLY.length && !ONLY.includes(name)) continue;
   try { await fn(browser); } catch (e) { check(`${name}: ran to the end`, false, String(e?.stack ?? e).slice(0, 600)); }
 }

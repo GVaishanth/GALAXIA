@@ -20,6 +20,11 @@
  * frame; every position is a function of time and size, so nothing drifts.
  * Any exception while drawing ends the cinematic through onError (the shell
  * then opens the home page); nothing is retried.
+ *
+ * Post-release cockpit upgrade: the cabin's palette, geometry and painting
+ * live in openingCabin.ts (paintCabin, with a per-resize cabinGeom cache);
+ * this file keeps the loop, the space battle and the display punch/handoff
+ * contract.
  */
 import { SPRITES, type SpriteId } from '../../assets/sprites/index.ts';
 import { drawFrame } from '../../render/sprite/drawSprite.ts';
@@ -27,35 +32,12 @@ import type { Viewport } from '../../render/viewport.ts';
 import { DisposableScope } from '../lifecycle/scope.ts';
 import type { CinematicDebug, CinematicHandle, CinematicOptions } from './introPolicy.ts';
 import { OpeningDirector, type PhaseSample } from './openingDirector.ts';
-import { buildScript, SCENE_LIMITS, sceneAt, type SceneFrame, type SceneView } from './openingScene.ts';
-import { COCKPIT_DEPTH, cockpitCamera, displayAtFill, displayQuad, layerRatio, matrix3dCss, rectToQuadMatrix, restDisplay, type CockpitCamera, type Quad } from './openingCockpit.ts';
+import { buildScript, clamp01, SCENE_LIMITS, sceneAt, type SceneFrame, type SceneView } from './openingScene.ts';
+import { cockpitCamera, displayAtFill, displayQuad, matrix3dCss, rectToQuadMatrix, type Quad } from './openingCockpit.ts';
+import { cabinGeom, INK, paintCabin, STAR_TONES, type CabinGeom } from './openingCabin.ts';
 
 /** Marker for the chunk inventory (scripts/lib/distCheck.ts): only this chunk carries it. */
 const LAYER_TAG = 'galaxia-opening:cockpit';
-
-const INK = Object.freeze({
-  void: '#06070f',
-  deep: '#030409',
-  hull: '#161c31',
-  hullDark: '#05060c',
-  panel: '#0b0f1d',
-  edge: '#2b3766',
-  cyan: '#5cefff',
-  trim: '#2ec4e6',
-  amber: '#ffb347',
-  green: '#7dffa8',
-  text: '#c9d3f2',
-});
-
-const STAR_TONES = ['#353b57', '#555e80', '#8d96b8'] as const;
-
-function hash01(a: number, b: number): number {
-  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x7f4a7c15, 0xc2b2ae35);
-  h ^= h >>> 15;
-  h = Math.imul(h, 0x27d4eb2f);
-  h ^= h >>> 13;
-  return (h >>> 0) / 4294967296;
-}
 
 function spriteFrames(id: string, state: string): number {
   const def = (SPRITES as Record<string, { states: Record<string, readonly unknown[]> }>)[id];
@@ -98,6 +80,7 @@ export function createOpeningCinematic(opts: CinematicOptions): CinematicHandle 
   let dpr = 1;
   let k = 1; // device px per art px (space scene)
   let view: SceneView = { visW: 1, visH: 1, heroH: heroFrame0.raster.sprite.height, burstSmall, burstBig };
+  let geom: CabinGeom = cabinGeom(1, 1); // static cockpit geometry for the current size
   let dirty = true;
   const measure = (): void => {
     dirty = false;
@@ -112,6 +95,7 @@ export function createOpeningCinematic(opts: CinematicOptions): CinematicHandle 
     }
     k = Math.max(1, Math.min(ch / 200, cw / 130));
     view = { visW: cw / k, visH: ch / k, heroH: heroFrame0.raster.sprite.height, burstSmall, burstBig };
+    geom = cabinGeom(W, H);
   };
   scope.observer(new ResizeObserver(() => (dirty = true))).observe(opts.host);
 
@@ -205,252 +189,6 @@ export function createOpeningCinematic(opts: CinematicOptions): CinematicHandle 
     maxParticles = Math.max(maxParticles, particles);
   }
 
-  /* ---- cockpit ---- */
-  /** Map rest-space CSS px of a layer at `depth` onto the canvas. */
-  const layer = (depth: number, cam: CockpitCamera): void => {
-    const r = layerRatio(depth, cam.z);
-    const cx = W / 2;
-    const cy = H / 2;
-    ctx.setTransform(dpr * r, 0, 0, dpr * r, dpr * (cx - (cx + cam.panX) * r), dpr * (cy - (cy + cam.panY) * r));
-  };
-  const roundRect = (x: number, y: number, w: number, h: number, r: number): void => {
-    ctx.beginPath();
-    if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, w, h, Math.min(r, w / 2, h / 2));
-    else ctx.rect(x, y, w, h);
-  };
-  const quadPath = (q: Quad): void => {
-    ctx.beginPath();
-    ctx.moveTo(q[0].x, q[0].y);
-    for (let i = 1; i < 4; i++) ctx.lineTo(q[i]!.x, q[i]!.y);
-    ctx.closePath();
-  };
-  const grow = (q: Quad, by: number): Quad => {
-    const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4;
-    const cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
-    return q.map((p) => ({ x: p.x + Math.sign(p.x - cx) * by, y: p.y + Math.sign(p.y - cy) * by })) as unknown as Quad;
-  };
-
-  function drawCockpit(cam: CockpitCamera, quad: Quad, t: number, alpha: number): void {
-    const R = restDisplay(W, H);
-    const consoleTop = R.y - 0.07 * H;
-    const still = opts.reduced;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = alpha;
-
-    // space beyond the canopy (far: stars drift outward, forward flight)
-    layer(COCKPIT_DEPTH.space, cam);
-    ctx.fillStyle = INK.deep;
-    ctx.fillRect(-W, -H, W * 3, H * 3);
-    const glow = ctx.createRadialGradient(W * 0.3, H * 0.05, 0, W * 0.3, H * 0.05, W * 0.6);
-    glow.addColorStop(0, 'rgba(46,196,230,0.12)');
-    glow.addColorStop(1, 'rgba(3,4,9,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(-W, -H, W * 3, H * 3);
-    const span = Math.hypot(W, H) * 0.6;
-    for (let i = 0; i < 70; i++) {
-      const ang = hash01(i, 1) * Math.PI * 2;
-      const d = ((hash01(i, 2) * span + (still ? 0 : t * 0.02 * (0.5 + hash01(i, 3)))) % span) + 4;
-      const x = W / 2 + Math.cos(ang) * d;
-      const y = H * 0.3 + Math.sin(ang) * d * 0.6;
-      ctx.fillStyle = STAR_TONES[i % 3]!;
-      const s = 1 + (d / span) * 1.5;
-      ctx.fillRect(x, y, s, s);
-    }
-
-    // canopy frame: everything but the window (evenodd), with its edge lit
-    layer(COCKPIT_DEPTH.canopy, cam);
-    const win = (): void => {
-      ctx.moveTo(W * 0.03, consoleTop + 30);
-      ctx.lineTo(W * 0.15, H * 0.07);
-      ctx.quadraticCurveTo(W / 2, -H * 0.07, W * 0.85, H * 0.07);
-      ctx.lineTo(W * 0.97, consoleTop + 30);
-      ctx.closePath();
-    };
-    ctx.beginPath();
-    ctx.rect(-W * 1.5, -H * 1.5, W * 4, H * 4);
-    win();
-    const frameGrad = ctx.createLinearGradient(0, -H * 0.2, 0, H);
-    frameGrad.addColorStop(0, '#0d1122');
-    frameGrad.addColorStop(1, '#07090f');
-    ctx.fillStyle = frameGrad;
-    ctx.fill('evenodd');
-    ctx.beginPath();
-    win();
-    ctx.strokeStyle = INK.edge;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.globalAlpha = alpha * 0.35;
-    ctx.strokeStyle = INK.trim;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.globalAlpha = alpha;
-    // centre bow strut
-    ctx.fillStyle = '#0d1122';
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 5, -H);
-    ctx.lineTo(W / 2 + 5, -H);
-    ctx.lineTo(W / 2 + 3, H * 0.0);
-    ctx.lineTo(W / 2 - 3, H * 0.0);
-    ctx.fill();
-
-    // console with the display, side panels and keys
-    layer(COCKPIT_DEPTH.display, cam);
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.6, consoleTop + 0.1 * H);
-    ctx.quadraticCurveTo(W / 2, consoleTop - 0.1 * H, W * 1.6, consoleTop + 0.1 * H);
-    ctx.lineTo(W * 1.6, H * 2.4);
-    ctx.lineTo(-W * 0.6, H * 2.4);
-    ctx.closePath();
-    const hull = ctx.createLinearGradient(0, consoleTop, 0, H * 1.2);
-    hull.addColorStop(0, INK.hull);
-    hull.addColorStop(1, INK.hullDark);
-    ctx.fillStyle = hull;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(-W * 0.6, consoleTop + 0.1 * H);
-    ctx.quadraticCurveTo(W / 2, consoleTop - 0.1 * H, W * 1.6, consoleTop + 0.1 * H);
-    ctx.strokeStyle = INK.trim;
-    ctx.globalAlpha = alpha * 0.55;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.globalAlpha = alpha;
-
-    const m = R.x; // side margin at rest
-    const fs = Math.max(8, Math.min(12, H * 0.016));
-    ctx.font = `700 ${fs}px system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
-    if (m >= 72) {
-      const pw = m * 0.72;
-      const ph = R.h * 0.6;
-      const lx = m * 0.14;
-      const rx = W - m * 0.14 - pw;
-      const py = R.y + R.h * 0.14;
-      for (const x of [lx, rx]) {
-        roundRect(x, py, pw, ph, 8);
-        ctx.fillStyle = INK.panel;
-        ctx.fill();
-        ctx.strokeStyle = INK.edge;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-      // left: radar, sweeping, no contacts left
-      const rr = Math.min(pw, ph) * 0.32;
-      const rcx = lx + pw / 2;
-      const rcy = py + rr + ph * 0.1;
-      ctx.strokeStyle = 'rgba(125,255,168,0.35)';
-      ctx.lineWidth = 1;
-      for (const f of [1, 0.6, 0.25]) {
-        ctx.beginPath();
-        ctx.arc(rcx, rcy, rr * f, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      const sweep = still ? -0.6 : (t / 1000) * Math.PI;
-      ctx.strokeStyle = 'rgba(125,255,168,0.8)';
-      ctx.beginPath();
-      ctx.moveTo(rcx, rcy);
-      ctx.lineTo(rcx + Math.cos(sweep) * rr, rcy + Math.sin(sweep) * rr);
-      ctx.stroke();
-      ctx.fillStyle = INK.green;
-      ctx.textAlign = 'center';
-      ctx.fillText('HOSTILES 0', rcx, py + ph * 0.86);
-      // right: ship status bars
-      ctx.textAlign = 'left';
-      ['SHLD', 'HULL', 'PWR'].forEach((label, i) => {
-        const by = py + ph * (0.2 + i * 0.26);
-        ctx.fillStyle = INK.text;
-        ctx.fillText(label, rx + pw * 0.1, by);
-        const bw = pw * 0.8;
-        ctx.fillStyle = 'rgba(43,55,102,0.8)';
-        ctx.fillRect(rx + pw * 0.1, by + fs * 0.8, bw, fs * 0.6);
-        const level = [0.86, 0.94, 0.72][i]! + (still ? 0 : 0.02 * Math.sin(t / 700 + i));
-        ctx.fillStyle = i === 2 ? INK.amber : INK.trim;
-        ctx.fillRect(rx + pw * 0.1, by + fs * 0.8, bw * level, fs * 0.6);
-      });
-    } else if (m >= 18) {
-      // narrow screens: a column of status lights each side
-      for (const x of [m * 0.5, W - m * 0.5]) {
-        for (let i = 0; i < 5; i++) {
-          const on = still || hash01(i + (x > W / 2 ? 9 : 0), Math.floor(t / (700 + i * 130))) > 0.35;
-          ctx.fillStyle = on ? (i === 4 ? INK.amber : INK.green) : '#1b2340';
-          ctx.fillRect(x - 3, R.y + R.h * (0.2 + i * 0.13), 6, 6);
-        }
-      }
-    }
-    // keys under the display
-    const kw = R.w * 0.7;
-    const keys = 7;
-    const kh = Math.max(6, H * 0.016);
-    const ky = R.y + R.h + Math.max(10, H * 0.03);
-    for (let i = 0; i < keys; i++) {
-      const w = kw / keys - 6;
-      const x = W / 2 - kw / 2 + i * (kw / keys) + 3;
-      const lit = !still && hash01(i, Math.floor(t / 900)) > 0.7;
-      roundRect(x, ky, w, kh, 3);
-      ctx.fillStyle = lit ? 'rgba(92,239,255,0.55)' : '#121935';
-      ctx.fill();
-    }
-    // label over the display
-    ctx.textAlign = 'center';
-    ctx.fillStyle = INK.cyan;
-    ctx.globalAlpha = alpha * 0.75;
-    ctx.fillText('FLIGHT DECK · HOME LINK', W / 2, R.y - Math.max(12, R.h * 0.04) - fs);
-    ctx.globalAlpha = alpha;
-
-    // bezel and the dark screen (screen space: the display may be keystoned)
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const qw = quad[1].x - quad[0].x;
-    const b = Math.max(5, Math.min(18, qw * 0.025));
-    quadPath(grow(quad, b));
-    ctx.fillStyle = '#090c17';
-    ctx.fill();
-    ctx.strokeStyle = INK.cyan;
-    ctx.globalAlpha = alpha * 0.45;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.globalAlpha = alpha;
-    quadPath(quad);
-    ctx.fillStyle = '#04050a';
-    ctx.fill();
-    // the display powers on: cut the screen out so the live home page shows through
-    if (cam.power > 0) {
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.globalAlpha = cam.power;
-      quadPath(quad);
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = alpha;
-      if (cam.glare > 0) {
-        const gl = ctx.createLinearGradient(quad[0].x, quad[0].y, quad[2].x, quad[2].y);
-        gl.addColorStop(0, `rgba(234,255,255,${0.08 * cam.glare})`);
-        gl.addColorStop(0.4, 'rgba(234,255,255,0)');
-        ctx.fillStyle = gl;
-        quadPath(quad);
-        ctx.fill();
-      }
-    }
-
-    // near: armrests, throttle and stick (they slide out of frame first)
-    if (layerRatio(COCKPIT_DEPTH.near, cam.z) < 6) {
-      layer(COCKPIT_DEPTH.near, cam);
-      for (const side of [-1, 1] as const) {
-        const x0 = side < 0 ? -W * 0.3 : W * 0.9;
-        roundRect(x0, H * 0.88, W * 0.4, H * 0.5, 26);
-        ctx.fillStyle = '#0c1020';
-        ctx.fill();
-        ctx.strokeStyle = INK.edge;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        const gx = side < 0 ? W * 0.05 : W * 0.95;
-        ctx.fillStyle = '#1a2142';
-        ctx.fillRect(gx - 4, H * 0.8, 8, H * 0.1);
-        ctx.fillStyle = side < 0 ? INK.amber : INK.cyan;
-        ctx.beginPath();
-        ctx.arc(gx, H * 0.8, 9, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-  }
 
   function draw(s: PhaseSample): void {
     if (dirty) measure();
@@ -466,7 +204,7 @@ export function createOpeningCinematic(opts: CinematicOptions): CinematicHandle 
     if (space) {
       const scene = sceneAt(script, s.t, view);
       drawSpace(scene);
-      if (scene.cabin > 0) drawCockpit(cam, quad, s.t, scene.cabin);
+      if (scene.cabin > 0) paintCabin(ctx, dpr, geom, { cam, quad, t: s.t, alpha: scene.cabin, still: opts.reduced, ember: 0 });
       place(quad);
     } else if (s.phase === 'idle') {
 
@@ -476,7 +214,9 @@ export function createOpeningCinematic(opts: CinematicOptions): CinematicHandle 
     } else {
       ctx.clearRect(0, 0, cw, ch);
       const drawn = cam.visible && !displayAtFill(cam, W, H); // past the fill threshold the canvas is visually out
-      if (drawn) drawCockpit(cam, quad, s.t, 1);
+      // the battle's afterglow: a brief warm wash over the canopy as the cabin phase opens (timeline-only, purely visual)
+      const ember = !opts.reduced && s.phase === 'cabin' ? 1 - clamp01(s.p / 0.45) : 0;
+      if (drawn) paintCabin(ctx, dpr, geom, { cam, quad, t: s.t, alpha: 1, still: opts.reduced, ember });
       actors = 0;
       particles = 0;
       place(drawn ? quad : null);

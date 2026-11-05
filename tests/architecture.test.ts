@@ -141,10 +141,11 @@ describe('the opening cinematic (Finale P3)', () => {
   const intro = files(resolve(src, 'shared/intro'));
   const inDir = (prefix: string): string[] => files(src).filter((f) => rel(f).startsWith(prefix));
 
-  it('contains exactly the policy, the shell and the four pure painters', () => {
+  it('contains exactly the policy, the shell and the five pure painters (post-release: cabin drawing lives in openingCabin.ts)', () => {
     expect(intro.map(rel).sort()).toEqual([
       'shared/intro/introPolicy.ts',
       'shared/intro/introShell.ts',
+      'shared/intro/openingCabin.ts',
       'shared/intro/openingCinematic.ts',
       'shared/intro/openingCockpit.ts',
       'shared/intro/openingDirector.ts',
@@ -153,7 +154,7 @@ describe('the opening cinematic (Finale P3)', () => {
   });
 
   it('the pure modules never read the DOM, storage, the wall clock or a random draw', () => {
-    for (const relPath of ['shared/intro/introPolicy.ts', 'shared/intro/openingDirector.ts', 'shared/intro/openingScene.ts', 'shared/intro/openingCockpit.ts']) {
+    for (const relPath of ['shared/intro/introPolicy.ts', 'shared/intro/openingDirector.ts', 'shared/intro/openingScene.ts', 'shared/intro/openingCockpit.ts', 'shared/intro/openingCabin.ts']) {
       const body = readFileSync(resolve(src, relPath), 'utf8');
       expect(body, relPath).not.toMatch(/\b(document|window|localStorage|sessionStorage|performance|Date\.now|Math\.random)\b/);
       expect(body.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, ''), relPath).not.toMatch(/setTimeout|setInterval|requestAnimationFrame/);
@@ -525,11 +526,17 @@ describe('P11.1 Fleet Command boundaries (fleet/)', () => {
   });
 
   it('fleet code imports only catalogue, ship, combat-world and sim modules, values only from the world chunk (never input, crew, the shell or the Hangar)', () => {
-    const allowed = /^modes\/freeroam\/(fleet\/[\w]+|catalogue\/types|ships\/(roster|types)|combat\/(critical|families|stealth|state|world)|sector\/(grid|run)|sim|profile)\.ts$/;
+    // Post-release fleet cargo: the transfer rules consume the pure inventory model (addLoot/removeLoot/holdUnits/
+    // validQty, isResourceId) — cargo is the inventory domain; both files are storage-free and DOM-free (checked above).
+    // sector/model is a type-only import (LootEntry: the moved/left amounts of a transfer) — it pulls no code.
+    // Post-release fleet cargo: vesselCapacity(ship) = the stock archetype's derived hold (upgradedShip with no
+    // modules/upgrades — exactly what the wing flies); vessels.ts and ships/upgrades.ts both live in the Free Roam
+    // chunk already, so the edge adds no code anywhere.
+    const allowed = /^modes\/freeroam\/(fleet\/[\w]+|catalogue\/types|inventory\/(inventory|resources)|ships\/(roster|types|upgrades)|combat\/(critical|families|stealth|state|world)|sector\/(grid|model|run)|sim|profile)\.ts$/;
     // value imports must stay inside the lazy kit or the shared world chunk (a value from run.ts, the Hangar or the
     // equipment model would pull eager code into the chunk, or the kit into eager code). Finale P1: the critical-hit
     // policy (combat/critical.ts) is imported by combat/world.ts, so it lives in the same shared world chunk.
-    const valueOk = /^modes\/freeroam\/(fleet\/(vessels|command|wing)|ships\/roster|combat\/(critical|families|stealth|world)|sector\/grid|sim)\.ts$/;
+    const valueOk = /^modes\/freeroam\/(fleet\/(vessels|command|wing)|inventory\/(inventory|resources)|ships\/(roster|upgrades)|combat\/(critical|families|stealth|world)|sector\/grid|sim)\.ts$/;
     for (const f of fleet) {
       for (const spec of importSpecs(f)) expect(spec, `${rel(f)} imports ${spec}`).toMatch(allowed);
       for (const v of valuesOf(f)) expect(v, `${rel(f)} value-imports ${v}`).toMatch(valueOk);

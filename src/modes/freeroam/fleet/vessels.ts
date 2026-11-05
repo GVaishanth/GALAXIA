@@ -14,8 +14,10 @@
  * see them. Crew are passed in as plain ids (`CrewRoster`); this folder imports nothing from crew/.
  */
 import type { CritToken } from '../combat/critical.ts';
+import { isResourceId } from '../inventory/resources.ts';
 import type { SavedVessels } from '../profile.ts';
 import { SHIP_BY_ID } from '../ships/roster.ts';
+import { upgradedShip } from '../ships/upgrades.ts';
 import type { ShipDef, ShipId, ShipStats, WeaponProfile } from '../ships/types.ts';
 import type { ShipState, ShipTuning } from '../sim.ts';
 import type * as Kit from './fleetKit.ts';
@@ -39,13 +41,18 @@ export interface FleetVessel {
   readonly status: VesselStatus;
 }
 
+/** Cargo aboard one vessel: the same per-unit hold shape as the pilot's own hold (inventory/inventory.ts). */
+export type VesselHold = Readonly<Record<string, number>>;
+
 export interface Vessels {
   /** Last vessel number issued. */
   readonly seq: number;
   readonly list: readonly FleetVessel[];
+  /** Post-release fleet cargo: vessel id -> its hold. Keyed by the stable vessel id, never a list position. */
+  readonly holds: Readonly<Record<string, VesselHold>>;
 }
 
-export const NO_VESSELS: Vessels = Object.freeze({ seq: 0, list: Object.freeze([]) });
+export const NO_VESSELS: Vessels = Object.freeze({ seq: 0, list: Object.freeze([]), holds: Object.freeze({}) });
 
 export const VESSEL_ID = /^fv-[1-9][0-9]{0,5}$/;
 
@@ -93,13 +100,37 @@ export function cleanVessels(raw: SavedVessels | undefined, crew: CrewRoster): {
     seq = Math.max(seq, Number(r.id.slice(3)));
   }
   if (seq !== raw.seq) changes += 1;
-  return { state: list.length || seq ? { seq, list } : NO_VESSELS, changes };
+  // holds: only aboard surviving vessels, known positive amounts only
+  const holds: Record<string, VesselHold> = {};
+  for (const v of list) {
+    const raw0 = raw.holds?.[v.id];
+    if (!raw0) continue;
+    const h: Record<string, number> = {};
+    for (const [k, n] of Object.entries(raw0)) {
+      if (isResourceId(k) && Number.isInteger(n) && n > 0) h[k] = n;
+      else changes += 1;
+    }
+    if (Object.keys(h).length > 0) holds[v.id] = h;
+  }
+  if (raw.holds && Object.keys(raw.holds).some((k) => !holds[k])) changes += 1;
+  if (!list.length && !seq) return { state: NO_VESSELS, changes };
+  return { state: { seq, list, holds }, changes };
+}
+
+/** A vessel's hold (empty record when nothing is stored). */
+export const vesselHold = (v: Vessels, id: string): VesselHold => v.holds[id] ?? {};
+
+/** A vessel's cargo capacity: the stock archetype's cargo stat — what its flying unit derives and the sector uses (no bespoke capacity table). */
+export function vesselCapacity(ship: ShipId): number {
+  return Math.max(0, Math.floor(upgradedShip(ship, undefined, {}).stats.cargo));
 }
 
 /** The saved form; undefined when no vessel was ever issued (the field is then not written). */
 export function vesselsToSaved(v: Vessels): SavedVessels | undefined {
   if (!v.list.length && !v.seq) return undefined;
-  return { seq: v.seq, list: v.list.map((x) => (x.captain ? { id: x.id, ship: x.ship, captain: x.captain, status: x.status } : { id: x.id, ship: x.ship, status: x.status })) };
+  const out: SavedVessels = { seq: v.seq, list: v.list.map((x) => (x.captain ? { id: x.id, ship: x.ship, captain: x.captain, status: x.status } : { id: x.id, ship: x.ship, status: x.status })) };
+  const holds = Object.fromEntries(Object.entries(v.holds).filter(([, h]) => Object.keys(h).length > 0));
+  return Object.keys(holds).length ? { ...out, holds } : out;
 }
 
 /** Docking services the fleet like the pilot's ship: a disabled vessel is back in service (FLEET_COMMAND.md "Disabled"). */
@@ -187,7 +218,9 @@ export type FleetAct =
   | { readonly kind: 'captain'; readonly vessel: string; readonly crew: string }
   | { readonly kind: 'release'; readonly vessel: string }
   | { readonly kind: 'service'; readonly vessel: string; readonly status: 'active' | 'reserve' }
-  | { readonly kind: 'order'; readonly who: string; readonly order: OrderRequest };
+  | { readonly kind: 'order'; readonly who: string; readonly order: OrderRequest }
+  /** Post-release cargo transfer between the pilot's hold ('hold') and a vessel's hold; docked only. */
+  | { readonly kind: 'cargo'; readonly from: string; readonly to: string; readonly resource: string; readonly amount: number };
 
 /** The number players see for a vessel (`fv-3` -> "3"): from its id, never its list position. */
 export const vesselNo = (id: string): string => id.slice(3);

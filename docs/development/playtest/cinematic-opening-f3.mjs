@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
  * Finale P3 browser harness: the opening cinematic and the home-page handoff.
+ * Post-release cockpit upgrade: same 65 checks; the run now also captures the
+ * cabin's reveal (desk-approach/cabin/display/push/home and per-viewport
+ * *-cabin.png) into .cinematic-f3-shots/ for human review.
  *
  * Usage: node docs/development/playtest/cinematic-opening-f3.mjs [baseUrl]
  * (default http://127.0.0.1:4181/galaxia/), against a served QA / build:e2e
@@ -39,8 +42,9 @@ const intro = async (p) => (await debug(p))?.intro ?? null;
 const music = async (p) => (await debug(p))?.music ?? null;
 const saveDump = (p) => p.evaluate(() => Object.keys(localStorage).sort().map((k) => [k, localStorage.getItem(k)]));
 
-/** Advance the fake clock and collect the observed phases. */
-async function runThrough(p, untilMs, log = []) {
+/** Advance the fake clock and collect the observed phases. `shots` (phase -> filename) captures the first
+ *  sighting of each wanted phase for human review (post-release cockpit upgrade review shots). */
+async function runThrough(p, untilMs, log = [], shots = null) {
   let t = log.length ? log[log.length - 1][0] : 0;
   while (t < untilMs) {
     await p.clock.runFor(250);
@@ -48,6 +52,10 @@ async function runThrough(p, untilMs, log = []) {
     const i = await intro(p);
     if (i) log.push([t, i.phase, i.state, i.outcome, (await music(p))?.loads ?? null]);
     if (!i) log.push([t, 'no-intro', 'resolved', null, 0]);
+    if (i && shots && shots[i.phase]) {
+      await p.screenshot({ path: `${shotDir}${shots[i.phase]}` });
+      delete shots[i.phase];
+    }
     if (i && i.state === 'resolved') break;
   }
   return log;
@@ -88,8 +96,8 @@ async function main() {
     });
     check('A07 SKIP INTRO appears with visible focus and a 44px target', skipShown.shown && skipShown.focused && skipShown.minH);
 
-    // walk the phases deterministically
-    await runThrough(p, 11000, log);
+    // walk the phases deterministically (screenshots of the cockpit reveal are meant to be looked at)
+    await runThrough(p, 11000, log, { approach: 'desk-approach.png', cabin: 'desk-cabin.png', display: 'desk-display.png', push: 'desk-push.png' });
     const phases = [...new Set(log.map(([, ph]) => ph))];
     check('A08 every phase in its documented order', JSON.stringify(phases.filter((p2) => STUB_PHASES.includes(p2))) === JSON.stringify(STUB_PHASES), { phases });
     const done = await intro(p);
@@ -100,6 +108,7 @@ async function main() {
       transform: document.querySelector('.title-screen').style.transform || '',
     }));
     check('A10 cleanup: overlay gone, nothing drawn over the root, loop and listeners at 0', !leftovers.overlay && leftovers.stageCanvases === 0 && leftovers.transform === '' && done.cinematic && done.cinematic.loops === 0 && done.cinematic.listeners === 0 && done.cinematic.disposed === true, leftovers);
+    await p.screenshot({ path: `${shotDir}desk-home.png` });
     check('A11 bounded work: frames and particles capped', done.cinematic.frames < 1200 && done.cinematic.maxParticles <= 160, done.cinematic);
 
     // the handoff: live page, untransformed, unobstructed, focused
@@ -276,7 +285,15 @@ async function main() {
     const { browser, p, errs } = await open({ w, h, touch: true });
     await p.clock.install();
     await gotoHome(p);
-    await p.clock.runFor(6500); // cabin / display
+    const cabShot = { cabin: `${tag}-cabin.png` }; // reviewed by a human: the cockpit reveal on each form factor
+    for (let t = 0; t < 6500; t += 250) {
+      await p.clock.runFor(250);
+      const i = await intro(p);
+      if (i && cabShot.cabin && i.phase === 'cabin') {
+        await p.screenshot({ path: `${shotDir}${cabShot.cabin}` });
+        delete cabShot.cabin;
+      }
+    } // cabin / display
     const mid = await intro(p);
     await p.screenshot({ path: `${shotDir}${tag}-display.png` });
     check(`F01 [${tag}] the intro is in its cockpit/display phases on this size`, ['cabin', 'display'].includes(mid.phase) || mid.phase === 'push', mid.phase);

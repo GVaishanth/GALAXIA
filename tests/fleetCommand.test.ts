@@ -159,7 +159,7 @@ describe('P11.1 fleet-vessel record and clean-up', () => {
   });
 
   it('docking services the fleet: disabled vessels are back in service, nothing else changes', () => {
-    const v: Vessels = { seq: 2, list: [{ id: 'fv-1', ship: 'swift', captain: MAREN, status: 'disabled' }, { id: 'fv-2', ship: 'crane', captain: null, status: 'reserve' }] };
+    const v: Vessels = { seq: 2, list: [{ id: 'fv-1', ship: 'swift', captain: MAREN, status: 'disabled' }, { id: 'fv-2', ship: 'crane', captain: null, status: 'reserve' }], holds: {} };
     expect(serviceAtDock(v).list.map((x) => x.status)).toEqual(['active', 'reserve']);
     expect(serviceAtDock(NO_VESSELS)).toBe(NO_VESSELS);
   });

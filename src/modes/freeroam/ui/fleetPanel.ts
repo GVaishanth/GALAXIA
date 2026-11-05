@@ -12,12 +12,12 @@
  */
 import { MenuList } from '../../../shared/ui/menuList.ts';
 import type { UnlockRequirement } from '../catalogue/types.ts';
-import { FLEET_COMMAND, type FleetAct, type FleetKit, type Vessels } from '../fleet/vessels.ts';
+import { FLEET_COMMAND, vesselCapacity, vesselHold, type FleetAct, type FleetKit, type Vessels } from '../fleet/vessels.ts';
 import type { PurchaseWorld } from '../fleet/command.ts';
 import type { RequirementInfo } from '../galaxy/progress.ts';
 import { btn, el, focusedKey, panelShell, restoreFocus, strayRepeat } from '../progression/ui/common.ts';
 import type { ShipId } from '../ships/types.ts';
-import { crewRows, fleetHead, hullRows, hullsNotBuilt, ORDER_HELP, orderChoices, vesselRows, type FleetContext, type FleetFlight, type OrderKind } from './fleetView.ts';
+import { collectiveLines, collectiveView, crewRows, fleetHead, hullRows, hullsNotBuilt, ORDER_HELP, orderChoices, transferMax, transferRows, vesselRows, type FleetContext, type FleetFlight, type OrderKind, type PlayerHold } from './fleetView.ts';
 
 /** Admin Access test fleet (only while a session is on; the shell's sandbox, never saved). */
 export interface FleetAdmin {
@@ -38,6 +38,8 @@ export interface FleetPanelDeps {
   readonly describe: (req: UnlockRequirement) => RequirementInfo;
   /** Station name when docked (station tab), null in flight (pause menu). */
   readonly station: () => string | null;
+  /** The pilot's own hold (for the collective-cargo summary and transfers), read live from the shell. */
+  readonly own: () => PlayerHold;
   readonly act: (a: FleetAct) => Promise<{ readonly ok: boolean; readonly text: string; readonly reason?: string }>;
   /** The empty state's link: the Hangar tab (docked). */
   readonly hangar: () => void;
@@ -48,14 +50,17 @@ export interface FleetPanelDeps {
 
 export interface FleetPanelStatus {
   readonly mode: 'docked' | 'flight';
-  readonly step: 'list' | 'hull' | 'captain';
+  readonly step: 'list' | 'hull' | 'captain' | 'transfer';
   readonly pending: string | null;
   readonly busy: boolean;
   readonly buyShip: string | null;
   readonly buyCaptain: string | null;
   readonly captainFor: string | null;
+  readonly transferFor: string | null;
   readonly message: string;
-  readonly rows: readonly { readonly id: string; readonly name: string; readonly state: string; readonly order: string; readonly captain: string | null; readonly hull: string | null }[];
+  /** The collective-cargo summary lines shown at the top. */
+  readonly collective: readonly string[];
+  readonly rows: readonly { readonly id: string; readonly name: string; readonly state: string; readonly order: string; readonly captain: string | null; readonly hull: string | null; readonly cargo: string }[];
   readonly buttons: readonly { readonly key: string; readonly text: string; readonly disabled: boolean }[];
 }
 
@@ -80,6 +85,11 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
   let buyShip: ShipId | null = null;
   let buyCaptain: string | null = null;
   let captainFor: string | null = null;
+  /** The transfer step's state: vessel, direction ('in' = ship to vessel), resource and amount. */
+  let transferFor: string | null = null;
+  let tDir: 'in' | 'out' = 'in';
+  let tRes: string | null = null;
+  let tAmount = 1;
   const ctx = (): FleetContext => ({ kit: d.kit, vessels: d.vessels(), world: d.world(), flight: d.flight(), crewName: d.crewName, crewRole: d.crewRole, describe: d.describe });
   const say = (t: string): void => {
     s.message.textContent = t;
@@ -89,6 +99,8 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
     buyShip = null;
     buyCaptain = null;
     captainFor = null;
+    transferFor = null;
+    tRes = null;
   };
   /** Run one fleetAct; the panel re-reads the shell afterwards. */
   const run = (a: FleetAct, done: (ok: boolean, text: string) => void): void => {
@@ -149,7 +161,7 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
     }
     const ul = el('ul', 'fr-fab-list fr-fleet-list');
     for (const r of rows) {
-      const { li, info } = row(r.name, `${r.role.toUpperCase()} · ${r.captainText}`, r.stateText, r.hull, `ORDER ${r.order}`);
+      const { li, info } = row(r.name, `${r.role.toUpperCase()} · ${r.captainText}`, r.stateText, r.hull, r.cargo, `ORDER ${r.order}`);
       li.dataset['vessel'] = r.id;
       li.dataset['state'] = r.state;
       if (docked) {
@@ -158,6 +170,16 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
           captainFor = r.id;
           d.sound('uiSelect');
           say(`Choose a captain for the ${r.name}. Only recruited crew who are not seated aboard your ships can command.`);
+          refresh();
+          menuList.focus(0);
+        }), button(`transfer:${r.id}`, 'CARGO', `Move cargo between the ${r.name} and your ship`, null, () => {
+          pending = null;
+          transferFor = r.id;
+          tDir = 'in';
+          tRes = null;
+          tAmount = 1;
+          d.sound('uiSelect');
+          say(`Moving cargo with the ${r.name}. Choose what and how much, then CONFIRM TRANSFER.`);
           refresh();
           menuList.focus(0);
         })];
@@ -306,6 +328,97 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
     return out;
   }
 
+  /** The transfer step: ship <-> one vessel, while docked. Every rule rides the kit's transfer. */
+  function transferStep(c: FleetContext, vid: string): HTMLElement[] {
+    const v = c.vessels.list.find((x) => x.id === vid);
+    if (!v) {
+      transferFor = null;
+      return [];
+    }
+    const own = d.own();
+    const name = vesselRows(c).find((x) => x.id === vid)?.name ?? vid;
+    const vHold = vesselHold(c.vessels, vid);
+    const vCap = vesselCapacity(v.ship);
+    const into = tDir === 'in';
+    const [srcHold, dstHold, dstCap, srcName, dstName] = into
+      ? ([own.hold, vHold, vCap, own.shipName.toUpperCase(), name] as const)
+      : ([vHold, own.hold, own.capacity, name, own.shipName.toUpperCase()] as const);
+    const rows = transferRows(srcHold, dstHold);
+    const out: HTMLElement[] = [
+      el('p', 'fr-kicker fr-fab-head', `CARGO · ${name}`),
+      el('p', 'fr-fab-desc', `${own.shipName.toUpperCase()} ${holdText(own.hold, own.capacity)} · ${name} ${holdText(vHold, vCap)} · Moves happen only while docked; a full destination keeps the rest aboard the source.`),
+    ];
+    out.push(actions(
+      button('dir:in', `TO THE ${name}`, `Move cargo from your ship to the ${name}`, null, () => { if (tDir !== 'in') { tDir = 'in'; tRes = null; tAmount = 1; pending = null; d.sound('uiMove'); refresh(); } }, into),
+      button('dir:out', `TO YOUR ${own.shipName.toUpperCase()}`, `Move cargo from the ${name} to your ship`, null, () => { if (tDir !== 'out') { tDir = 'out'; tRes = null; tAmount = 1; pending = null; d.sound('uiMove'); refresh(); } }, !into),
+    ));
+    const ul = el('ul', 'fr-fab-list');
+    if (!rows.length) ul.append(row('BOTH HOLDS EMPTY', 'Collect salvage in the field, then dock to stow it aboard the fleet.').li);
+    for (const r of rows) {
+      const { li, info } = row(r.name, `${srcName} ${r.from} · ${dstName} ${r.to}`);
+      li.dataset['resource'] = r.resource;
+      info.append(actions(button(`res:${r.resource}`, tRes === r.resource ? 'CHOSEN' : 'CHOOSE', `Choose ${r.name} to move`, null, () => {
+        pending = null;
+        tRes = r.resource;
+        tAmount = Math.max(1, Math.min(tAmount, transferMax(r.from, dstHold, dstCap)));
+        d.sound('uiSelect');
+        refresh();
+        restoreFocus(s.root, `res:${r.resource}`);
+      }, tRes === r.resource)));
+      ul.append(li);
+    }
+    out.push(ul);
+    const chosen = rows.find((x) => x.resource === tRes) ?? null;
+    if (chosen) {
+      const max = transferMax(chosen.from, dstHold, dstCap);
+      // accurate refusal words: an empty source and a full destination are different problems
+      const noneWhy = chosen.from <= 0 ? `Nothing to move: no ${chosen.name} aboard the ${srcName.toLowerCase()}.` : 'Nothing fits: the destination hold is full.';
+      if (max > 0) tAmount = Math.max(1, Math.min(tAmount, max));
+      out.push(actions(
+        button('amt:-', '−', 'Move one unit less', tAmount <= 1 ? 'At the smallest amount.' : null, (e) => { if (!strayRepeat(e)) { tAmount -= 1; d.sound('uiMove'); refresh(); restoreFocus(s.root, 'amt:-'); } }),
+        button('amt:+', '+', 'Move one unit more', tAmount >= max ? `No more than the ${max} the source holds and the destination fits.` : null, (e) => { if (!strayRepeat(e)) { tAmount = Math.min(max, tAmount + 1); d.sound('uiMove'); refresh(); restoreFocus(s.root, 'amt:+'); } }),
+        button('amt:max', tAmount === max ? `${tAmount} (ALL THAT FITS)` : `${tAmount} → ${max === chosen.from ? 'ALL' : 'MAX'} ${max}`, 'Set the amount to everything that fits', max <= 0 ? noneWhy : null, (e) => { if (!strayRepeat(e) && max > 0) { tAmount = max; d.sound('uiMove'); refresh(); restoreFocus(s.root, 'amt:max'); } }),
+      ));
+      const from = into ? 'hold' : vid;
+      const to = into ? vid : 'hold';
+      const why = max <= 0 ? noneWhy : null;
+      out.push(actions(
+        button('confirm', busy ? 'TRANSFERRING…' : 'CONFIRM TRANSFER', `Confirm: move ${tAmount} ${chosen.name} ${into ? `to the ${name}` : 'to your ship'}`, why, (e) => {
+          if (strayRepeat(e) || !tRes || max <= 0) return;
+          const res = tRes;
+          const amt = tAmount;
+          run({ kind: 'cargo', from, to, resource: res, amount: amt }, (ok, text) => {
+            const lid = transferFor;
+            if (ok) {
+              transferFor = null;
+              keep = lid ? `transfer:${lid}` : undefined;
+            }
+            say(ok ? text : `${text} Nothing was moved.`);
+          });
+        }),
+        button('cancel', 'CANCEL', 'Cancel the transfer', null, () => cancel()),
+      ));
+    } else {
+      out.push(actions(button('cancel', 'BACK', 'Back to the fleet list', null, () => cancel())));
+    }
+    return out;
+  }
+
+  /** `n / cap` for a hold. */
+  function holdText(h: Record<string, number>, cap: number): string {
+    let n = 0;
+    for (const x of Object.values(h)) if (Number.isInteger(x) && x > 0) n += x;
+    return `${n} / ${Math.floor(cap)}`;
+  }
+
+  /** The COLLECTIVE CARGO summary (readable text; re-derived on every refresh, never cached). */
+  function collectiveBlock(c: FleetContext): HTMLElement[] {
+    const wrap = el('div', 'fr-fleet-collective');
+    wrap.append(el('p', 'fr-kicker fr-fab-head', 'COLLECTIVE CARGO'));
+    for (const l of collectiveLines(collectiveView(c, d.own()))) wrap.append(el('p', 'fr-fab-desc', l));
+    return [wrap];
+  }
+
   function adminBlock(c: FleetContext, adm: FleetAdmin): HTMLElement[] {
     const docked = d.station() !== null;
     const lines = adm.lines();
@@ -337,7 +450,13 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
       else body.push(el('p', 'fr-kicker fr-fab-head', `CAPTAIN · ${v.name}`), ...captainList(c, v.id), actions(button('cancel', 'CANCEL', 'Cancel the captain choice', null, () => cancel())));
     }
     if (docked && !captainFor && buyShip) body.push(...purchaseStep(c));
+    if (docked && !captainFor && !buyShip && transferFor) {
+      const step = transferStep(c, transferFor);
+      if (step.length) body.push(...step);
+      else transferFor = null;
+    }
     if (!body.length) {
+      body.push(...collectiveBlock(c));
       body.push(el('p', 'fr-kicker fr-fab-head', docked ? 'YOUR FLEET' : 'YOUR FLEET · ORDERS'), ...vesselList(c, docked));
       if (!docked && c.vessels.list.length) {
         body.push(el('p', 'fr-kicker fr-fab-head', `ALL ESCORTS${c.flight?.targetName ? ` · LOCKED: ${c.flight.targetName}` : ''}`), orderRow(c, 'all', 'All escorts'));
@@ -391,14 +510,16 @@ export function createFleetPanel(d: FleetPanelDeps): FleetPanel {
       const c = ctx();
       return {
         mode: d.station() !== null ? 'docked' : 'flight',
-        step: captainFor ? 'captain' : buyShip ? 'hull' : 'list',
+        step: captainFor ? 'captain' : buyShip ? 'hull' : transferFor ? 'transfer' : 'list',
         pending,
         busy,
         buyShip,
         buyCaptain,
         captainFor,
+        transferFor,
         message: s.message.textContent ?? '',
-        rows: vesselRows(c).map((r) => ({ id: r.id, name: r.name, state: r.state, order: r.order, captain: r.captain, hull: r.hull })),
+        collective: collectiveLines(collectiveView(c, d.own())),
+        rows: vesselRows(c).map((r) => ({ id: r.id, name: r.name, state: r.state, order: r.order, captain: r.captain, hull: r.hull, cargo: r.cargo })),
         buttons: [...s.root.querySelectorAll<HTMLButtonElement>('button[data-key]')].map((b) => ({ key: b.dataset['key']!, text: b.textContent ?? '', disabled: b.disabled })),
       };
     },

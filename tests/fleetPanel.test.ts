@@ -193,6 +193,7 @@ describe('P11.2 Fleet panel view model: vessel states and orders', () => {
         { id: 'fv-3', ship: 'condor', captain: TOBIAH, status: 'reserve' },
         { id: 'fv-4', ship: 'shrike', captain: ODILE, status: 'disabled' },
       ],
+      holds: {},
     };
     const rows = vesselRows(ctx(v));
     expect(rows.map((r) => r.state)).toEqual(['ready', 'uncrewed', 'reserve', 'disabled']);
@@ -207,7 +208,7 @@ describe('P11.2 Fleet panel view model: vessel states and orders', () => {
     const r = createSectorRun(L, { ...EMPTY_SECTOR_SAVE, surveyed: true }, { seed: 5, ship: deriveShip('petrel') });
     Object.assign(r.ship, { x: cx, y: cy, px: cx, py: cy });
     // vessels fv-2 and fv-5 (fv-1, 3, 4 were never issued or were trimmed): slots are 1 and 2, names keep the id's number
-    const v: Vessels = { seq: 5, list: [{ id: 'fv-2', ship: 'shrike', captain: MAREN, status: 'active' }, { id: 'fv-5', ship: 'swift', captain: TOBIAH, status: 'active' }] };
+    const v: Vessels = { seq: 5, list: [{ id: 'fv-2', ship: 'shrike', captain: MAREN, status: 'active' }, { id: 'fv-5', ship: 'swift', captain: TOBIAH, status: 'active' }], holds: {} };
     Kit.deploy(r, Kit, [spec('fv-2', 'shrike', MAREN), spec('fv-5', 'swift', TOBIAH)], RUN.heat);
     const rows = vesselRows(ctx(v, { flight: flightOf(r), world: world({ docked: null }) }));
     expect(rows.map((x) => [x.name, x.state, x.order])).toEqual([
